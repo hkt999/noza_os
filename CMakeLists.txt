@@ -27,6 +27,7 @@ add_executable(
 	kernel/noza_syscall.S
 	kernel/noza_os.c
 	kernel/noza_os.h
+	user/syslib.c
 	user/noza_os_demo.c
 )
 
