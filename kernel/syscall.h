@@ -1,8 +1,17 @@
 #pragma once
 
-#define NSC_RESCHEDULE	        0
-#define NSC_SLEEP		        1
-#define NSC_CREATE_THREAD	    2
-#define NSC_TERMINATE_THREAD	3
+enum {
+    NSC_YIELD = 0,
+    NSC_SLEEP,
+    NSC_CREATE_THREAD,
+    NSC_TERMINATE_THREAD,
+    NSC_SEND,
+    NSC_RECV,
+    NSC_REPLY,
+    NSC_CALL,
+    NSC_NBSEND,
+    NSC_NBRECV,
+    NSC_NUM_SYSCALLS,
+};
 
-#define NSC_HARDFAULT           255
+#define NSC_HARDFAULT   255
