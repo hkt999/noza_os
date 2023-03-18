@@ -14,21 +14,23 @@ void test_task(void *param)
     }
 }
 
-void init_task(void *param)
+void task_demo()
 {
     uint32_t th1, th2, th3, th4;
     noza_thread_sleep(2000);
 
     th1 = noza_thread_create(test_task, "task 1", 0);
-    noza_thread_sleep(100);
     th2 = noza_thread_create(test_task, "task 2", 1);
-    noza_thread_sleep(100);
     th3 = noza_thread_create(test_task, "task 3", 2);
-    noza_thread_sleep(100);
     th4 = noza_thread_create(test_task, "task 4", 3);
-    noza_thread_sleep(100);
     while (1) {
-        printf("%d, %d, %d, %d\n", th1, th2, th3, th4);
+        printf("%ld, %ld, %ld, %ld\n", th1, th2, th3, th4);
         noza_thread_sleep(700);
     }
+}
+
+void __user_start()
+{
+    task_demo();
+    noza_thread_terminate();
 }
