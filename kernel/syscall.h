@@ -4,8 +4,9 @@ enum {
     // thread & scheduling
     NSC_YIELD = 0,
     NSC_SLEEP,
-    NSC_CREATE_THREAD,
-    NSC_TERMINATE_THREAD,
+    NSC_THREAD_CREATE,
+    NSC_THREAD_CHANGE_PRIORITY,
+    NSC_THREAD_TERMINATE,
     // IPC
     NSC_RECV,
     NSC_REPLY,

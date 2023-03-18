@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 # initalize pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
+set(TINYLIBC_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/Baselibc)
 
 # Pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -30,6 +31,8 @@ add_executable(
 	user/syslib.c
 	user/noza_os_demo.c
 )
+
+add_subdirectory(baselibc)
 
 target_include_directories(noza_os_demo PRIVATE .)
 
