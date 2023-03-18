@@ -69,11 +69,11 @@ add_library(
 	${TINYLIBC_SRC_DIR}/strtoul.c
 	${TINYLIBC_SRC_DIR}/strtoull.c
 	${TINYLIBC_SRC_DIR}/strtoumax.c
-	${TINYLIBC_SRC_DIR}/tinyprintf.c
-	${TINYLIBC_SRC_DIR}/vasprintf.c
-	${TINYLIBC_SRC_DIR}/vprintf.c
-	${TINYLIBC_SRC_DIR}/vsprintf.c
-	${TINYLIBC_SRC_DIR}/vsscanf.c
+	#${TINYLIBC_SRC_DIR}/tinyprintf.c
+	#${TINYLIBC_SRC_DIR}/vasprintf.c
+	#${TINYLIBC_SRC_DIR}/vprintf.c
+	#${TINYLIBC_SRC_DIR}/vsprintf.c
+	#${TINYLIBC_SRC_DIR}/vsscanf.c
 )
 
 message(STATUS "TINYLIBC_SRC_DIR: ${TINYLIBC_SRC_DIR}")
