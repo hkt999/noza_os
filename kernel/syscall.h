@@ -1,16 +1,17 @@
 #pragma once
 
 enum {
+    // thread & scheduling
     NSC_YIELD = 0,
     NSC_SLEEP,
     NSC_CREATE_THREAD,
     NSC_TERMINATE_THREAD,
-    NSC_SEND,
+    // IPC
     NSC_RECV,
     NSC_REPLY,
     NSC_CALL,
-    NSC_NBSEND,
-    NSC_NBRECV,
+    NSC_NB_RECV,
+    NSC_NB_CALL,
     NSC_NUM_SYSCALLS,
 };
 

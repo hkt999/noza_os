@@ -10,7 +10,7 @@ isr_hardfault:
 	b isr_svcall
 
 isr_systick:
-	movs r0, #0 // system call 0 --> reschedule
+	movs r0, #254 // system call 0 --> reschedule
 
 .type isr_svcall, %function
 .global isr_svcall
@@ -21,15 +21,13 @@ isr_svcall:
 	mov lr, r0
 
 trap_kernel:
+    // save user context
 	mrs r0, psp
-
     subs r0, #4
     mov r1, lr
     str r1, [r0]
-
     subs r0, #16
     stmia r0!, {r4,r5, r6, r7}
-    
     mov	r4, r8
 	mov	r5, r9
 	mov	r6, r10
@@ -63,7 +61,8 @@ noza_os_resume_thread:
     mov r5, r12
     push {r1, r2, r3, r4, r5}    
 
-	// load user state
+	// load user state from stack
+    // r0 is usertask_stack_start from noza_os_resume_thread
     ldmia	r0!,{r4-r7}
 	mov	r8, r4
 	mov	r9, r5
@@ -72,9 +71,9 @@ noza_os_resume_thread:
 	ldmia	r0!,{r4-r7}
     ldmia	r0!,{r1}
     mov lr, r1
-	msr psp, r0 /* r0 is usertask_stack_start from activate(usertask_stack_start); */
+	msr psp, r0
 
-	// jump to user task
+	// return to user
 	bx lr
 
 .global init_kernel_stack
