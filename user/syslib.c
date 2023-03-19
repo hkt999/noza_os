@@ -8,6 +8,11 @@ int noza_thread_yield()
 	return noza_syscall(NSC_YIELD, 0, 0, 0);
 }
 
+int     noza_thread_join(uint32_t thread_id)
+{
+	return noza_syscall(NSC_THREAD_JOIN, thread_id, 0, 0);
+}
+
 int noza_thread_sleep(uint32_t ms)
 {
 	return noza_syscall(NSC_SLEEP, ms, 0, 0);
