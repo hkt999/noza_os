@@ -54,3 +54,12 @@ make
 9. **Upload the binary to your Raspberry Pi Pico** : Follow the Raspberry Pi Pico documentation to upload the generated binary (e.g., `noza.uf2`) to your Raspberry Pi Pico.
 
 After completing these steps, you should have successfully built and uploaded the Noza microkernel to your Raspberry Pi Pico.
+
+# Future works
+1. Utilize the ARM Cortex-M0 MPU to protect kernel stack and data structures.
+2. Create a simple console for user interaction and system management.
+3. Implement a memory management service to provide heap and stack memory for newly created threads.
+4. Develop a virtual file system service to facilitate file operations.
+5. Implement an ELF object loader to dynamically load applications from the virtual file system.
+
+
