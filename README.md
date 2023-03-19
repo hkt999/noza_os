@@ -8,6 +8,21 @@ The design of Noza is partly inspired by the limitations of some real-time opera
 * Thread management: Noza supports thread creation, termination, and synchronization through system calls, enabling efficient multi-threading.
 * Inter-process communication (IPC): Noza facilitates communication between threads using message passing, ensuring seamless and synchronized execution of tasks.
 
+# System Calls
+* `noza_thread_yield()`: Yields the current thread's execution, allowing other threads to run. 
+* `noza_thread_join(uint32_t thread_id)`: Waits for the specified thread to terminate before continuing. 
+* `noza_thread_sleep(uint32_t ms)`: Puts the current thread to sleep for the specified number of milliseconds. 
+* `noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)`: Creates a new thread with the given entry function, parameter, and priority. 
+* `noza_thread_change_priority(uint32_t thread_id, uint32_t priority)`: Changes the priority of the specified thread. 
+* `noza_thread_terminate()`: Terminates the current thread. 
+* `noza_recv(noza_msg_t *msg)`: Receives a message from another process, blocking until a message is received. 
+* `noza_reply(noza_msg_t *msg)`: Replies to a message received from another process. 
+* `noza_call(noza_msg_t *msg)`: Sends a message to another process and waits for a reply, blocking until the reply is received. 
+* `noza_nonblock_call(uint32_t pid, noza_msg_t *msg)`: Sends a message to another process without waiting for a reply, returning immediately. 
+* `noza_nonblock_recv(uint32_t pid, noza_msg_t *msg)`: Receives a message from another process without blocking, returning immediately.
+
+All these functions make use of the `noza_syscall` function, which is a thin wrapper around the actual system call mechanism. This function takes four arguments (r0, r1, r2, r3) and passes them to the kernel. Each system call has a unique identifier, such as `NSC_YIELD`, `NSC_THREAD_JOIN`, etc., which is used as the first argument to `noza_syscall`. The other arguments depend on the specific system call being made.
+
 # Build
 To build the Noza microkernel project using the pico_sdk and cmake, follow the steps below. These instructions assume that you have already cloned the project from GitHub to your local machine.
 - To build the Noza microkernel project using the pico_sdk and cmake, follow the steps below. These instructions assume that you have already cloned the project from GitHub to your local machine. 
