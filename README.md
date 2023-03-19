@@ -1,15 +1,10 @@
 # Noza OS
-Noza OS is a tiny operating system for Rasperberry pico (RP2040 processor) written in C. It provides a minimal set of system calls for creating and managing threads, communication between threads, and thread synchronization.
+Noza is a lightweight, minimalist microkernel inspired by the mythical figure Noza (哪吒) from Eastern culture, known for being small, agile, and incredibly fast. In the legends, Noza is said to ride the Wind Fire Wheels (風火輪), which allow for swift and effortless movement. The Noza microkernel embodies these qualities, providing a unique and efficient solution for embedded systems and IoT devices. By focusing on core functionality like thread management and IPC, Noza offers a fast and efficient operating system tailored for embedded systems and IoT devices.
 
-|ID|Name|Description
-| :-----| :---- | :---- |
-|NSC_YIELD (0)|thread_yield()|Relinquishes the CPU and allows another thread to run.
-NSC_SLEEP (1)|uleep(int us)|Blocks the current thread for the specified number of timer ticks.
-NSC_CREATE_THREAD (2)|thread_create(void (*entry)(void *))|Creates a new thread that starts running the specified function.
-NSC_TERMINATE_THREAD (3)|terminate_thread()|Terminates the current thread.
-NSC_SEND (4)|send(int dest_tid, void *msg, int msglen)|Sends a message to the specified thread.
-NSC_RECV (5)|recv(int *src_tid, void *msg, int msglen)|Receives a message from any thread.
-NSC_REPLY (6)|reply(int tid, void *reply, int replylen)|Sends a reply message to the specified thread.
-NSC_CALL (7)|call(int tid, void *msg, int msglen, void *reply, int replylen)|Sends a message and waits for a reply from the specified thread.
-NSC_NBSEND (8)|nbsend(int dest_tid, void *msg, int msglen)|Non-blocking version of send().
-NSC_NBRECV (9)|nbrecv(int *src_tid, void *msg, int msglen)|Non-blocking version of recv().
+# Motivation
+The design of Noza is partly inspired by the limitations of some real-time operating systems like FreeRTOS, which do not enforce strict separation between user mode and kernel mode. Noza aims to provide a more secure and robust environment by implementing features such as memory protection and a clear distinction between user and kernel modes, making it a more suitable solution for embedded systems and IoT devices with security and stability concerns.
+
+# Key Features:
+* Thread management: Noza supports thread creation, termination, and synchronization through system calls, enabling efficient multi-threading.
+* Inter-process communication (IPC): Noza facilitates communication between threads using message passing, ensuring seamless and synchronized execution of tasks.
+
