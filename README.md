@@ -30,12 +30,8 @@ To build the Noza microkernel project using the pico_sdk and cmake, follow the s
 - CMake (version 3.12 or later)
 - GCC (with ARM cross-compilation support)
 - GNU Make
-2. **Set up the Raspberry Pi Pico SDK** : If you haven't already set up the Raspberry Pi Pico SDK (pico_sdk), follow the official guide for your operating system: 
-- [Getting Started with Raspberry Pi Pico for Linux](https://datasheets.raspberrypi.org/pico/getting-started-with-pico-linux.pdf) 
-- [Getting Started with Raspberry Pi Pico for macOS](https://datasheets.raspberrypi.org/pico/getting-started-with-pico-macos.pdf) 
-- [Getting Started with Raspberry Pi Pico for Windows](https://datasheets.raspberrypi.org/pico/getting-started-with-pico-windows.pdf) 
+2. **Set up the Raspberry Pi Pico SDK** : If you haven't already set up the Raspberry Pi Pico SDK (pico_sdk), follow the official guide for your operating system
 3. **Clone the Noza repository** : If you haven't already cloned the Noza microkernel project from GitHub, do so now by running the following command:
-
 ```bash
 git clone https://github.com/hkt999/noza_os.git
 ``` 
