@@ -28,27 +28,47 @@ void noza_thread_terminate()
 	noza_syscall(NSC_THREAD_TERMINATE, 0, 0, 0);
 }
 
-int noza_recv(noza_port_t *port, noza_msg_t *msg)
+int noza_recv(noza_msg_t *msg)
 {
-	return 0;
+	uint32_t ret;
+	noza_syscall(NSC_RECV, 0, 0, 0);
+
+	asm volatile (
+		"mov %[ret],  r0\n\t"
+		"mov %[pid],  r1\n\t"
+		"mov %[ptr],  r2\n\t"
+		"mov %[size], r3\n\t"
+		: [ret] "=r" (ret), [pid] "=r" (msg->pid), [ptr] "=r" (msg->ptr), [size] "=r" (msg->size)
+	);
+	return ret; // success
 }
 
-int noza_reply(noza_port_t *port, uint32_t reply_code)
+int noza_reply(noza_msg_t *msg)
 {
-	return 0;
+	return noza_syscall(NSC_REPLY, msg->pid, (uint32_t)msg->ptr, msg->size);
 }
 
-int noza_call(noza_port_t *port, noza_msg_t *msg)
+int noza_call(noza_msg_t *msg)
 {
-	return 0;
+	int code;
+	noza_syscall(NSC_CALL, msg->pid, (uint32_t)msg->ptr, msg->size);
+	asm volatile (
+		"mov %[code], r0\n\t"
+		"mov %[pid],  r1\n\t"
+		"mov %[ptr],  r2\n\t"
+		"mov %[size], r3\n\t"
+		: [code] "=r" (code), [pid] "=r" (msg->pid), [ptr] "=r" (msg->ptr), [size] "=r" (msg->size)
+	);
+
+	return code;
 }
 
-int noza_nonblock_call(noza_port_t *port, noza_msg_t *msg)
+int noza_nonblock_call(uint32_t pid, noza_msg_t *msg)
 {
-	return 0;
+	return noza_syscall(NSC_NB_CALL, msg->pid, (uint32_t)msg->ptr, msg->size);
 }
 
-int noza_nonblock_recv(noza_port_t *port, noza_msg_t *msg)
+int noza_nonblock_recv(uint32_t pid, noza_msg_t *msg)
 {
-	return 0;
+	return noza_syscall(NSC_NB_RECV, msg->pid, (uint32_t)msg->ptr, msg->size);
 }
