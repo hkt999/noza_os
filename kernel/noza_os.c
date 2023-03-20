@@ -91,6 +91,7 @@ typedef struct thread_s {
     kernel_trap_info_t  trap;
     noza_os_port_t      port;
     noza_os_message_t   message;
+    thread_list_t       join_list;
     uint32_t            stack_area[NOZA_OS_STACK_SIZE];
 } thread_t;
 
@@ -287,6 +288,22 @@ static void noza_os_reply(thread_t *running, uint32_t pid, void *msg, uint32_t s
     running->info.port_state = PORT_WAIT_LISTEN; // change state to wait listen
 }
 
+static void noza_os_join(thread_t *running, uint32_t pid)
+{
+    if (pid >= NOZA_OS_TASK_LIMIT) {
+        noza_os_set_return_value(running, -1); // error
+        return;
+    }
+    thread_t *th = &noza_os.thread[pid];
+    if (th->info.state == THREAD_FREE) {
+        noza_os_set_return_value(running, -1); // error
+        return;
+    }
+
+    noza_os_add_thread(&th->join_list, running);
+    noza_os_clear_running_thread();
+}
+
 // start the noza os
 static void noza_start()
 {
@@ -314,6 +331,7 @@ static void noza_start()
         noza_os_add_thread(&noza_os.free, &noza_os.thread[i]);
         noza_os.thread[i].port.pending_list.state_id = THREAD_WAITING;
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING;
+        noza_os.thread[i].join_list.state_id = THREAD_WAITING;
     }
 
     // create application thread
@@ -504,6 +522,11 @@ static void syscall_thread_create(thread_t *running)
     noza_os_set_return_value(running, ret_value);
 }
 
+static void syscall_thread_join(thread_t *running)
+{
+    noza_os_join(running, running->trap.r1);
+}
+
 static void syscall_thread_change_priority(thread_t *running)
 {
     kernel_trap_info_t *running_trap = &running->trap;
@@ -522,6 +545,11 @@ static void syscall_thread_change_priority(thread_t *running)
 
 static void syscall_thread_terminate(thread_t *running)
 {
+    while (running->join_list.count > 0) {
+        thread_t *joiner = (thread_t *)running->join_list.head->value;
+        noza_os_set_return_value(joiner, 0); // TODO: return the terminate code of running thread
+        noza_os_change_state(joiner, &running->join_list, &noza_os.ready[joiner->info.priority]);
+    }
     running->info.port_state = PORT_WAIT_LISTEN;
     noza_os_add_thread(&noza_os.free, running);
     noza_os_clear_running_thread();
@@ -567,6 +595,7 @@ static syscall_func_t syscall_func[] = {
     [NSC_SLEEP] = syscall_sleep,
     [NSC_THREAD_CREATE] = syscall_thread_create,
     [NSC_THREAD_CHANGE_PRIORITY] = syscall_thread_change_priority,
+    [NSC_THREAD_JOIN] = syscall_thread_join,
     [NSC_THREAD_TERMINATE] = syscall_thread_terminate,
 
     // messages and ports
