@@ -8,7 +8,7 @@ int noza_thread_yield()
 	return noza_syscall(NSC_YIELD, 0, 0, 0);
 }
 
-int     noza_thread_join(uint32_t thread_id)
+int noza_thread_join(uint32_t thread_id)
 {
 	return noza_syscall(NSC_THREAD_JOIN, thread_id, 0, 0);
 }
@@ -57,6 +57,7 @@ int noza_call(noza_msg_t *msg)
 {
 	int code;
 	noza_syscall(NSC_CALL, msg->pid, (uint32_t)msg->ptr, msg->size);
+
 	asm volatile (
 		"mov %[code], r0\n\t"
 		"mov %[pid],  r1\n\t"
@@ -64,7 +65,6 @@ int noza_call(noza_msg_t *msg)
 		"mov %[size], r3\n\t"
 		: [code] "=r" (code), [pid] "=r" (msg->pid), [ptr] "=r" (msg->ptr), [size] "=r" (msg->size)
 	);
-
 	return code;
 }
 

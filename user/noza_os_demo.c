@@ -32,7 +32,6 @@ void task_demo()
 
 void server(void *param)
 {
-    noza_thread_sleep(1000);
     for (;;) {
         noza_msg_t msg;
         if (noza_recv(&msg) == 0) {
@@ -64,6 +63,44 @@ void message_demo()
     client((void *)pid);
 }
 
+void thread_working(void *param)
+{
+    uint32_t master = (uint32_t) param;
+    uint32_t counter = 5;
+    while (counter-->0) {
+        printf("join count down: %ld\n", counter);
+        noza_thread_sleep(1000);
+    }
+    printf("enter join state\n");
+    noza_thread_join(master);
+    printf("-- master thread terminated\n");
+    noza_thread_terminate();
+}
+
+void thread_master(void *param)
+{
+    uint32_t counter = 10;
+    while (counter-- > 0) {
+        printf("master count down: %ld\n", counter);
+        noza_thread_sleep(1000);
+    }
+    printf("** master thread terminated\n");
+    noza_thread_terminate();
+}
+
+void thread_join_demo()
+{
+    uint32_t master = noza_thread_create(thread_master, NULL, 0);
+    noza_thread_create(thread_working, (void *)master, 0);
+    noza_thread_create(thread_working, (void *)master, 0);
+    for (;;) {
+        noza_thread_sleep(1000);
+        printf(" -- main loop tick --\n");
+    }
+
+    noza_thread_terminate();
+}
+
 void __user_start()
 {
     // task_demo();
@@ -72,6 +109,7 @@ void __user_start()
         noza_thread_sleep(1000);
         printf("count down: %d\n", counter);
     }
-    message_demo();
+    //message_demo();
+    thread_join_demo();
     noza_thread_terminate();
 }
