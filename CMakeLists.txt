@@ -28,8 +28,6 @@ add_executable(
 	user/noza_os_demo.c
 )
 
-add_subdirectory(baselibc)
-
 target_include_directories(noza PRIVATE .)
 
 pico_set_program_name(noza "noza")
