@@ -27,7 +27,7 @@ add_executable(
 	user/noza_os_demo.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
-	3rd_party/rpmalloc/rpmalloc.c
+	3rd_party/rpmalloc_noza/rpmalloc.c
 )
 
 target_include_directories(
