@@ -1,0 +1,3 @@
+[submodule "3rd_party/rpmalloc"]
+	path = 3rd_party/rpmalloc
+	url = https://github.com/mjansson/rpmalloc
