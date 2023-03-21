@@ -27,6 +27,7 @@ add_executable(
 	user/noza_os_demo.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
+	3rd_party/rpmalloc/rpmalloc.c
 )
 
 target_include_directories(
@@ -34,6 +35,7 @@ target_include_directories(
 	PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}
 	${CMAKE_CURRENT_LIST_DIR}/service/vfs
+	${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 pico_set_program_name(noza "noza")
