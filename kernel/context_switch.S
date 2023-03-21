@@ -1,7 +1,34 @@
 .thumb
 .syntax unified
-
 .global noza_os_trap_info
+.global core1_pop_fifo
+
+.type core1_fifo_handler, %function
+.global core1_fifo_handler
+core1_fifo_handler:
+    push {r4, r5, r6, r7, lr}
+    mov r1, r8
+    mov r2, r9
+    mov r3, r10
+    mov r4, r11
+    mov r5, r12
+    push {r1, r2, r3, r4, r5}
+    bl core1_pop_fifo
+    pop {r1, r2, r3, r4, r5}
+    mov r8, r1
+    mov r9, r2
+    mov r10, r3
+    mov r11, r4
+    mov r12, r5
+    pop {r4, r5, r6, r7}
+
+    //pop {r0}
+    //mov lr, r0
+
+    pop {pc} // pop lr
+
+    // test
+    b trap_kernel // jump to kernel wihout changing priviledge level
 
 .type isr_systick, %function
 .global isr_systick
@@ -27,16 +54,16 @@ trap_kernel:
     mov r1, lr
     str r1, [r0]
     subs r0, #16
-    stmia r0!, {r4,r5, r6, r7}
+    stmia r0!, {r4, r5, r6, r7}
     mov	r4, r8
 	mov	r5, r9
 	mov	r6, r10
 	mov	r7, r11
     subs r0, #32
-    stmia r0!, {r4,r5, r6, r7}
+    stmia r0!, {r4, r5, r6, r7}
     subs r0, #16
 
-	// load kernel state from stack
+	// load kernel context 
     pop {r1, r2, r3, r4, r5}
     mov r8, r1
     mov r9, r2
@@ -44,10 +71,8 @@ trap_kernel:
     mov r11, r4
     mov r12, r5
     pop {r4, r5, r6, r7}       
-
 	msr psr_nzcvq, ip
-
-    pop {pc}
+    pop {pc} // jump to kernel wihout changing priviledge level
 
 .global noza_os_resume_thread
 noza_os_resume_thread:
@@ -76,8 +101,8 @@ noza_os_resume_thread:
 	// return to user
 	bx lr
 
-.global init_kernel_stack
-init_kernel_stack:
+.global noza_init_kernel_stack
+noza_init_kernel_stack:
 	mrs ip, psr
     push {r4, r5, r6, r7, lr}
     mov r1, r8
@@ -95,5 +120,4 @@ init_kernel_stack:
 	movs r0, #0 // system call: 0 --> reschedule
 	svc 0
 	bx lr
-
 

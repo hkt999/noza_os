@@ -18,3 +18,4 @@ enum {
 };
 
 #define NSC_HARDFAULT   255
+#define NSC_SYSTICK     254
