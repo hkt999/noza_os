@@ -25,9 +25,16 @@ add_executable(
 	kernel/noza_os.h
 	user/syslib.c
 	user/noza_os_demo.c
+	service/vfs/rootfs.c
+	service/vfs/romfs.c
 )
 
-target_include_directories(noza PRIVATE .)
+target_include_directories(
+	noza
+	PRIVATE
+	${CMAKE_CURRENT_LIST_DIR}
+	${CMAKE_CURRENT_LIST_DIR}/service/vfs
+)
 
 pico_set_program_name(noza "noza")
 pico_set_program_version(noza "0.1.1")

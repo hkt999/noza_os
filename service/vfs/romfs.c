@@ -1,7 +1,6 @@
 #include "vfs.h"
 #include "romfs.h"
 #include "setbit.h"
-#include "os_debug.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -96,7 +95,7 @@ static int romfd_open(vfs_t *vfs, const char *path, int oflag, int omode)
             // file found, setup the file descriptor structure
             int fd = find_first_set_bit(romfs->fd_bits);
             if (fd >= MAX_NUM_FILES) {
-                printk("exceed max number of files (%d)\n", fd);
+                printf("exceed max number of files (%d)\n", fd);
                 return -1;
             }
             set_bit(&romfs->fd_bits, fd);
@@ -170,7 +169,7 @@ static int romfd_stat(vfs_t *vfs, const char *path, struct sys_stat *buf)
     strtok_noreplace_t sn;
     sn.last_token_end = NULL;
 
-    printk("romfd_open path=[%s] romfs->bin=%p\n", path, romfs->bin);
+    printf("romfd_open path=[%s] romfs->bin=%p\n", path, romfs->bin);
     // parse the path
     const char *name = strtok_noreplace(&sn, path, "/");
     while (sn.last_token_end != NULL) {
