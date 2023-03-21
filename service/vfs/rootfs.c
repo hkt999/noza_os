@@ -5,7 +5,6 @@
 #include "romfs.h"
 #include "setbit.h"
 #include "rootfs.h"
-#include "os_debug.h"
 
 #define MAX_NUM_MOUNTS  8
 #define MAX_PATH_LEN    256
@@ -155,7 +154,7 @@ int rootfs_open(const char *path, int flags, int mode)
 {
     int open_fd = find_first_zero_bit(OPEN_FILE_BITS);
     if (open_fd<0) {
-        printk("rootfs_open: no more fd available\n");
+        //printk("rootfs_open: no more fd available\n");
         return -1; // not enough fd
     }
     mount_rec_t *mount = rootfs_match_mount(path);
