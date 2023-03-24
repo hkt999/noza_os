@@ -1,54 +1,50 @@
 .thumb
 .syntax unified
 .global noza_os_trap_info
-.global core1_pop_fifo
 
-.type core1_fifo_handler, %function
-.global core1_fifo_handler
-core1_fifo_handler:
-    push {r4, r5, r6, r7, lr}
-    mov r1, r8
-    mov r2, r9
-    mov r3, r10
-    mov r4, r11
-    mov r5, r12
-    push {r1, r2, r3, r4, r5}
-    bl core1_pop_fifo
-    pop {r1, r2, r3, r4, r5}
-    mov r8, r1
-    mov r9, r2
-    mov r10, r3
-    mov r11, r4
-    mov r12, r5
-    pop {r4, r5, r6, r7}
+.macro save_context
+    push {r4-r7}
+    mov r4, r8
+    mov r5, r9
+    mov r6, r10
+    mov r7, r11
+    push {r4-r7}
+    mov r4, r12
+    push {r4}
+    push {lr}
+.endm
 
-    //pop {r0}
-    //mov lr, r0
+.macro restore_context
+    pop {r0}
+    mov lr, r0
+    pop {r4}
+    mov r12, r4
+    pop {r4-r7}
+    mov r8, r4
+    mov r9, r5
+    mov r10, r6
+    mov r11, r7
+    pop {r4-r7}
+.endm
 
-    pop {pc} // pop lr
-
-    // test
-    b trap_kernel // jump to kernel wihout changing priviledge level
-
+/* 
 .type isr_systick, %function
 .global isr_systick
-isr_hardfault:
-	movs r0, #255 // system call 255 --> hardfault
-	b isr_svcall
-
 isr_systick:
-	movs r0, #254 // system call 0 --> reschedule
+	movs r0, #0 // system call 0 --> reschedule
+*/
 
 .type isr_svcall, %function
 .global isr_svcall
 isr_svcall:
-    push {lr}
+    save_context
 	bl noza_os_trap_info
-	pop {r0}
-	mov lr, r0
+    restore_context
 
-trap_kernel:
-    // save user context
+.type isr_systick, %function
+.global isr_systick
+isr_systick:
+    // save user context (psp stack)
 	mrs r0, psp
     subs r0, #4
     mov r1, lr
@@ -63,7 +59,7 @@ trap_kernel:
     stmia r0!, {r4, r5, r6, r7}
     subs r0, #16
 
-	// load kernel context 
+	// load kernel context (msp stack)
     pop {r1, r2, r3, r4, r5}
     mov r8, r1
     mov r9, r2

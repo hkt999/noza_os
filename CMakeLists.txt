@@ -49,5 +49,5 @@ target_link_libraries(noza pico_stdlib pico_multicore)
 
 pico_add_extra_outputs(noza)
 pico_enable_stdio_usb(noza 1)
-pico_enable_stdio_uart(noza 1)
+#pico_enable_stdio_uart(noza 1)
 

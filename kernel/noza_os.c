@@ -4,6 +4,7 @@
 #include "pico/multicore.h"
 #include "pico/mutex.h"
 #include "hardware/structs/systick.h"
+//#include "hardware/structs/sio.h"
 #include "hardware/sync.h"
 #include "noza_config.h"
 #include "syscall.h"
@@ -89,7 +90,6 @@ typedef struct thread_s {
     thread_list_t       join_list;
     uint32_t            stack_area[NOZA_OS_STACK_SIZE];
 } thread_t;
-
 
 typedef struct {
     thread_t        *running[NOZA_OS_NUM_CORES];
@@ -464,10 +464,26 @@ typedef struct {
 static idle_task_t idle_task[NOZA_OS_NUM_CORES];
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
-static void idle_entry()
+
+#if 0
+void toggle_debug_gpio(uint32_t io_num)
+{
+    gpio_put(io_num, !gpio_get(io_num));
+}
+#endif
+
+static void idle_entry0()
 {
     for (;;) {
         __wfi(); // idle, power saving
+    }
+}
+
+static void idle_entry1()
+{
+    for (;;) {
+        multicore_fifo_pop_blocking();
+        //__wfi(); // idle, power saving
     }
 }
 
@@ -488,7 +504,7 @@ uint32_t *noza_build_stack(uint32_t *stack, uint32_t size, void (*entry)(void *)
 static void noza_make_idle_context(uint32_t core)
 {
     idle_task_t *t = &idle_task[core];
-    t->idle_stack_ptr = noza_build_stack(t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), idle_entry, (void *)0);
+    t->idle_stack_ptr = noza_build_stack(t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), (core == 0) ? idle_entry0 : idle_entry1, (void *)0);
 }
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
@@ -499,16 +515,16 @@ static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void
 static void noza_systick_config(unsigned int n)
 {
     // stop systick and cancel it if it is pending
-    systick_hw->csr = 0;    // disable timer and IRQ 
+    systick_hw->csr = 0;    // disable timer and irq 
     __dsb();                // make sure systick is disabled
     __isb();                // and it is really off
 
     // clear the systick exception pending bit if it got set
-    hw_set_bits  ((io_rw_32 *)(PPB_BASE + M0PLUS_ICSR_OFFSET),M0PLUS_ICSR_PENDSTCLR_BITS);
+    hw_set_bits  ((io_rw_32 *)(PPB_BASE + M0PLUS_ICSR_OFFSET), M0PLUS_ICSR_PENDSTCLR_BITS);
 
     systick_hw->rvr = (n) - 1UL;    // set the reload value
     systick_hw->cvr = 0;    // clear counter to force reload
-    systick_hw->csr = 0x03; // arm IRQ, start counter with 1 usec clock
+    systick_hw->csr = 0x03; // arm irq, start counter with 1 usec clock
 }
 
 static uint32_t noza_os_thread_create( void (*entry)(void *param), void *param, uint32_t pri)
@@ -696,50 +712,27 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
     return 0;
 }
 
-#if NOZA_OS_NUM_CORES > 1
-void core1_pop_fifo(void)
-{
-    // read out the fifo
-    while (multicore_fifo_rvalid()) {
-        multicore_fifo_pop_blocking();
-    }
-    multicore_fifo_clear_irq();
-}
-
-#define NOZA_OS_CORE1_READY  0xdeadbeef
-static void noza_os_cores_start(uint32_t core)
-{
-    if (core == 0) {
-        multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
-        for (;;) {
-            if (multicore_fifo_pop_blocking() == NOZA_OS_CORE1_READY)
-                break;
-        }
-    } else {
-        extern void core1_fifo_handler(); // assembly in ISR
-        irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_fifo_handler);
-        irq_set_enabled(SIO_IRQ_PROC1, true);
-        multicore_fifo_clear_irq();
-    }
-}
-#else
-#define noza_os_cores_start(core)   (void)0
-void core1_pop_fifo(void) {}
-#endif
-
 uint32_t *noza_os_resume_thread(uint32_t *stack);
 static void noza_os_scheduler()
 {
     uint32_t core = get_core_num();
-    noza_os_cores_start(core); // start multicore
+    if (core == 0) {
+        multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
+    }
     noza_switch_handler(core); // switch to kernel stack
+
 #if NOZA_OS_NUM_CORES > 1
-    multicore_fifo_push_blocking(NOZA_OS_CORE1_READY); // notify core0 that core1 kernel is ready
-    while (core!=0) { 
-        idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
-        printf("tick\n");
-    } // save power
+    if (core > 0) {
+        //irq_set_enabled(SIO_IRQ_PROC1, true);
+        multicore_fifo_clear_irq();
+        for (;;) {
+            idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
+        }
+    }
+    #if 0
+    #endif
 #endif
+
     for (;;) {
         thread_t *running = NULL;
         for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
