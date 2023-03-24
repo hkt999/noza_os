@@ -509,7 +509,7 @@ static void noza_make_idle_context(uint32_t core)
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
 {
-    th->stack_ptr = noza_build_stack((uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, entry, param);
+    th->stack_ptr = noza_build_stack((uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
 static void noza_systick_config(unsigned int n)

@@ -18,9 +18,35 @@ int noza_thread_sleep(uint32_t ms)
 	return noza_syscall(NSC_SLEEP, ms, 0, 0);
 }
 
+typedef struct boot_info {
+	void (*user_entry)(void *param);
+	void *user_param;
+	uint32_t created;
+} boot_info_t;
+
+static void app_bootstrap(void *param)
+{
+	boot_info_t *boot_src = (boot_info_t *) param;
+	void (*user_entry)(void *param) = boot_src->user_entry;
+	void *user_param = boot_src->user_param;
+	boot_src->created = 1;
+
+	user_entry(user_param);
+
+    noza_thread_terminate();
+}
+
 int noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)
 {
-    return noza_syscall(NSC_THREAD_CREATE, (uint32_t) entry, (uint32_t) param, priority);
+	volatile boot_info_t boot_info;
+	boot_info.user_entry = entry;
+	boot_info.user_param = param;
+	boot_info.created = 0;
+    int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) entry, (uint32_t) param, priority);
+	while (boot_info.created==0)
+		noza_thread_yield();
+
+	return ret;
 }
 
 int noza_thread_change_priority(uint32_t thread_id, uint32_t priority)
