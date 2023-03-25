@@ -20,11 +20,15 @@ pico_sdk_init()
 add_executable(
 	noza
 	kernel/context_switch.S
-	kernel/noza_syscall.S
 	kernel/noza_os.c
 	kernel/noza_os.h
+
+	user/libc/src/noza_syscall.S
+	user/libc/src/app_bootstrap.S
 	user/syslib.c
 	user/noza_os_demo.c
+
+	service/memory/mem_serv.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
 	3rd_party/rpmalloc_noza/rpmalloc.c
@@ -36,6 +40,7 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}
 	${CMAKE_CURRENT_LIST_DIR}/service/vfs
 	${CMAKE_CURRENT_LIST_DIR}/include
+	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 )
 
 pico_set_program_name(noza "noza")

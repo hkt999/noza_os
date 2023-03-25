@@ -1,6 +1,6 @@
 #pragma once
 
-#define NOZA_OS_STACK_SIZE       256         // size of our user task stacks in words
+#define NOZA_OS_STACK_SIZE       128         // size of our user task stacks in words
 #define NOZA_OS_TASK_LIMIT       32          // number of user task
 #define NOZA_OS_THREAD_PSP       0xFFFFFFFD  // exception return behavior (thread mode)
 #define NOZA_OS_TIME_SLICE       10000       // scheduler timer, in us

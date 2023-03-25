@@ -73,8 +73,7 @@ void thread_working(void *param)
     }
     printf("enter join state\n");
     noza_thread_join(master);
-    printf("-- master thread terminated\n");
-    noza_thread_terminate();
+    printf("-- detect master thread terminated\n");
 }
 
 void thread_master(void *param)
@@ -85,7 +84,6 @@ void thread_master(void *param)
         noza_thread_sleep(1000);
     }
     printf("** master thread terminated\n");
-    noza_thread_terminate();
 }
 
 void thread_join_demo()
@@ -97,8 +95,6 @@ void thread_join_demo()
         noza_thread_sleep(1000);
         printf(" -- main loop tick --\n");
     }
-
-    noza_thread_terminate();
 }
 
 void __user_start()
@@ -111,5 +107,6 @@ void __user_start()
     }
     //message_demo();
     thread_join_demo();
+
     noza_thread_terminate();
 }

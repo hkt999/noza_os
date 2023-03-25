@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h> // TODO: remove malloc and free to use the memory service
 #include "syslib.h"
 #include "kernel/syscall.h"
 
@@ -21,30 +23,30 @@ int noza_thread_sleep(uint32_t ms)
 typedef struct boot_info {
 	void (*user_entry)(void *param);
 	void *user_param;
+	uint32_t *stack_ptr;
+	uint32_t stack_size;
 	uint32_t created;
 } boot_info_t;
 
-static void app_bootstrap(void *param)
+void free_stack(void *ptr)
 {
-	boot_info_t *boot_src = (boot_info_t *) param;
-	void (*user_entry)(void *param) = boot_src->user_entry;
-	void *user_param = boot_src->user_param;
-	boot_src->created = 1;
-
-	user_entry(user_param);
-
-    noza_thread_terminate();
+	free(ptr);
 }
 
+extern void app_bootstrap(boot_info_t *info);
 int noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)
 {
 	volatile boot_info_t boot_info;
 	boot_info.user_entry = entry;
 	boot_info.user_param = param;
+	boot_info.stack_ptr = (uint32_t *)malloc(1024); // TODO: use noza memory allocator
+	boot_info.stack_size = 1024;
 	boot_info.created = 0;
-    int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) entry, (uint32_t) param, priority);
-	while (boot_info.created==0)
+	printf("stack_ptr: %p\n", boot_info.stack_ptr);
+    int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_bootstrap, (uint32_t) &boot_info, priority);
+	while (boot_info.created==0) {
 		noza_thread_yield();
+	}
 
 	return ret;
 }
