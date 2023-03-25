@@ -1,6 +1,13 @@
 #pragma once
 #include <stdint.h>
 
+// Noza IPC
+typedef struct {
+    uint32_t    pid;
+    void        *ptr;
+    uint32_t    size;
+} noza_msg_t;
+
 // Noza thread & scheduling
 int     noza_thread_sleep(uint32_t ms);
 int     noza_thread_create(void (*entry)(void *param), void *param, uint32_t priority);
@@ -9,15 +16,9 @@ int     noza_thread_yield();
 int     noza_thread_join(uint32_t thread_id);
 void    noza_thread_terminate();
 
-// Noza IPC
-typedef struct {
-    uint32_t    pid;
-    void        *ptr;
-    uint32_t    size;
-} noza_msg_t;
-
+// NOza message
 int noza_recv(noza_msg_t *msg);
 int noza_reply(noza_msg_t *msg);
 int noza_call(noza_msg_t *msg);
-int noza_nonblock_call(uint32_t pid, noza_msg_t *msg);
-int noza_nonblock_recv(uint32_t pid, noza_msg_t *msg);
+int noza_nonblock_call(noza_msg_t *msg);
+int noza_nonblock_recv(noza_msg_t *msg);

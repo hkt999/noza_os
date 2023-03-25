@@ -35,13 +35,3 @@ int noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)
 
 	return ret;
 }
-
-int noza_nonblock_call(uint32_t pid, noza_msg_t *msg)
-{
-	return noza_syscall(NSC_NB_CALL, msg->pid, (uint32_t)msg->ptr, msg->size);
-}
-
-int noza_nonblock_recv(uint32_t pid, noza_msg_t *msg)
-{
-	return noza_syscall(NSC_NB_RECV, msg->pid, (uint32_t)msg->ptr, msg->size);
-}
