@@ -25,9 +25,11 @@ add_executable(
 
 	user/libc/src/noza_syscall.S
 	user/libc/src/app_bootstrap.S
-	user/syslib.c
+	user/libc/src/syscall_asm.S
+	user/libc/src/syslib.c
 	user/noza_os_demo.c
 
+	service/name_lookup/name_lookup.c
 	service/memory/mem_serv.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c

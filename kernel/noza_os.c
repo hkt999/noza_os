@@ -1,13 +1,14 @@
 #include <string.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "pico/multicore.h"
 #include "pico/mutex.h"
 #include "hardware/structs/systick.h"
-//#include "hardware/structs/sio.h"
 #include "hardware/sync.h"
 #include "noza_config.h"
 #include "syscall.h"
+#if NOZA_OS_NUM_CORES > 1
+#include "pico/multicore.h"
+#endif
 
 //#define DEBUG
 
@@ -36,7 +37,6 @@
 #define PORT_WAIT_LISTEN        0
 #define PORT_READY              1
 
-extern void __user_start(void *param); // the first user task
 typedef struct cdl_node_s cdl_node_t;
 struct cdl_node_s {
     cdl_node_t *next;
@@ -269,6 +269,7 @@ static void noza_os_nonblock_recv(thread_t *running)
 
 static void noza_os_reply(thread_t *running, uint32_t pid, void *msg, uint32_t size)
 {
+    DEBUG_PRINTF("noza_os_reply: pid=%ld, msg=%p, size=%ld\n", pid, msg, size);
     // search if pid is in the reply list (sanity check)
     thread_t *head_th = (thread_t *)running->port.reply_list.head->value;
     thread_t *th = head_th;
@@ -336,12 +337,13 @@ static void noza_start()
         noza_os.thread[i].join_list.state_id = THREAD_WAITING;
     }
 
-    // create application thread
-    noza_os_thread_create(__user_start, NULL, 0);
     for (int i=0; i<NOZA_OS_NUM_CORES; i++) {
         noza_make_idle_context(i);
     }
 
+    // create user service name lookup thread
+    extern void name_lookup_init(void *param);
+    noza_os_thread_create(name_lookup_init, NULL, 0); // create the first thread for name lookup service (user level)
     noza_os_scheduler();
 }
 
@@ -465,13 +467,6 @@ static idle_task_t idle_task[NOZA_OS_NUM_CORES];
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
 
-#if 0
-void toggle_debug_gpio(uint32_t io_num)
-{
-    gpio_put(io_num, !gpio_get(io_num));
-}
-#endif
-
 static void idle_entry0()
 {
     for (;;) {
@@ -479,6 +474,7 @@ static void idle_entry0()
     }
 }
 
+#if NOZA_OS_NUM_CORES > 1
 static void idle_entry1()
 {
     for (;;) {
@@ -486,6 +482,7 @@ static void idle_entry1()
         //__wfi(); // idle, power saving
     }
 }
+#endif
 
 uint32_t *noza_build_stack(uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
 {
@@ -504,7 +501,11 @@ uint32_t *noza_build_stack(uint32_t *stack, uint32_t size, void (*entry)(void *)
 static void noza_make_idle_context(uint32_t core)
 {
     idle_task_t *t = &idle_task[core];
+#if NOZA_OS_NUM_CORES > 1
     t->idle_stack_ptr = noza_build_stack(t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), (core == 0) ? idle_entry0 : idle_entry1, (void *)0);
+#else
+    t->idle_stack_ptr = noza_build_stack(t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), idle_entry0, 0);
+#endif
 }
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
@@ -716,9 +717,12 @@ uint32_t *noza_os_resume_thread(uint32_t *stack);
 static void noza_os_scheduler()
 {
     uint32_t core = get_core_num();
+#if NOZA_OS_NUM_CORES > 1
     if (core == 0) {
         multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
     }
+#endif
+
     noza_switch_handler(core); // switch to kernel stack
 
 #if NOZA_OS_NUM_CORES > 1
