@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include "syslib.h"
 #include <string.h>
+#include "syslib.h"
 
 void test_task(void *param)
 {
@@ -34,9 +34,12 @@ void server(void *param)
 {
     for (;;) {
         noza_msg_t msg;
-        if (noza_recv(&msg) == 0) {
-            printf("msg: %s\n", (char *)msg.ptr);
+        int ret = noza_recv(&msg);
+        if (ret == 0) {
+            printf("server got msg: %s\n", (char *)msg.ptr);
             noza_reply(&msg);
+        } else {
+            printf("server recv error: %d\n", ret);
         }
     }
 }
@@ -49,9 +52,11 @@ void client(void *param)
     uint32_t counter = 0;
     for (;;) {
         sprintf(s, "hello %ld", counter++);
-        noza_msg_t msg = {.pid = pid, .ptr = (void *)s, .size = strlen(s) + 1};
-        noza_call(&msg);
-        noza_thread_sleep(1000);
+        noza_msg_t msg = {.pid=pid, .ptr=s, .size=strlen(s)+1};
+        printf("client call (%s)\n", s);
+        int code = noza_call(&msg);
+        printf("    client return %d\n", code);
+        noza_thread_sleep(500);
     }
 }
 
@@ -105,8 +110,8 @@ void __user_start()
         noza_thread_sleep(1000);
         printf("count down: %d\n", counter);
     }
-    //message_demo();
-    thread_join_demo();
+    message_demo();
+    //thread_join_demo();
 
     noza_thread_terminate();
 }
