@@ -27,12 +27,19 @@
     pop {r4-r7}
 .endm
 
-/* 
-.type isr_systick, %function
-.global isr_systick
-isr_systick:
-	movs r0, #0 // system call 0 --> reschedule
-*/
+.type isr_irq16, %function
+.global isr_irq16
+isr_irq16:
+    pop {r1, r2, r3, r4, r5}
+    mov r8, r1
+    mov r9, r2
+    mov r10, r3
+    mov r11, r4
+    mov r12, r5
+    pop {r4, r5, r6, r7}       
+	msr psr_nzcvq, ip
+    pop {pc} // jump to kernel wihout changing priviledge level
+
 
 .type isr_svcall, %function
 .global isr_svcall
