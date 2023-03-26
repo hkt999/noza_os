@@ -4,8 +4,19 @@
 .type app_bootstrap, %function
 .global app_bootstrap, noza_thread_terminate, free_stack
 app_bootstrap:
-    // r0 is the pointer to the info structure
-    ldmia  r0!, {r1, r2, r3, r4} // load the info structure, r1 -> func_entry, r2 -> func_param, r3 -> stack_base, r4 -> stack_size
+    // r0: the pointer to the info structure
+    // r1: thread id
+    // push the signature and thread id to the stack
+    /*
+    push {r1}
+    mov r1, #0xFEEDFACE
+    push {r1}
+    mov r1, 0xBADC0FFE
+    push {r1}
+    */
+
+    // load the info structure, r1 -> func_entry, r2 -> func_param, r3 -> stack_base, r4 -> stack_size
+    ldmia  r0!, {r1, r2, r3, r4} 
     movs r5, #1
     str r5, [r0]    // set created flag: info->created = 1
     mov r5, r3

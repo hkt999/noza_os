@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 # initalize pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
+add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 
 # Pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -33,7 +34,6 @@ add_executable(
 	service/memory/mem_serv.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
-	3rd_party/rpmalloc_noza/rpmalloc.c
 )
 
 target_include_directories(
@@ -43,6 +43,7 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/service/vfs
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
+	${CMAKE_CURRENT_LIST_DIR}/3rd_party
 )
 
 pico_set_program_name(noza "noza")
