@@ -809,6 +809,7 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 {
     // callback from SVC servie routine, make system call pending
     // and trap into kernel later
+    spin_lock_unsafe_blocking(noza_os.spinlock_count) ;
     thread_t *th = noza_os_get_running_thread();
     if (th != NULL) {
         kernel_trap_info_t *trap = &th->trap;
@@ -818,6 +819,7 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->r3 = r3;
         trap->state = SYSCALL_PENDING;
     }
+    spin_unlock_unsafe(noza_os.spinlock_count) ;
 }
 
 int main()
