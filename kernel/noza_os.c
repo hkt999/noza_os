@@ -1,9 +1,10 @@
 #include <string.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "pico/mutex.h"
 #include "hardware/structs/systick.h"
 #include "hardware/sync.h"
+#include "hardware/regs/m0plus.h"
+#include "hardware/structs/scb.h"
 #include "noza_config.h"
 #include "syscall.h"
 #if NOZA_OS_NUM_CORES > 1
@@ -98,8 +99,9 @@ typedef struct {
     thread_list_t   sleep;
     thread_list_t   hardfault;
     thread_list_t   free;
-    #if NOZA_OS_NUMCORE > 1
-    mutex_t         mutex;
+    #if NOZA_OS_NUM_CORES > 1
+    int             spinlock_num_count;
+    spin_lock_t     *spinlock_count;
     #endif
 
     // context
@@ -336,6 +338,8 @@ static void noza_start()
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING;
         noza_os.thread[i].join_list.state_id = THREAD_WAITING;
     }
+    noza_os.spinlock_num_count = spin_lock_claim_unused(true) ;
+    noza_os.spinlock_count = spin_lock_init(noza_os.spinlock_num_count) ;
 
     for (int i=0; i<NOZA_OS_NUM_CORES; i++) {
         noza_make_idle_context(i);
@@ -475,16 +479,17 @@ static void idle_entry0()
 }
 
 #if NOZA_OS_NUM_CORES > 1
+extern void noza_thread_yield(void);
 static void idle_entry1()
 {
     for (;;) {
-        multicore_fifo_pop_blocking();
-        //__wfi(); // idle, power saving
+        __wfi(); // idle, power saving
+        // noza_thread_yield();
     }
 }
 #endif
 
-uint32_t *noza_build_stack(uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
+uint32_t *noza_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
 {
     uint32_t *new_ptr = stack + size - 17; // end of task_stack
     user_stack_t *u = (user_stack_t *) new_ptr;
@@ -494,6 +499,7 @@ uint32_t *noza_build_stack(uint32_t *stack, uint32_t size, void (*entry)(void *)
     is->pc = (uint32_t) entry;
     is->xpsr = (uint32_t) 0x01000000; // thumb bit
     is->r0 = (uint32_t) param;
+    is->r1 = thread_id;
 
     return new_ptr;
 }
@@ -502,15 +508,15 @@ static void noza_make_idle_context(uint32_t core)
 {
     idle_task_t *t = &idle_task[core];
 #if NOZA_OS_NUM_CORES > 1
-    t->idle_stack_ptr = noza_build_stack(t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), (core == 0) ? idle_entry0 : idle_entry1, (void *)0);
+    t->idle_stack_ptr = noza_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), (core == 0) ? idle_entry0 : idle_entry1, (void *)0);
 #else
-    t->idle_stack_ptr = noza_build_stack(t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), idle_entry0, 0);
+    t->idle_stack_ptr = noza_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), idle_entry0, 0); // TODO: make idle thread also user thread
 #endif
 }
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
 {
-    th->stack_ptr = noza_build_stack((uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
+    th->stack_ptr = noza_build_stack(thread_get_pid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
 static void noza_systick_config(unsigned int n)
@@ -713,30 +719,37 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
     return 0;
 }
 
+#if NOZA_OS_NUM_CORES > 1
+void core1_interrupt_handler() {
+
+    while (multicore_fifo_rvalid()){
+        multicore_fifo_pop_blocking();
+    }
+    multicore_fifo_clear_irq(); // clear interrupt
+
+    scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; 
+}
+#endif
+
 uint32_t *noza_os_resume_thread(uint32_t *stack);
 static void noza_os_scheduler()
 {
     uint32_t core = get_core_num();
+
 #if NOZA_OS_NUM_CORES > 1
     if (core == 0) {
         multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
+    } else {
+        multicore_fifo_clear_irq();
+        irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_interrupt_handler);
+        irq_set_priority(SIO_IRQ_PROC1, 32); // set priority to 32, lower then pendSV
+        irq_set_enabled(SIO_IRQ_PROC1, true);
     }
 #endif
 
     noza_switch_handler(core); // switch to kernel stack
 
-#if NOZA_OS_NUM_CORES > 1
-    if (core > 0) {
-        //irq_set_enabled(SIO_IRQ_PROC1, true);
-        multicore_fifo_clear_irq();
-        for (;;) {
-            idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
-        }
-    }
-    #if 0
-    #endif
-#endif
-
+    spin_lock_unsafe_blocking(noza_os.spinlock_count) ;
     for (;;) {
         thread_t *running = NULL;
         for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
@@ -759,7 +772,9 @@ static void noza_os_scheduler()
                     is->r3 = running->trap.r3;
                     running->trap.state = SYSCALL_DONE;
                 }
+                spin_unlock_unsafe(noza_os.spinlock_count) ;
                 running->stack_ptr = noza_os_resume_thread(running->stack_ptr); // switch to user task
+                spin_lock_unsafe_blocking(noza_os.spinlock_count) ;
                 if (running->trap.state == SYSCALL_PENDING) {
                     serv_syscall(core);
                     if (noza_os_get_running_thread() == NULL)
@@ -773,7 +788,9 @@ static void noza_os_scheduler()
         } else {
             // no task here, switch to idle thread, and wait for interrupt to wake up the processor
             noza_systick_config(NOZA_OS_TIME_SLICE);
+            spin_unlock_unsafe(noza_os.spinlock_count) ;
             idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
+            spin_lock_unsafe_blocking(noza_os.spinlock_count) ;
         }
 
         #if NOZA_OS_NUM_CORES > 1
