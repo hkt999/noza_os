@@ -102,8 +102,11 @@ void thread_join_demo()
     }
 }
 
+extern void console_start(void *);
 void __user_start()
 {
+    uint32_t th = noza_thread_create(console_start, NULL, 0);
+    #if 0
     // task_demo();
     int counter = 4;
     while (counter-->0) {
@@ -111,7 +114,9 @@ void __user_start()
         printf("count down: %d\n", counter);
     }
     message_demo();
-    //thread_join_demo();
+    thread_join_demo();a
+    #endif
 
+    noza_thread_join(th);
     noza_thread_terminate();
 }
