@@ -98,11 +98,6 @@ extern void app_bootstrap(void *param);
 
 void name_lookup_init(void *param)
 {
-    int counter = 6;
-    while (counter-->0) {
-        printf("name_lookup_init: %d\n", counter);
-        noza_thread_sleep(1000);
-    }
 	boot_info_t boot_info;
 	boot_info.user_entry = do_name_lookup;
 	boot_info.user_param = param;

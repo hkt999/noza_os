@@ -22,13 +22,20 @@ add_executable(
 	noza
 	kernel/context_switch.S
 	kernel/noza_os.c
-	kernel/noza_os.h
 
+	# lib and system call for user space application
 	user/libc/src/noza_syscall.S
 	user/libc/src/app_bootstrap.S
 	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
+
+	# applciation demo
 	user/noza_os_demo.c
+
+	# application console
+	user/console/history.c
+	user/console/cmd_line.c
+	user/console/noza_console.c
 
 	service/name_lookup/name_lookup.c
 	service/memory/mem_serv.c
@@ -48,9 +55,6 @@ target_include_directories(
 
 pico_set_program_name(noza "noza")
 pico_set_program_version(noza "0.1.1")
-
-pico_enable_stdio_uart(noza 1)
-pico_enable_stdio_usb(noza 0)
 
 # Add the standard library to the build
 target_link_libraries(noza pico_stdlib pico_multicore)
