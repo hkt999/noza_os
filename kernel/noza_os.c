@@ -92,6 +92,7 @@ typedef struct {
     thread_list_t   hardfault;
     thread_list_t   free;
     #if NOZA_OS_NUM_CORES > 1
+    uint32_t        interrupt_state[NOZA_OS_NUM_CORES];
     int             spinlock_num_count;
     spin_lock_t     *spinlock_count;
     #endif
@@ -117,13 +118,25 @@ static uint32_t noza_os_thread_create( void (*entry)(void *param), void *param, 
 static void     noza_os_scheduler();
 
 #if NOZA_OS_NUM_CORES > 1
-#define noza_os_lock_init() noza_os.spinlock_num_count = spin_lock_claim_unused(true); noza_os.spinlock_count = spin_lock_init(noza_os.spinlock_num_count)
-#define noza_os_lock()      spin_lock_unsafe_blocking(noza_os.spinlock_count)
-#define noza_os_unlock()    spin_unlock_unsafe(noza_os.spinlock_count)
+inline static void noza_os_lock_init() {
+    for (int i=0; i<NOZA_OS_NUM_CORES; i++)
+        noza_os.interrupt_state[i] = 0;
+    noza_os.spinlock_num_count = spin_lock_claim_unused(true);
+    noza_os.spinlock_count = spin_lock_init(noza_os.spinlock_num_count);
+}
+
+inline static void noza_os_lock(uint32_t core) {
+    noza_os.interrupt_state[core] = save_and_disable_interrupts();
+    spin_lock_unsafe_blocking(noza_os.spinlock_count);
+}
+inline static void noza_os_unlock(uint32_t core) {
+    spin_unlock_unsafe(noza_os.spinlock_count);
+    restore_interrupts(noza_os.interrupt_state[core]);
+}
 #else
-#define noza_os_lock()      (void)0
-#define noza_os_lock()      (void)0  
-#define noza_os_unlock()    (void)0
+#define noza_os_lock_init()     (void)0
+#define noza_os_lock(core)      (void)0
+#define noza_os_unlock(core)    (void)0
 #endif
 
 inline static void noza_os_set_return_value(thread_t *th, uint32_t r0)
@@ -297,9 +310,10 @@ static void noza_start()
     int i;
     stdio_init_all();
 
-    // setup the interrupt priority
-    hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR2_OFFSET), M0PLUS_SHPR2_BITS); // setup as priority 3
-    hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR3_OFFSET), M0PLUS_SHPR3_BITS); // setup as priority 3
+    // set the SVC interrupt priority
+    hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR2_OFFSET), M0PLUS_SHPR2_BITS); // setup as priority 3 (2 bits)
+    // set the PENDSV interrupt priority
+    hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR3_OFFSET), M0PLUS_SHPR3_BITS); // setup as priority 3 (2 bits)
 
     // init noza os / thread structure
     memset(&noza_os, 0, sizeof(noza_os_t));
@@ -703,18 +717,21 @@ static void noza_os_scheduler()
     } else {
         multicore_fifo_clear_irq();
         irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_interrupt_handler);
-        irq_set_priority(SIO_IRQ_PROC1, 32); // set priority to 32, priority higher then pendSV interrupt
+        // set priority to 32, priority higher then pendSV interrupt
+        // hardware interrupt priority is only 2 bits, the svc and pensv are both seting to 0x3
+        irq_set_priority(SIO_IRQ_PROC1, 32);
         irq_set_enabled(SIO_IRQ_PROC1, true); // enable the FIFO interrupt
     }
 #endif
 
-    noza_switch_handler(core); // switch to kernel stack
+    noza_switch_handler(core); // switch to kernel stack (priviliged mode)
 
     // TODO: for lock, consider the case PendSV interrupt goes here, 
     // and some other high priority interrupt is triggered, could cause deadlock ere
     // maybe need to disable all interrupts here with spin lock
-    noza_os_lock();
+    noza_os_lock(core);
     for (;;) {
+        core = get_core_num(); // update the core number whenever the scheduler is called
         thread_t *running = NULL;
         for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
             if (noza_os.ready[i].count > 0) {
@@ -735,9 +752,9 @@ static void noza_os_scheduler()
                     is->r3 = running->trap.r3;
                     running->trap.state = SYSCALL_DONE;
                 }
-                noza_os_unlock();
+                noza_os_unlock(core);
                 running->stack_ptr = noza_os_resume_thread(running->stack_ptr); // switch to user task
-                noza_os_lock();
+                noza_os_lock(core);
                 if (running->trap.state == SYSCALL_PENDING) {
                     serv_syscall(core);
                     if (noza_os_get_running_thread() == NULL)
@@ -750,19 +767,20 @@ static void noza_os_scheduler()
             }
         } else {
             // no task here, switch to idle thread, and wait for interrupt to wake up the processor
-            noza_systick_config(NOZA_OS_TIME_SLICE);
-            noza_os_unlock();
+            if (core==0)
+                noza_systick_config(NOZA_OS_TIME_SLICE);
+            noza_os_unlock(core);
             idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
-            noza_os_lock();
+            noza_os_lock(core);
         }
 
         #if NOZA_OS_NUM_CORES > 1
         if (core==0) {
             multicore_fifo_push_blocking(0);
+            noza_systick_config(noza_check_sleep_thread(NOZA_OS_TIME_SLICE));
         }
         #endif
         // reschedule the next time slice
-        noza_systick_config(noza_check_sleep_thread(NOZA_OS_TIME_SLICE));
     }
 }
 
@@ -770,9 +788,10 @@ static void noza_os_scheduler()
 // called from assembly SVC0 handler
 void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 {
+    uint32_t core = get_core_num();
     // callback from SVC servie routine, make system call pending
     // and trap into kernel later
-    noza_os_lock();
+    noza_os_lock(core);
     thread_t *th = noza_os_get_running_thread();
     if (th != NULL) {
         kernel_trap_info_t *trap = &th->trap;
@@ -782,7 +801,7 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->r3 = r3;
         trap->state = SYSCALL_PENDING;
     }
-    noza_os_unlock();
+    noza_os_unlock(core);
 }
 
 int main()
