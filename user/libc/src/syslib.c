@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h> // TODO: remove malloc and free to use the memory service
-#include "syslib.h"
+#include "nozaos.h"
 #include "kernel/syscall.h"
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);

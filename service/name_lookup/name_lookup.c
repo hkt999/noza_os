@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "syslib.h"
+#include "nozaos.h"
 
 #define NOZA_MAX_SERVICE    16
 #define MAX_NAME_LEN        16
