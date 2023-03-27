@@ -694,6 +694,12 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
     return 0;
 }
 
+#define SCHEDULE(stack_ptr) \
+    noza_os_unlock(core); \
+    stack_ptr = noza_os_resume_thread(stack_ptr); \
+    core = get_core_num(); \
+    noza_os_lock(core); \
+
 #if NOZA_OS_NUM_CORES > 1
 void core1_interrupt_handler() {
 
@@ -702,7 +708,7 @@ void core1_interrupt_handler() {
     }
     multicore_fifo_clear_irq(); // clear interrupt
 
-    scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; 
+    scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
 }
 #endif
 
@@ -752,10 +758,7 @@ static void noza_os_scheduler()
                     is->r3 = running->trap.r3;
                     running->trap.state = SYSCALL_DONE;
                 }
-                noza_os_unlock(core);
-                running->stack_ptr = noza_os_resume_thread(running->stack_ptr); // switch to user task
-                core = get_core_num(); // update core number after switching back
-                noza_os_lock(core);
+                SCHEDULE(running->stack_ptr)
                 if (running->trap.state == SYSCALL_PENDING) {
                     serv_syscall(core);
                     if (noza_os_get_running_thread() == NULL)
@@ -770,10 +773,8 @@ static void noza_os_scheduler()
             // no task here, switch to idle thread, and wait for interrupt to wake up the processor
             if (core==0)
                 noza_systick_config(NOZA_OS_TIME_SLICE);
-            noza_os_unlock(core);
-            idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
-            core = get_core_num(); // update core number after switching back
-            noza_os_lock(core);
+
+            SCHEDULE(idle_task[core].idle_stack_ptr);
         }
 
         #if NOZA_OS_NUM_CORES > 1
