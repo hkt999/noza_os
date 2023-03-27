@@ -754,6 +754,7 @@ static void noza_os_scheduler()
                 }
                 noza_os_unlock(core);
                 running->stack_ptr = noza_os_resume_thread(running->stack_ptr); // switch to user task
+                core = get_core_num(); // update core number after switching back
                 noza_os_lock(core);
                 if (running->trap.state == SYSCALL_PENDING) {
                     serv_syscall(core);
@@ -771,12 +772,13 @@ static void noza_os_scheduler()
                 noza_systick_config(NOZA_OS_TIME_SLICE);
             noza_os_unlock(core);
             idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
+            core = get_core_num(); // update core number after switching back
             noza_os_lock(core);
         }
 
         #if NOZA_OS_NUM_CORES > 1
         if (core==0) {
-            multicore_fifo_push_blocking(0);
+            multicore_fifo_push_blocking(0); // TODO: only timer interrupt need to wake up core1
             noza_systick_config(noza_check_sleep_thread(NOZA_OS_TIME_SLICE));
         }
         #endif
