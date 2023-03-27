@@ -17,5 +17,3 @@ enum {
     NSC_NUM_SYSCALLS,
 };
 
-#define NSC_HARDFAULT   255
-#define NSC_SYSTICK     254
