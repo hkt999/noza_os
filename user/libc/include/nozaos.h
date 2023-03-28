@@ -12,7 +12,7 @@ typedef struct {
 
 // Noza thread & scheduling
 int     noza_thread_sleep(uint32_t ms);
-int     noza_thread_create(void (*entry)(void *param), void *param, uint32_t priority);
+int     noza_thread_create(void (*entry)(void *param, uint32_t pid), void *param, uint32_t priority);
 int     noza_thread_change_priority(uint32_t thread_id, uint32_t priority);
 int     noza_thread_yield();
 int     noza_thread_join(uint32_t thread_id);
