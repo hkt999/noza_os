@@ -136,7 +136,7 @@ void console_start(void *param, uint32_t pid)
 {
 	noza_console_init(&noza_console, "noza> ", param);
 	for (;;) {
-		int ch = noza_console.cmd.driver.getc(); // TODO: keep it simple, remove getc
+		int ch = noza_console.cmd.driver.getc();
 		if (ch < 0)
 			noza_thread_sleep(20);
 		else
