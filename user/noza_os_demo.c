@@ -62,22 +62,29 @@ void server_thread(void *param, uint32_t pid)
     }
 }
 
-void client_thread(void *param, uint32_t my_pid)
+void client_thread(void *param, uint32_t mypid)
 {
+    noza_msg_t msg;
     char s[16];
 
     uint32_t pid = (uint32_t) param;
-    uint32_t counter = 0;
+    uint32_t counter = 20;
     while (counter-->0) {
-        sprintf(s, "hello %ld", counter++);
-        noza_msg_t msg = {.pid=pid, .ptr=s, .size=strlen(s)+1};
+        sprintf(s, "hello %ld", counter);
+        msg.pid = pid;
+        msg.ptr = s;
+        msg.size = strlen(s)+1;
         printf("client call (%s)\n", s);
         int code = noza_call(&msg);
         printf("    client return %d\n", code);
         noza_thread_sleep(300);
     }
     strncpy(s, "kill", sizeof(s));
-    noza_msg_t msg = {.pid=pid, .ptr=s, .size=strlen(s)+1};
+    msg.pid = pid;
+    msg.ptr = s;
+    msg.size = strlen(s)+1;
+    int code = noza_call(&msg);
+    printf("    client return %d\n", code);
 }
 
 int message_demo(int argc, char **argv)
