@@ -147,16 +147,32 @@ int thread_join_demo(int argc, char **argv)
 
 #include "user/console/noza_console.h"
 extern int lua_main(int argc, char **argv);
+extern int person_detection_main(int argc, char **argv);
+extern int hello_world_main(int argc, char **argv);
+extern int magic_wand_main(int argc, char **argv);
+extern int micro_speech_main(int argc, char **argv);
+
+void tflm_debug(const char *s)
+{
+    printf("%s", s);
+}
+
 builtin_cmd_t builtin_cmds[] = {
     {"test_task", task_demo, "a demo program for task creation and scheduling"},
     {"test_msg", message_demo, "a demo program for message passing"},
     {"test_join", thread_join_demo, "a demo program for thread synchronization join"},
-     {"lua", lua_main, "lua interpreter"},
+    {"hello_world", hello_world_main, "tensorflow lite demo -- hello world"},
+//    {"person_detection", person_detection_main, "tensorflow lite demo -- person detection"},
+//    {"magic_wand", magic_wand_main, "tensorflow lite demo -- magic wand"},
+//    {"micro_speech", micro_speech_main, "tensorflow lite demo -- micro speech"},
+    {"lua", lua_main, "lua interpreter"},
     {NULL, NULL}
 };
 
+extern void RegisterDebugLogCallback(void (*cb)(const char* s));
 void __user_start()
 {
+    RegisterDebugLogCallback(tflm_debug);
     uint32_t th = noza_thread_create(console_start, &builtin_cmds[0], 0);
 
     noza_thread_join(th);

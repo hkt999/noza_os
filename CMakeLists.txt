@@ -115,6 +115,11 @@ target_link_libraries(
 	pico_stdlib
 	pico_multicore
 	lua
+    hello_world
+#    person_detection
+#    magic_wand
+#    micro_speech
+#    tflm_cmsis
 )
 
 pico_add_extra_outputs(noza)
