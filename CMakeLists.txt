@@ -56,12 +56,13 @@ add_library(
     ${LUA_PATH}/lutf8lib.c
     ${LUA_PATH}/lvm.c
     ${LUA_PATH}/lzio.c
-    ${LUA_PORT_PATH}/lua.c # main program
+    ${LUA_PORT_PATH}/lua_noza.c # main program
 )
 
 target_include_directories(
 	lua
 	PRIVATE
+	${CMAKE_CURRENT_LIST_DIR}/user/console
 	${LUA_PORT_PATH}
 	${LUA_PATH}
 )
@@ -85,6 +86,7 @@ add_executable(
 	user/console/history.c
 	user/console/cmd_line.c
 	user/console/noza_console.c
+	user/console/noza_term.c
 
 	service/name_lookup/name_lookup.c
 	service/memory/mem_serv.c

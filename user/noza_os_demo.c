@@ -138,7 +138,7 @@ int thread_join_demo(int argc, char **argv)
     return 0;
 }
 
-#include "user/console/console.h"
+#include "user/console/noza_console.h"
 extern int lua_main(int argc, char **argv);
 builtin_cmd_t builtin_cmds[] = {
     {"test_task", task_demo, "a demo program for task creation and scheduling"},
