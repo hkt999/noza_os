@@ -139,10 +139,12 @@ int thread_join_demo(int argc, char **argv)
 }
 
 #include "user/console/console.h"
+extern int lua_main(int argc, char **argv);
 builtin_cmd_t builtin_cmds[] = {
     {"test_task", task_demo, "a demo program for task creation and scheduling"},
     {"test_msg", message_demo, "a demo program for message passing"},
     {"test_join", thread_join_demo, "a demo program for thread synchronization join"},
+     {"lua", lua_main, "lua interpreter"},
     {NULL, NULL}
 };
 
