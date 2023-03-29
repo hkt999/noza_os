@@ -28,6 +28,7 @@ add_executable(
 	user/libc/src/app_bootstrap.S
 	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
+	user/libc/src/setjmp.S
 
 	# applciation demo
 	user/noza_os_demo.c
