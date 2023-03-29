@@ -26,6 +26,7 @@ void Log(const char* format, va_list args);
 // printf-like functionalitys and are common to all target platforms.
 void MicroPrintf(const char* format, ...);
 #else
+#include <stdio.h>
 // We use a #define to ensure that the strings are completely stripped, to
 // prevent an unnecessary increase in the binary size.
 #define MicroPrintf(...) tflite::Unused(__VA_ARGS__)

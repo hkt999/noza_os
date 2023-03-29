@@ -258,10 +258,9 @@ target_include_directories(
 	third_party/flatbuffers/include
 )
 
-if(FALSE)
 # make examples
 # hello_world
-add_executable(
+add_library(
 	hello_world
 	examples/hello_world/constants.cc
 	examples/hello_world/hello_world_model_data.cc
@@ -271,7 +270,7 @@ add_executable(
 )
 
 # person_detection
-add_executable(
+add_library(
 	person_detection
 	examples/person_detection/detection_responder.cc
 	examples/person_detection/image_provider.cc
@@ -282,7 +281,7 @@ add_executable(
 )
 
 # magic wand
-add_executable(
+add_library(
 	magic_wand
 	examples/magic_wand/accelerometer_handler.cc
 	examples/magic_wand/gesture_predictor.cc
@@ -293,7 +292,7 @@ add_executable(
 )
 
 # micro speech
-add_executable(
+add_library(
 	micro_speech
 	examples/micro_speech/audio_provider.cc
 	examples/micro_speech/command_responder.cc
@@ -316,7 +315,7 @@ set(
 
 foreach(TARGET ${TARGET_LIST})
 	target_include_directories(${TARGET} PRIVATE
-		.
+		${CMAKE_CURRENT_LIST_DIR}
 		third_party/ruy
 		third_party/gemmlowp
 		third_party/kissfft
@@ -332,4 +331,3 @@ foreach(TARGET ${TARGET_LIST})
 	)
 endforeach()
 		
-endif()

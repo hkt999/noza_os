@@ -19,7 +19,11 @@ limitations under the License.
 // point. Other devices (for example FreeRTOS or ESP32) that have different
 // requirements for entry code (like an app_main function) should specialize
 // this main.cc file in a target-specific subfolder.
-int main(int argc, char* argv[]) {
+extern "C" {
+  int micro_speech_main(int argc, char* argv[]);
+};
+
+int micro_speech_main(int argc, char* argv[]) {
   setup();
   while (true) {
     loop();
