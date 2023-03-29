@@ -18,23 +18,8 @@ void free_stack(void *ptr)
 }
 
 extern void app_bootstrap(boot_info_t *info);
-int noza_thread_create(void (*entry)(void *, uint32_t), void *param, uint32_t priority)
-{
-	volatile boot_info_t boot_info;
-	boot_info.user_entry = entry;
-	boot_info.user_param = param;
-	boot_info.stack_ptr = (uint32_t *)malloc(2048); // TODO: use noza memory allocator
-	boot_info.stack_size = 2048;
-	boot_info.created = 0;
-    int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_bootstrap, (uint32_t) &boot_info, priority);
-	while (boot_info.created==0) {
-		noza_thread_yield();
-	}
 
-	return ret;
-}
-
-int noza_thread_create_width_stack(void (*entry)(void *, uint32_t pid),
+int noza_thread_create_with_stack(void (*entry)(void *, uint32_t pid),
 	void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
 {
 	volatile boot_info_t boot_info;
@@ -50,3 +35,12 @@ int noza_thread_create_width_stack(void (*entry)(void *, uint32_t pid),
 
 	return ret;
 }
+
+#define DEFAULT_STACK_SIZE 4096
+int noza_thread_create(void (*entry)(void *, uint32_t), void *param, uint32_t priority)
+{
+	uint8_t *stack_ptr = (uint8_t *)malloc(DEFAULT_STACK_SIZE);
+	uint32_t stack_size = DEFAULT_STACK_SIZE;
+	return noza_thread_create_with_stack(entry, param, priority, stack_ptr, stack_size);
+}
+
