@@ -1,32 +1,15 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 #include "cmd_line.h"
-#include "console.h"
+#include "noza_console.h"
 
 #include "pico/stdlib.h"
 
-#define NOZA_LIB
-
-#ifdef HOST_TEST
-#include <unistd.h>
-#define getchar_timeout_us(t)	getc(stdin)
-#define putchar_raw(c) putc(c, stdout)
-#define noza_thread_sleep(t) usleep(t*1000)
-#endif
-
-#ifdef SA_TEST
-extern int getchar_timeout_us(uint32_t timeout_us);
-extern int putchar_raw(int c);
-#define  noza_thread_sleep(t) sleep_ms(t)
-#endif
-
-#ifdef NOZA_LIB
 extern int getchar_timeout_us(uint32_t timeout_us);
 extern int putchar_raw(int c);
 extern void noza_thread_sleep(int ms);
-#endif
 
 static void noza_char_putc(int c)
 {
@@ -55,18 +38,10 @@ void noza_char_clear(char_driver_t *driver)
 
 ////
 
-#if 0
-typedef struct {
-	main_func_t main_func;
-	const char *name;
-} register_command_t;
-#endif
-
 typedef struct {
 	cmd_line_t 			cmd;
 	const char 			*prompt;
 	int					num_cmd;
-//	void				*user_data;
 	builtin_cmd_t 		*table;
 } noza_console_t;
 

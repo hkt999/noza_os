@@ -279,3 +279,8 @@ void cmd_line_putc(cmd_line_t *edit, int c)
 {
     edit->state_func(edit, c);
 }
+
+char *cmd_line_get_line(cmd_line_t *edit)
+{
+
+}
