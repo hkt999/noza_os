@@ -264,9 +264,9 @@ add_library(
 	hello_world
 	examples/hello_world/constants.cc
 	examples/hello_world/hello_world_model_data.cc
-	examples/hello_world/main.cc
-	examples/hello_world/main_functions.cc
-	examples/hello_world/output_handler.cc
+	examples/hello_world/hw_main.cc
+	examples/hello_world/hw_main_functions.cc
+	examples/hello_world/hw_output_handler.cc
 )
 
 # person_detection
@@ -274,9 +274,9 @@ add_library(
 	person_detection
 	examples/person_detection/detection_responder.cc
 	examples/person_detection/image_provider.cc
-	examples/person_detection/main.cc
-	examples/person_detection/main_functions.cc
-	examples/person_detection/model_settings.cc
+	examples/person_detection/pd_main.cc
+	examples/person_detection/pd_main_functions.cc
+	examples/person_detection/pd_model_settings.cc
 	examples/person_detection/person_detect_model_data.cc
 )
 
@@ -286,9 +286,9 @@ add_library(
 	examples/magic_wand/accelerometer_handler.cc
 	examples/magic_wand/gesture_predictor.cc
 	examples/magic_wand/magic_wand_model_data.cc
-	examples/magic_wand/main.cc
-	examples/magic_wand/main_functions.cc
-	examples/magic_wand/output_handler.cc
+	examples/magic_wand/mw_main.cc
+	examples/magic_wand/mw_main_functions.cc
+	examples/magic_wand/mw_output_handler.cc
 )
 
 # micro speech
@@ -297,8 +297,8 @@ add_library(
 	examples/micro_speech/audio_provider.cc
 	examples/micro_speech/command_responder.cc
 	examples/micro_speech/feature_provider.cc
-	examples/micro_speech/main.cc
-	examples/micro_speech/main_functions.cc
+	examples/micro_speech/ms_main.cc
+	examples/micro_speech/ms_main_functions.cc
 	examples/micro_speech/micro_speech_model_data.cc
 	examples/micro_speech/recognize_commands.cc
 	examples/micro_speech/micro_features/micro_features_generator.cc

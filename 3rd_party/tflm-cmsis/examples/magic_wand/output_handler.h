@@ -18,6 +18,6 @@ limitations under the License.
 
 #include "tensorflow/lite/c/common.h"
 
-void HandleOutput(int kind);
+void mwHandleOutput(int kind);
 
 #endif  // TENSORFLOW_LITE_MICRO_EXAMPLES_MAGIC_WAND_OUTPUT_HANDLER_H_
