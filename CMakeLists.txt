@@ -18,7 +18,7 @@ project(noza_os_demo C CXX ASM)
 # Initialise the Pico SDK
 pico_sdk_init()
 
-add_subdirectory(3rd_party/tflm-cmsis)
+#add_subdirectory(3rd_party/tflm-cmsis)
 
 set(LUA_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua)
 set(LUA_PORT_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua_port)
@@ -115,11 +115,10 @@ target_link_libraries(
 	pico_stdlib
 	pico_multicore
 	lua
-    hello_world
-#    person_detection
+#    hello_world
 #    magic_wand
+#    person_detection
 #    micro_speech
-#    tflm_cmsis
 )
 
 pico_add_extra_outputs(noza)
