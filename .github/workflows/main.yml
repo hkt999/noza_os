@@ -20,8 +20,6 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
-        wget https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-linux-x86_64.tar.gz
-        apt install cmake
         cmake --version
 
     - name: Set up pico-sdk
