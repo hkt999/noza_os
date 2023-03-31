@@ -324,6 +324,7 @@ static void noza_start()
     noza_os.wait.state_id = THREAD_WAITING;
     noza_os.sleep.state_id = THREAD_SLEEP;
     noza_os.free.state_id = THREAD_FREE;
+    noza_os.hardfault.state_id = THREAD_HARDFAULT;
 
     for (i=0; i<NOZA_OS_TASK_LIMIT; i++) {
         noza_os.thread[i].state_node.value = &noza_os.thread[i];
@@ -641,13 +642,21 @@ static syscall_func_t syscall_func[] = {
 static void serv_syscall(uint32_t core)
 {
     thread_t *source = noza_os_get_running_thread();
-    if (source->trap.r0 >= 0 && source->trap.r0 < NSC_NUM_SYSCALLS && syscall_func[source->trap.r0]) {
+    if (source->trap.r0 >= 0 && source->trap.r0 < NSC_NUM_SYSCALLS) {
         syscall_func_t syscall = syscall_func[source->trap.r0];
         source->trap.state = SYSCALL_SERVING;
         syscall(source);
     } else {
-        // TODO: think about how will this happen
-        source->trap.state = SYSCALL_DONE;
+        if (source->trap.r0 == 255) {
+            // hardfault
+            thread_t *running = noza_os_get_running_thread();
+            printf("CPU hardfault, thread id=%lu, core=%d\n", thread_get_pid(running), core);
+            noza_os_add_thread(&noza_os.hardfault, running); // insert the thread back to ready queue
+            noza_os_clear_running_thread(); // remove the running thread
+            source->trap.state = SYSCALL_DONE;
+        } else {
+            source->trap.state = SYSCALL_DONE;
+        }
     }
 }
 
