@@ -177,19 +177,36 @@ int setjmp_test(int argc, char **argv)
 void normal_task(void *param, uint32_t pid)
 {
     int counter = 10;
-    while (counter-->10) {
+    while (counter-->0) {
         printf("normal task: %lu, count down: %ld\n", pid, counter);
         noza_thread_sleep(500);
     }
-    printf("finish test\n");
+    printf("normal_task end. finish test\n");
+}
+
+void fault_task(void *param, uint32_t pid)
+{
+    int counter = 10;
+    while (counter-->0) {
+        printf("fault task: %lu, count down: %ld\n", pid, counter);
+        noza_thread_sleep(500);
+    }
+    printf("fault !!\n");
+    int *p = 0;
+    *p = 0;
+    printf("not reash here\n");
 }
 
 int hardfault_test(int argc, char **argv)
 {
     printf("test hardfault\n");
     noza_thread_create(normal_task, NULL, 0);
-    int *p = 0;
-    *p = 0;
+    noza_thread_create(fault_task, NULL, 0);
+    int counter = 10;
+    while (counter-->10) {
+        printf("main task, count down: %ld\n", counter);
+        noza_thread_sleep(600);
+    }
     return 0;
 }
 
