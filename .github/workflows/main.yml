@@ -41,18 +41,12 @@ jobs:
         cmake -DPICO_SDK_PATH=$PICO_SDK_PATH ..
         make
 
+    - name: List build directory contents
+      run: |
+      ls -la build 
+
     - name: Upload firmware binary
       uses: actions/upload-artifact@v2
       with:
         name: noza.uf2
         path: build/noza.uf2
-
-			#    - name: Send Slack notification
-			#      if: success()
-			#      uses: 8398a7/action-slack@v3
-			#      with:
-			#        status: ${{ job.status }}
-			#        fields: repo,commit,author,eventName,workflow,ref,action,job,took
-			#      env:
-			#        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-			#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
