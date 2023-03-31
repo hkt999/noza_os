@@ -46,13 +46,4 @@ jobs:
       with:
         name: noza.uf2
         path: build/noza.uf2
-
-			#    - name: Send Slack notification
-			#      if: success()
-			#      uses: 8398a7/action-slack@v3
-			#      with:
-			#        status: ${{ job.status }}
-			#        fields: repo,commit,author,eventName,workflow,ref,action,job,took
-			#      env:
-			#        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-			#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+	
