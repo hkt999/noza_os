@@ -53,9 +53,11 @@ void __user_start()
     extern int task_test(int argc, char **argv);
     extern int message_test(int argc, char **argv);
     extern int thread_join_test(int argc, char **argv);
+    extern int setjmp_test(int argc, char **argv);
     builtin_add(&table, "test_task", task_test, "a demo program for task creation and scheduling");
     builtin_add(&table, "test_msg", message_test, "a demo program for message passing");
     builtin_add(&table, "test_join", thread_join_test, "a demo program for thread synchronization join");
+    builtin_add(&table, "test_setjmp", setjmp_test, "test setjmp/longjmp");
 #endif
 
 #ifdef NOZAOS_LUA
