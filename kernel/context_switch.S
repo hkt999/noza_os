@@ -29,11 +29,21 @@
     pop {r4-r7}
 .endm
 
+// interrupt service routine for hardfault
+.type isr_hardfault, %function
+.global isr_hardfault
+isr_hardfault:
+    save_context
+    movs r0, #255 // hardfault
+    bl noza_os_trap_info
+    restore_context
+    b isr_systick
+
 // interrupt service routine for supervisor calls (SVC)
 .type isr_pendsv, %function
-.global isr_pendsv, show_counter
+.global isr_pendsv
 isr_pendsv:
-    b isr_systick
+    b isr_systick // do context switch
 
 .type isr_svcall, %function
 .global isr_svcall
