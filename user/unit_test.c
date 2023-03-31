@@ -161,9 +161,7 @@ void foo(void)
 
 int setjmp_test(int argc, char **argv)
 {
-    int ret;
-
-    ret = setjmp(env);
+    int ret = setjmp(env);
     if (ret == 0) {
         printf("initial call to setjmp\n");
         foo();
@@ -172,6 +170,26 @@ int setjmp_test(int argc, char **argv)
     }
     printf("finish test\n");
 
+    return 0;
+}
+
+
+void normal_task(void *param, uint32_t pid)
+{
+    int counter = 10;
+    while (counter-->10) {
+        printf("normal task: %lu, count down: %ld\n", pid, counter);
+        noza_thread_sleep(500);
+    }
+    printf("finish test\n");
+}
+
+int hardfault_test(int argc, char **argv)
+{
+    printf("test hardfault\n");
+    noza_thread_create(normal_task, NULL, 0);
+    int *p = 0;
+    *p = 0;
     return 0;
 }
 

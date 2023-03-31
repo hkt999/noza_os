@@ -20,7 +20,6 @@ add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 add_definitions(-DNOZAOS_LUA)
 add_definitions(-DNOZAOS_UNITTEST)
 
-#add_definitions(-DLUA_USE_POSIX)
 # add sub module built
 add_subdirectory(3rd_party/tflm-cmsis)
 add_subdirectory(3rd_party/fatfs_port)
