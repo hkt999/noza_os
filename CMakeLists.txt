@@ -9,6 +9,9 @@ set(CMAKE_CXX_STANDARD 17)
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
+
+#add_definitions(-DNOZAOS_TFCMSIS)
+add_definitions(-DNOZAOS_LUA)
 add_definitions(-DNOZAOS_UNITTEST)
 
 # Pull in Pico SDK (must be before project)
@@ -72,10 +75,10 @@ target_link_libraries(
 	pico_stdlib
 	pico_multicore
 	lua
-#    hello_world
-#    magic_wand
-#    person_detection
-#    micro_speech
+    hello_world
+    magic_wand
+    person_detection
+    micro_speech
 )
 
 pico_add_extra_outputs(noza)
