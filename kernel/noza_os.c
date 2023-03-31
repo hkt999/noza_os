@@ -650,7 +650,6 @@ static void serv_syscall(uint32_t core)
         if (source->trap.r0 == 255) {
             // hardfault
             thread_t *running = noza_os_get_running_thread();
-            printf("CPU hardfault, thread id=%lu, core=%d\n", thread_get_pid(running), core);
             noza_os_add_thread(&noza_os.hardfault, running); // insert the thread back to ready queue
             noza_os_clear_running_thread(); // remove the running thread
             source->trap.state = SYSCALL_DONE;
@@ -814,6 +813,9 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->state = SYSCALL_PENDING;
     }
     noza_os_unlock(core);
+    if (r0==255) {
+        scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
+    }
 }
 
 int main()

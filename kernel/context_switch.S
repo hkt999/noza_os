@@ -37,7 +37,7 @@ isr_hardfault:
     movs r0, #255 // hardfault
     bl noza_os_trap_info
     restore_context
-    b isr_systick
+    bx lr
 
 // interrupt service routine for supervisor calls (SVC)
 .type isr_pendsv, %function
