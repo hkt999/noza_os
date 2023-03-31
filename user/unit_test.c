@@ -146,4 +146,33 @@ int thread_join_test(int argc, char **argv)
     printf("finish: main thread join master thread\n");
     return 0;
 }
+
+#include <stdio.h>
+#include <setjmp.h>
+
+jmp_buf env;
+
+void foo(void)
+{
+    printf("entering foo\n");
+    longjmp(env, 1);
+    printf("exiting foo\n");
+}
+
+int setjmp_test(int argc, char **argv)
+{
+    int ret;
+
+    ret = setjmp(env);
+    if (ret == 0) {
+        printf("initial call to setjmp\n");
+        foo();
+    } else {
+        printf("returned from longjmp with value %d\n", ret);
+    }
+    printf("finish test\n");
+
+    return 0;
+}
+
 #endif // end of unittest

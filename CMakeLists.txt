@@ -1,5 +1,3 @@
-# Generated Cmake Pico project file
-
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -8,24 +6,27 @@ set(CMAKE_CXX_STANDARD 17)
 # initalize pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
-add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 
-#add_definitions(-DNOZAOS_TFCMSIS)
+# pull in Pico SDK (must be before project)
+include(pico_sdk_import.cmake)
+project(noza_os C CXX ASM)
+
+# initialise the Pico SDK
+pico_sdk_init()
+
+add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
+# define sub module built and test
+# add_definitions(-DNOZAOS_TFCMSIS)
 add_definitions(-DNOZAOS_LUA)
 add_definitions(-DNOZAOS_UNITTEST)
 
-# Pull in Pico SDK (must be before project)
-include(pico_sdk_import.cmake)
-
-project(noza_os_demo C CXX ASM)
-
-# Initialise the Pico SDK
-pico_sdk_init()
-
+#add_definitions(-DLUA_USE_POSIX)
+# add sub module built
 add_subdirectory(3rd_party/tflm-cmsis)
 add_subdirectory(3rd_party/fatfs_port)
 add_subdirectory(3rd_party/lua_port)
 
+# the noza kernel and user space application
 add_executable(
 	noza
 	kernel/context_switch.S
@@ -66,8 +67,8 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
 )
 
-pico_set_program_name(noza "noza")
-pico_set_program_version(noza "0.1.1")
+#pico_set_program_name(noza "noza")
+#pico_set_program_version(noza "0.1.1")
 
 # Add the standard library to the build
 target_link_libraries(
