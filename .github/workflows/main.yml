@@ -43,7 +43,7 @@ jobs:
 
     - name: List build directory contents
       run: |
-      ls -la build 
+        ls -la build 
 
     - name: Upload firmware binary
       uses: actions/upload-artifact@v2
