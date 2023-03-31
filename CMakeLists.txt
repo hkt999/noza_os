@@ -21,55 +21,7 @@ pico_sdk_init()
 
 #add_subdirectory(3rd_party/tflm-cmsis)
 add_subdirectory(3rd_party/fatfs_port)
-
-set(LUA_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua)
-set(LUA_PORT_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua_port)
-#add_compile_definitions(lua LUA_USE_POSIX)
-add_library(
-    lua
-    ${LUA_PATH}/lapi.c
-    ${LUA_PATH}/lauxlib.c
-    ${LUA_PATH}/lbaselib.c
-    ${LUA_PATH}/lcode.c
-    ${LUA_PATH}/lcorolib.c
-    ${LUA_PATH}/lctype.c
-    ${LUA_PATH}/ldblib.c
-    ${LUA_PATH}/ldebug.c
-    ${LUA_PATH}/ldo.c
-    ${LUA_PATH}/ldump.c
-    ${LUA_PATH}/lfunc.c
-    ${LUA_PATH}/lgc.c
-    ${LUA_PATH}/linit.c
-    ${LUA_PATH}/liolib.c
-    ${LUA_PATH}/llex.c
-    ${LUA_PATH}/lmathlib.c
-    ${LUA_PATH}/lmem.c
-    ${LUA_PATH}/loadlib.c
-    ${LUA_PATH}/lobject.c
-    ${LUA_PATH}/lopcodes.c
-    ${LUA_PATH}/loslib.c
-    ${LUA_PATH}/lparser.c
-    ${LUA_PATH}/lstate.c
-    ${LUA_PATH}/lstring.c
-    ${LUA_PATH}/lstrlib.c
-    ${LUA_PATH}/ltable.c
-    ${LUA_PATH}/ltablib.c
-    ${LUA_PATH}/ltests.c
-    ${LUA_PATH}/ltm.c
-    ${LUA_PATH}/lundump.c
-    ${LUA_PATH}/lutf8lib.c
-    ${LUA_PATH}/lvm.c
-    ${LUA_PATH}/lzio.c
-    ${LUA_PORT_PATH}/lua_noza.c # main program
-)
-
-target_include_directories(
-	lua
-	PRIVATE
-	${CMAKE_CURRENT_LIST_DIR}/user/console
-	${LUA_PORT_PATH}
-	${LUA_PATH}
-)
+add_subdirectory(3rd_party/lua_port)
 
 add_executable(
 	noza
