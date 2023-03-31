@@ -20,6 +20,7 @@ project(noza_os_demo C CXX ASM)
 pico_sdk_init()
 
 #add_subdirectory(3rd_party/tflm-cmsis)
+add_subdirectory(3rd_party/fatfs_port)
 
 set(LUA_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua)
 set(LUA_PORT_PATH ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua_port)
