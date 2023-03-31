@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
+add_definitions(-DNOZAOS_UNITTEST)
 
 # Pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -94,6 +95,9 @@ add_executable(
 	service/memory/mem_serv.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
+
+	# unit test
+	user/unit_test.c
 )
 
 target_include_directories(
