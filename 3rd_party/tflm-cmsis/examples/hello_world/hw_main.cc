@@ -22,8 +22,14 @@ limitations under the License.
 // this main.cc file in a target-specific subfolder.
 extern "C" int hello_world_main(int argc, char* argv[]);
 int hello_world_main(int argc, char* argv[]) {
+  // in this demo, we linke everything together
+  // so check if the hello_world_setup() has been called or not
+  static int inited = false;
+  if (inited == false) {
+    hello_world_setup();
+    inited = true;
+  }
   int counter = 100;
-  hello_world_setup();
   while (counter-->0) {
     printf("inference test count down: %d\n", counter);
     hello_world_loop();

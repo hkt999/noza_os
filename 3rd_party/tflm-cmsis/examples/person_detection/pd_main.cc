@@ -25,8 +25,12 @@ extern "C" {
 
 #include <stdio.h>
 int person_detection_main(int argc, char* argv[]) {
+  static int inited = false;
+  if (inited == false) {
+    person_detection_setup();
+    inited = true;
+  }
   int counter = 10;
-  person_detection_setup();
   while (counter-->0) {
     person_detection_loop();
     printf("test inference count donw: %d\n", counter);

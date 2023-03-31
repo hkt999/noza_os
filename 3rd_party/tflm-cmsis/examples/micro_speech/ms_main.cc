@@ -23,8 +23,12 @@ limitations under the License.
 extern "C" int micro_speech_main(int argc, char* argv[]);
 
 int micro_speech_main(int argc, char* argv[]) {
+  static int inited = false;
+  if (inited == false) {
+    micro_speech_setup();
+    inited = true;
+  }
   int counter = 100;
-  micro_speech_setup();
   while (counter-->0) {
     printf("inference test count down: %d\n", counter);
     micro_speech_loop();

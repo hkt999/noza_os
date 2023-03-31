@@ -22,8 +22,14 @@ limitations under the License.
 extern "C" int magic_wand_main(int argc, char* argv[]);
 
 int magic_wand_main(int argc, char* argv[]) {
+  // in this demo, we linke everything together
+  // so check if the ..._setup() has been called or not
+  static int inited = false;
+  if (inited == false) {
+    magic_wand_setup();
+    inited = true;
+  }
   int counter = 100;
-  magic_wand_setup();
   while (counter-->0) {
     printf("inference test count down: %d\n", counter);
     magic_wand_loop();

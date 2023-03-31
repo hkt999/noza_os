@@ -19,7 +19,7 @@ project(noza_os_demo C CXX ASM)
 # Initialise the Pico SDK
 pico_sdk_init()
 
-#add_subdirectory(3rd_party/tflm-cmsis)
+add_subdirectory(3rd_party/tflm-cmsis)
 add_subdirectory(3rd_party/fatfs_port)
 add_subdirectory(3rd_party/lua_port)
 
