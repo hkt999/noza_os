@@ -13,13 +13,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout repository with submodules
       uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
 
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential
+        sudo apt install -y cmake gcc-arm-none-eabi build-essential
         cmake --version
 
     - name: Set up pico-sdk
