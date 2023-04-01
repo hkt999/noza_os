@@ -585,7 +585,9 @@ static void syscall_thread_terminate(thread_t *running)
     }
     running->info.port_state = PORT_WAIT_LISTEN;
     noza_os_add_thread(&noza_os.free, running);
-    noza_os_clear_running_thread();
+    if (running == noza_os_get_running_thread())
+        noza_os_clear_running_thread();
+
     noza_thread_clear(running); // TODO: rename this
     running->trap.state = SYSCALL_DONE; // thread is terminated, it is fine to remove this line
 }
@@ -720,6 +722,19 @@ void core1_interrupt_handler() {
 }
 #endif
 
+static void nozaos_core_dump(thread_t *th)
+{
+    uint32_t *stack_ptr = th->stack_ptr - 17;
+    user_stack_t *us = (user_stack_t *)stack_ptr;
+    interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
+
+    printf("core dump:\n");
+    printf("r0  %08x   r1 %08x  r2 %08x  r3   %08x\n", is->r0, is->r1, is->r2, is->r3);
+    printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
+    printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
+    printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
+}
+
 uint32_t *noza_os_resume_thread(uint32_t *stack);
 static void noza_os_scheduler()
 {
@@ -785,9 +800,18 @@ static void noza_os_scheduler()
             SCHEDULE(idle_task[core].idle_stack_ptr);
         }
 
+        // process the hardfault thread
+        while (noza_os.hardfault.count > 0) {
+            printf("process hardfault thread th\n");
+            thread_t *th = noza_os.hardfault.head->value;
+            nozaos_core_dump(th);
+            noza_os_remove_thread(&noza_os.hardfault, th);
+            syscall_thread_terminate(th);
+        }
+
         #if NOZA_OS_NUM_CORES > 1
         if (core==0) {
-            multicore_fifo_push_blocking(0); // TODO: only timer interrupt need to wake up core1
+            multicore_fifo_push_blocking(0);
             noza_systick_config(noza_check_sleep_thread(NOZA_OS_TIME_SLICE));
         }
         #endif
