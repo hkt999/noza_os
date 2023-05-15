@@ -63,7 +63,7 @@ typedef struct {
     uint32_t    port_state:1;       // PORT_WAIT_LISTEN or PORT_READY
 } info_t;
 
-typedef struct noza_os_message_s {
+typedef struct {
     union {
         uint32_t   target;
         uint32_t   reply;
@@ -72,34 +72,37 @@ typedef struct noza_os_message_s {
     void       *ptr;
 } noza_os_message_t;
 
+// define a structure for thread management
 typedef struct thread_s {
-    uint32_t            *stack_ptr;
-    cdl_node_t          state_node;
-    info_t              info;
-    uint32_t            expired_time;
-    kernel_trap_info_t  trap;
-    noza_os_port_t      port;
-    noza_os_message_t   message;
-    thread_list_t       join_list;
-    uint32_t            stack_area[NOZA_OS_STACK_SIZE];
+    uint32_t            *stack_ptr;          // pointer to the thread's stack
+    cdl_node_t          state_node;          // node for managing the thread state
+    info_t              info;                // thread information
+    uint32_t            expired_time;        // time when the thread expires
+    kernel_trap_info_t  trap;                // kernel trap information
+    noza_os_port_t      port;                // port information
+    noza_os_message_t   message;             // message passing mechanism for the thread
+    thread_list_t       join_list;           // list of threads waiting to join this thread
+    uint32_t            stack_area[NOZA_OS_STACK_SIZE]; // stack memory area for the thread
 } thread_t;
 
+// Define a structure for Noza OS management
 typedef struct {
-    thread_t        *running[NOZA_OS_NUM_CORES];
-    thread_list_t   ready[NOZA_OS_PRIORITY_LIMIT];
-    thread_list_t   wait;
-    thread_list_t   sleep;
-    thread_list_t   hardfault;
-    thread_list_t   free;
+    thread_t        *running[NOZA_OS_NUM_CORES];         // array of currently running threads for each core
+    thread_list_t   ready[NOZA_OS_PRIORITY_LIMIT];       // array of ready threads for each priority level
+    thread_list_t   wait;                                // list of threads in waiting state
+    thread_list_t   sleep;                               // list of threads in sleeping state
+    thread_list_t   hardfault;                           // list of threads in hardfault state
+    thread_list_t   free;                                // list of free/available threads
     #if NOZA_OS_NUM_CORES > 1
-    uint32_t        interrupt_state[NOZA_OS_NUM_CORES];
-    int             spinlock_num_count;
-    spin_lock_t     *spinlock_count;
+    uint32_t        interrupt_state[NOZA_OS_NUM_CORES];  // array of interrupt states for each core
+    int             spinlock_num_count;                  // count of spinlocks
+    spin_lock_t     *spinlock_count;                     // pointer to spinlock count
     #endif
 
     // context
-    thread_t thread[NOZA_OS_TASK_LIMIT];
+    thread_t thread[NOZA_OS_TASK_LIMIT];                 // array of thread_t structures for task management
 } noza_os_t;
+
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -473,6 +476,7 @@ static void idle_entry()
     }
 }
 
+#define NOZA_OS_THREAD_PSP       0xFFFFFFFD  // exception return behavior (thread mode)
 uint32_t *noza_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
 {
     uint32_t *new_ptr = stack + size - 17; // end of task_stack
