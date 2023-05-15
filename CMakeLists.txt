@@ -10,6 +10,7 @@ set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
 # pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 project(noza_os C CXX ASM)
+#project(noza_kernel C CXX ASM)
 
 # initialise the Pico SDK
 pico_sdk_init()
@@ -24,6 +25,37 @@ add_definitions(-DNOZAOS_UNITTEST)
 add_subdirectory(3rd_party/tflm-cmsis)
 add_subdirectory(3rd_party/fatfs_port)
 add_subdirectory(3rd_party/lua_port)
+
+if(0)
+add_library(
+	noza_kernel
+)
+
+target_compile_options(noza_kernel PRIVATE -O3 -ffreestanding ) 
+
+target_include_directories(
+	noza_kernel
+	PRIVATE
+	${CMAKE_CURRENT_LIST_DIR}
+	${CMAKE_CURRENT_LIST_DIR}/include
+	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
+	${PICO_SDK_PATH}/src/common/pico_stdlib/include
+	${PICO_SDK_PATH}/src/common/pico_base/include
+	${PICO_SDK_PATH}/src/common/pico_time/include
+	${PICO_SDK_PATH}/src/common/pico_base/include/pico
+	${PICO_SDK_PATH}/src/host/pico_platform/include
+	${PICO_SDK_PATH}/src/host/pico_stdio/include
+	${PICO_SDK_PATH}/src/host/hardware_timer/include
+	${PICO_SDK_PATH}/src/host/hardware_gpio/include
+	${PICO_SDK_PATH}/src/host/hardware_uart/include
+	${PICO_SDK_PATH}/src/host/hardware_sync/include
+	${PICO_SDK_PATH}/src/host/pico_multicore/include
+	${PICO_SDK_PATH}/src/rp2_common/hardware_base/include
+	${PICO_SDK_PATH}/src/rp2040/hardware_structs/include
+	${PICO_SDK_PATH}/src/rp2040/hardware_regs/include
+	${PICO_SDK_PATH}/build/generated/pico_base
+)
+endif()
 
 # the noza kernel and user space application
 add_executable(
@@ -65,9 +97,6 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
 )
-
-#pico_set_program_name(noza "noza")
-#pico_set_program_version(noza "0.1.1")
 
 # Add the standard library to the build
 target_link_libraries(
