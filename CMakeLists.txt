@@ -18,50 +18,20 @@ pico_sdk_init()
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 # define sub module built and test
 # add_definitions(-DNOZAOS_TFCMSIS)
-add_definitions(-DNOZAOS_LUA)
-add_definitions(-DNOZAOS_UNITTEST)
+# add_definitions(-DNOZAOS_LUA)
+# add_definitions(-DNOZAOS_UNITTEST)
 
 # add sub module built
-add_subdirectory(3rd_party/tflm-cmsis)
-add_subdirectory(3rd_party/fatfs_port)
-add_subdirectory(3rd_party/lua_port)
-
-if(0)
-add_library(
-	noza_kernel
-)
-
-target_compile_options(noza_kernel PRIVATE -O3 -ffreestanding ) 
-
-target_include_directories(
-	noza_kernel
-	PRIVATE
-	${CMAKE_CURRENT_LIST_DIR}
-	${CMAKE_CURRENT_LIST_DIR}/include
-	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
-	${PICO_SDK_PATH}/src/common/pico_stdlib/include
-	${PICO_SDK_PATH}/src/common/pico_base/include
-	${PICO_SDK_PATH}/src/common/pico_time/include
-	${PICO_SDK_PATH}/src/common/pico_base/include/pico
-	${PICO_SDK_PATH}/src/host/pico_platform/include
-	${PICO_SDK_PATH}/src/host/pico_stdio/include
-	${PICO_SDK_PATH}/src/host/hardware_timer/include
-	${PICO_SDK_PATH}/src/host/hardware_gpio/include
-	${PICO_SDK_PATH}/src/host/hardware_uart/include
-	${PICO_SDK_PATH}/src/host/hardware_sync/include
-	${PICO_SDK_PATH}/src/host/pico_multicore/include
-	${PICO_SDK_PATH}/src/rp2_common/hardware_base/include
-	${PICO_SDK_PATH}/src/rp2040/hardware_structs/include
-	${PICO_SDK_PATH}/src/rp2040/hardware_regs/include
-	${PICO_SDK_PATH}/build/generated/pico_base
-)
-endif()
+# add_subdirectory(3rd_party/tflm-cmsis)
+# add_subdirectory(3rd_party/fatfs_port)
+# add_subdirectory(3rd_party/lua_port)
 
 # the noza kernel and user space application
 add_executable(
 	noza
 	kernel/context_switch.S
 	kernel/noza_os.c
+	kernel/platform.c
 
 	# lib and system call for user space application
 	user/libc/src/noza_syscall.S
@@ -103,11 +73,11 @@ target_link_libraries(
 	noza
 	pico_stdlib
 	pico_multicore
-	lua
-    hello_world
-    magic_wand
-    person_detection
-    micro_speech
+#	lua
+#    hello_world
+#    magic_wand
+#    person_detection
+#    micro_speech
 )
 
 pico_add_extra_outputs(noza)
