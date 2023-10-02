@@ -1,15 +1,9 @@
 #include <string.h>
 #include <stdio.h>
-#include "pico/stdlib.h"
-#include "hardware/structs/systick.h"
-#include "hardware/sync.h"
-#include "hardware/regs/m0plus.h"
-#include "hardware/structs/scb.h"
+
 #include "noza_config.h"
 #include "syscall.h"
-#if NOZA_OS_NUM_CORES > 1
-#include "pico/multicore.h"
-#endif
+#include "platform.h"
 
 //////////////////////////////////////////////////////////////
 //
@@ -93,16 +87,9 @@ typedef struct {
     thread_list_t   sleep;                               // list of threads in sleeping state
     thread_list_t   hardfault;                           // list of threads in hardfault state
     thread_list_t   free;                                // list of free/available threads
-    #if NOZA_OS_NUM_CORES > 1
-    uint32_t        interrupt_state[NOZA_OS_NUM_CORES];  // array of interrupt states for each core
-    int             spinlock_num_count;                  // count of spinlocks
-    spin_lock_t     *spinlock_count;                     // pointer to spinlock count
-    #endif
-
     // context
     thread_t thread[NOZA_OS_TASK_LIMIT];                 // array of thread_t structures for task management
 } noza_os_t;
-
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -121,21 +108,9 @@ static uint32_t noza_os_thread_create( void (*entry)(void *param), void *param, 
 static void     noza_os_scheduler();
 
 #if NOZA_OS_NUM_CORES > 1
-inline static void noza_os_lock_init() {
-    for (int i=0; i<NOZA_OS_NUM_CORES; i++)
-        noza_os.interrupt_state[i] = 0;
-    noza_os.spinlock_num_count = spin_lock_claim_unused(true);
-    noza_os.spinlock_count = spin_lock_init(noza_os.spinlock_num_count);
-}
-
-inline static void noza_os_lock(uint32_t core) {
-    noza_os.interrupt_state[core] = save_and_disable_interrupts();
-    spin_lock_unsafe_blocking(noza_os.spinlock_count);
-}
-inline static void noza_os_unlock(uint32_t core) {
-    spin_unlock_unsafe(noza_os.spinlock_count);
-    restore_interrupts(noza_os.interrupt_state[core]);
-}
+#define noza_os_lock_init()     platform_os_lock_init()
+#define noza_os_lock(core)      platform_os_lock(core)
+#define noza_os_unlock(core)    platform_os_unlock(core)
 #else
 #define noza_os_lock_init()     (void)0
 #define noza_os_lock(core)      (void)0
@@ -180,17 +155,17 @@ inline static void noza_os_change_state(thread_t *th, thread_list_t *from, threa
 
 inline static thread_t *noza_os_get_running_thread()
 {
-    return noza_os.running[get_core_num()];
+    return noza_os.running[platform_get_running_core()];
 }
 
 inline static void noza_os_set_running_thread(thread_t *th)
 {
-    noza_os.running[get_core_num()] = th;
+    noza_os.running[platform_get_running_core()] = th;
 }
 
 inline static void noza_os_clear_running_thread()
 {
-    noza_os.running[get_core_num()] = NULL;
+    noza_os.running[platform_get_running_core()] = NULL;
 }
 
 
@@ -311,12 +286,7 @@ static void noza_make_idle_context(uint32_t core);
 static void noza_start()
 {
     int i;
-    stdio_init_all();
-
-    // set the SVC interrupt priority
-    hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR2_OFFSET), M0PLUS_SHPR2_BITS); // setup as priority 3 (2 bits)
-    // set the PENDSV interrupt priority
-    hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR3_OFFSET), M0PLUS_SHPR3_BITS); // setup as priority 3 (2 bits)
+    platform_io_init(); // initial all state in platform
 
     // init noza os / thread structure
     memset(&noza_os, 0, sizeof(noza_os_t));
@@ -329,6 +299,7 @@ static void noza_start()
     noza_os.free.state_id = THREAD_FREE;
     noza_os.hardfault.state_id = THREAD_HARDFAULT;
 
+    // init all thread structure
     for (i=0; i<NOZA_OS_TASK_LIMIT; i++) {
         noza_os.thread[i].state_node.value = &noza_os.thread[i];
         noza_os_add_thread(&noza_os.free, &noza_os.thread[i]);
@@ -336,9 +307,8 @@ static void noza_start()
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING;
         noza_os.thread[i].join_list.state_id = THREAD_WAITING;
     }
-    noza_os.spinlock_num_count = spin_lock_claim_unused(true) ;
-    noza_os.spinlock_count = spin_lock_init(noza_os.spinlock_num_count) ;
 
+    // init all running thread to NULL
     for (int i=0; i<NOZA_OS_NUM_CORES; i++) {
         noza_make_idle_context(i);
     }
@@ -346,13 +316,14 @@ static void noza_start()
     // create user service name lookup thread
     extern void name_lookup_init(void *param);
     noza_os_thread_create(name_lookup_init, NULL, 0); // create the first thread for name lookup service (user level)
-    noza_os_scheduler();
+    noza_os_scheduler(); // start os scheduler
 }
 
+// Noza OS scheduler
 static thread_t *noza_thread_alloc()
 {
     if (noza_os.free.count == 0) {
-        panic("noza_thread_alloc: no free thread\n");
+        platform_panic("noza_thread_alloc: no free thread\n");
         return NULL;
     }
 
@@ -469,12 +440,14 @@ static idle_task_t idle_task[NOZA_OS_NUM_CORES];
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
 
+#if 0
 static void idle_entry()
 {
     for (;;) {
         __wfi(); // idle, power saving
     }
 }
+#endif
 
 #define NOZA_OS_THREAD_PSP       0xFFFFFFFD  // exception return behavior (thread mode)
 uint32_t *noza_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
@@ -495,27 +468,12 @@ uint32_t *noza_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, v
 static void noza_make_idle_context(uint32_t core)
 {
     idle_task_t *t = &idle_task[core];
-    t->idle_stack_ptr = noza_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), idle_entry, (void *)0);
+    t->idle_stack_ptr = noza_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), platform_idle, (void *)0);
 }
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
 {
     th->stack_ptr = noza_build_stack(thread_get_pid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
-}
-
-static void noza_systick_config(unsigned int n)
-{
-    // stop systick and cancel it if it is pending
-    systick_hw->csr = 0;    // disable timer and irq 
-    __dsb();                // make sure systick is disabled
-    __isb();                // and it is really off
-
-    // clear the systick exception pending bit if it got set
-    hw_set_bits  ((io_rw_32 *)(PPB_BASE + M0PLUS_ICSR_OFFSET), M0PLUS_ICSR_PENDSTCLR_BITS);
-
-    systick_hw->rvr = (n) - 1UL;    // set the reload value
-    systick_hw->cvr = 0;    // clear counter to force reload
-    systick_hw->csr = 0x03; // arm irq, start counter with 1 usec clock
 }
 
 static uint32_t noza_os_thread_create( void (*entry)(void *param), void *param, uint32_t pri)
@@ -548,7 +506,7 @@ static void syscall_yield(thread_t *running)
 
 static void syscall_sleep(thread_t *running)
 {
-    running->expired_time = to_ms_since_boot(get_absolute_time()) + running->trap.r1; // setup expired time
+    running->expired_time = platform_get_absolute_time() + running->trap.r1; // setup expired time
     noza_os_add_thread(&noza_os.sleep, running);
     noza_os_clear_running_thread();
 }
@@ -676,7 +634,7 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
     if (noza_os.sleep.count == 0)
         return slice;
 
-    uint32_t now = to_ms_since_boot(get_absolute_time());
+    uint32_t now = platform_get_absolute_time();
     for (;;) {
         cdl_node_t *cursor = noza_os.sleep.head;
         for (int i=0; i<noza_os.sleep.count; i++) {
@@ -711,20 +669,8 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
 #define SCHEDULE(stack_ptr) \
     noza_os_unlock(core); \
     stack_ptr = noza_os_resume_thread(stack_ptr); \
-    core = get_core_num(); \
+    core = platform_get_running_core(); \
     noza_os_lock(core); \
-
-#if NOZA_OS_NUM_CORES > 1
-void core1_interrupt_handler() {
-
-    while (multicore_fifo_rvalid()){
-        multicore_fifo_pop_blocking();
-    }
-    multicore_fifo_clear_irq(); // clear interrupt
-
-    scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
-}
-#endif
 
 static void nozaos_core_dump(thread_t *th)
 {
@@ -742,19 +688,10 @@ static void nozaos_core_dump(thread_t *th)
 uint32_t *noza_os_resume_thread(uint32_t *stack);
 static void noza_os_scheduler()
 {
-    uint32_t core = get_core_num();
+    uint32_t core = platform_get_running_core();
 
 #if NOZA_OS_NUM_CORES > 1
-    if (core == 0) {
-        multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
-    } else {
-        multicore_fifo_clear_irq();
-        irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_interrupt_handler);
-        // set priority to 32, priority higher then pendSV interrupt
-        // hardware interrupt priority is only 2 bits, the svc and pensv are both seting to 0x3
-        irq_set_priority(SIO_IRQ_PROC1, 32);
-        irq_set_enabled(SIO_IRQ_PROC1, true); // enable the FIFO interrupt
-    }
+    platform_multicore_init(noza_os_scheduler);
 #endif
 
     noza_switch_handler(core); // switch to kernel stack (priviliged mode)
@@ -764,7 +701,7 @@ static void noza_os_scheduler()
     // maybe need to disable all interrupts here with spin lock
     noza_os_lock(core);
     for (;;) {
-        core = get_core_num(); // update the core number whenever the scheduler is called
+        core = platform_get_running_core(); // update the core number whenever the scheduler is called
         thread_t *running = NULL;
         for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
             if (noza_os.ready[i].count > 0) {
@@ -798,8 +735,9 @@ static void noza_os_scheduler()
             }
         } else {
             // no task here, switch to idle thread, and wait for interrupt to wake up the processor
-            if (core==0)
-                noza_systick_config(NOZA_OS_TIME_SLICE);
+            if (core==0) {
+                platform_systick_config(NOZA_OS_TIME_SLICE);
+            }
 
             SCHEDULE(idle_task[core].idle_stack_ptr);
         }
@@ -813,12 +751,11 @@ static void noza_os_scheduler()
             syscall_thread_terminate(th);
         }
 
-        #if NOZA_OS_NUM_CORES > 1
-        if (core==0) {
-            multicore_fifo_push_blocking(0);
-            noza_systick_config(noza_check_sleep_thread(NOZA_OS_TIME_SLICE));
+        // only core 0 tick the system
+        if (core == 0) {
+            uint32_t ms = noza_check_sleep_thread(NOZA_OS_TIME_SLICE);
+            platform_tick(ms);
         }
-        #endif
         // reschedule the next time slice
     }
 }
@@ -827,7 +764,7 @@ static void noza_os_scheduler()
 // called from assembly SVC0 handler
 void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 {
-    uint32_t core = get_core_num();
+    uint32_t core = platform_get_running_core();
     // callback from SVC servie routine, make system call pending
     // and trap into kernel later
     noza_os_lock(core);
@@ -841,13 +778,21 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->state = SYSCALL_PENDING;
     }
     noza_os_unlock(core);
+
+    #if 0 // TODO: issue the PendSV interrupt
     if (r0==255) {
         scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
     }
+    #endif
+}
+
+int noza_main()
+{
+    noza_start();
+    return 0;
 }
 
 int main()
 {
-    noza_start();
-    return 0;
+    noza_main();
 }
