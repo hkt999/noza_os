@@ -22,7 +22,7 @@ static void builtin_add(builtin_table_t *table, const char *name, int (*main)(in
     table->count++;
 }
 
-#ifdef NOZAOS_TFCMSIS
+#ifdef NOZAOS_TFLM
 extern void RegisterDebugLogCallback(void (*cb)(const char* s));
 void tflm_debug(const char *s)
 {
@@ -35,7 +35,7 @@ void __user_start()
     builtin_table_t table;
     memset(&table, 0, sizeof(table));
 
-#ifdef NOZAOS_TFCMSIS
+#ifdef NOZAOS_TFLM
     extern int hello_world_main(int argc, char **argv);
     extern int magic_wand_main(int argc, char **argv);
     extern int micro_speech_main(int argc, char **argv);

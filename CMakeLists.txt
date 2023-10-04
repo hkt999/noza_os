@@ -10,28 +10,67 @@ set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
 # pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 project(noza_os C CXX ASM)
-#project(noza_kernel C CXX ASM)
 
 # initialise the Pico SDK
 pico_sdk_init()
 
+# declare the project apps
+set(NOZAOS_UNITTEST					0)
+set(NOZAOS_LUA						0)
+
+# tensorflow lite micro
+set(NOZAOS_TFLM						0)
+set(NOZAOS_TFLM_HELLO 				0)
+set(NOZAOS_TFLM_MAGIC_WAND 			0)
+set(NOZAOS_TFLM_PERSON_DETECTION	0)
+set(NOZAOS_TFLM_MICRO_SPEECH		0)
+
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 # define sub module built and test
-# add_definitions(-DNOZAOS_TFCMSIS)
-# add_definitions(-DNOZAOS_LUA)
-# add_definitions(-DNOZAOS_UNITTEST)
+
+if (NOZAOS_UNITTEST)
+	add_definitions(-DNOZAOS_UNITTEST)
+endif()
+
+if (NOZAOS_LUA)
+	set(NOZAOS_LUA_LIB "lua")
+	add_definitions(-DNOZAOS_LUA)
+	add_subdirectory(3rd_party/lua_port)
+endif()
+
+if (NOZAOS_TFLM)
+	add_definitions(-DNOZAOS_TFLM)
+	add_subdirectory(3rd_party/tflm-cmsis)
+endif()
+
+if (NOZAOS_TFLM_HELLO)
+	set(NOZAOS_TFLM_HELLO_LIB "hello_world")
+	add_definitions(-DNOZAOS_TFLM_HELLO)
+endif()
+
+if (NOZAOS_TFLM_MAGIC_WAND)
+	set(NOZAOS_TFLM_MAGIC_WAND_LIB "magic_wand")
+	add_definitions(-DNOZAOS_TFLM_MAGIC_WAND)
+endif()
+
+if (NOZAOS_TFLM_MICRO_SPEECH)
+	set(NOZAOS_TFLM_MICRO_SPEECH_LIB "micro_speech")
+	add_definitions(-DNOZAOS_TFLM_MICRO_SPEECH)
+endif()
+
+if (NOZAOS_TFLM_PERSON_DETECTION)
+	set(NOZAOS_TFLM_MAGIC_WAND_LIB "person_detection")
+	add_definitions(-DNOZAOS_TFLM_PERSON_DETECTION)
+endif()
 
 # add sub module built
-# add_subdirectory(3rd_party/tflm-cmsis)
-# add_subdirectory(3rd_party/fatfs_port)
-# add_subdirectory(3rd_party/lua_port)
 
 # the noza kernel and user space application
 add_executable(
 	noza
 	kernel/context_switch.S
 	kernel/noza_os.c
-	kernel/platform.c
+	kernel/platform/rp2040.c
 
 	# lib and system call for user space application
 	user/libc/src/noza_syscall.S
@@ -39,6 +78,12 @@ add_executable(
 	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
 	user/libc/src/setjmp.S
+
+	# services
+	service/name_lookup/name_lookup.c
+	service/memory/mem_serv.c
+	service/vfs/rootfs.c
+	service/vfs/romfs.c
 
 	# applciation demo
 	user/noza_os_demo.c
@@ -48,11 +93,6 @@ add_executable(
 	user/console/cmd_line.c
 	user/console/noza_console.c
 	user/console/noza_term.c
-
-	service/name_lookup/name_lookup.c
-	service/memory/mem_serv.c
-	service/vfs/rootfs.c
-	service/vfs/romfs.c
 
 	# unit test
 	user/unit_test.c
@@ -73,14 +113,13 @@ target_link_libraries(
 	noza
 	pico_stdlib
 	pico_multicore
-#	lua
-#    hello_world
-#    magic_wand
-#    person_detection
-#    micro_speech
+	${NOZAOS_LUA_LIB}
+	${NOZAOS_TFLM_HELLO_LIB}
+	${NOZAOS_TFLM_MAGIC_WAND_LIB}
+	${NOZAOS_TFLM_MICRO_SPEECH_LIB}
+	${NOZAOS_TFLM_PERSON_DETECTION_LIB}
 )
 
 pico_add_extra_outputs(noza)
 pico_enable_stdio_usb(noza 1)
-#pico_enable_stdio_uart(noza 1)
 

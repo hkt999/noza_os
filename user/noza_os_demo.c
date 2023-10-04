@@ -22,7 +22,7 @@ static void builtin_add(builtin_table_t *table, const char *name, int (*main)(in
     table->count++;
 }
 
-#ifdef NOZAOS_TFCMSIS
+#ifdef NOZAOS_TFLM
 extern void RegisterDebugLogCallback(void (*cb)(const char* s));
 void tflm_debug(const char *s)
 {
@@ -35,7 +35,45 @@ void __user_start()
     builtin_table_t table;
     memset(&table, 0, sizeof(table));
 
-#ifdef NOZAOS_TFCMSIS
+#ifdef NOZAOS_TFLM
+    extern void RegisterDebugLogCallback(void (*cb)(const char* s));
+    RegisterDebugLogCallback(tflm_debug);
+#endif
+
+#ifdef NOZAOS_TFLM_HELLO
+    extern int hello_world_main(int argc, char **argv);
+    builtin_add(&table, "hello_world", hello_world_main, "tensorflow lite demo -- hello world");
+#endif
+
+#ifdef NOZAOS_TFLM_MAGIC_WAND
+    extern int magic_wand_main(int argc, char **argv);
+    builtin_add(&table, "magic_wand", magic_wand_main, "tensorflow lite demo -- magic wand");
+#endif
+
+#ifdef NOZAOS_TFLM_MICRO_SPEECH
+    extern int micro_speech_main(int argc, char **argv);
+    builtin_add(&table, "micro_speech", micro_speech_main, "tensorflow lite demo -- micro speech");
+#endif
+
+#ifdef NOZAOS_TFLM_PERSON_DETECTION
+    extern int person_detection_main(int argc, char **argv);
+    builtin_add(&table, "person_detection", person_detection_main, "tensorflow lite demo -- person detection");
+#endif
+
+#if 0
+    extern int hello_world_main(int argc, char **argv);
+    extern int magic_wand_main(int argc, char **argv);
+    extern int micro_speech_main(int argc, char **argv);
+    extern int person_detection_main(int argc, char **argv);
+
+    builtin_add(&table, "hello_world", hello_world_main, "tensorflow lite demo -- hello world");
+    builtin_add(&table, "magic_wand", magic_wand_main, "tensorflow lite demo -- magic wand");
+    builtin_add(&table, "micro_speech", micro_speech_main, "tensorflow lite demo -- micro speech");
+    builtin_add(&table, "person_detection", person_detection_main, "tensorflow lite demo -- person detection");
+#endif
+
+#if 0
+#ifdef NOZAOS_TFLM
     extern int hello_world_main(int argc, char **argv);
     extern int magic_wand_main(int argc, char **argv);
     extern int micro_speech_main(int argc, char **argv);
@@ -47,6 +85,7 @@ void __user_start()
     builtin_add(&table, "magic_wand", magic_wand_main, "tensorflow lite demo -- magic wand");
     builtin_add(&table, "micro_speech", micro_speech_main, "tensorflow lite demo -- micro speech");
     builtin_add(&table, "person_detection", person_detection_main, "tensorflow lite demo -- person detection");
+#endif
 #endif
 
 #ifdef NOZAOS_UNITTEST
