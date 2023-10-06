@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h> // TODO: remove malloc and free to use the memory service
 #include "nozaos.h"
 #include "kernel/syscall.h"
@@ -17,10 +18,29 @@ void free_stack(void *ptr)
 	free(ptr);
 }
 
-extern void app_bootstrap(boot_info_t *info);
+extern void app_run(boot_info_t *info);
 
-int noza_thread_create_with_stack(void (*entry)(void *, uint32_t pid),
-	void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
+#define MAX_SERVICES    8
+static void *service_entry[MAX_SERVICES];
+static int service_count = 0;
+void noza_add_service(void (*entry)(void *param, uint32_t pid))
+{
+    if (service_count >= MAX_SERVICES) {
+        printf("fatal: noza_add_service: too many services\n");
+		return;
+    }
+    service_entry[service_count++] = entry;
+}
+
+void noza_run_services()
+{
+    // initial all registered service
+    for (int i = 0; i < service_count; i++) {
+        noza_thread_create(service_entry[i], NULL, 0);
+    }
+}
+
+int noza_thread_create_with_stack(void (*entry)(void *, uint32_t pid), void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
 {
 	volatile boot_info_t boot_info;
 	boot_info.user_entry = entry;
@@ -28,7 +48,7 @@ int noza_thread_create_with_stack(void (*entry)(void *, uint32_t pid),
 	boot_info.stack_ptr = (uint32_t *)user_stack;
 	boot_info.stack_size = size;
 	boot_info.created = 0;
-    int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_bootstrap, (uint32_t) &boot_info, priority);
+    int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t) &boot_info, priority);
 	while (boot_info.created==0) {
 		noza_thread_yield();
 	}

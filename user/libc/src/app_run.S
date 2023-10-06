@@ -1,9 +1,9 @@
 .thumb
 .syntax unified
 
-.type app_bootstrap, %function
-.global app_bootstrap, noza_thread_terminate, free_stack
-app_bootstrap:
+.type app_run, %function
+.global app_run, noza_thread_terminate, free_stack
+app_run:
     // r0: the pointer to the info structure
     // r1: thread id
 

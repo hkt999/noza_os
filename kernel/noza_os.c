@@ -282,8 +282,9 @@ static void noza_os_join(thread_t *running, uint32_t pid)
 }
 
 static void noza_make_idle_context(uint32_t core);
+
 // start the noza os
-static void noza_start()
+static void noza_init()
 {
     int i;
     platform_io_init(); // initial all state in platform
@@ -312,11 +313,22 @@ static void noza_start()
     for (int i=0; i<NOZA_OS_NUM_CORES; i++) {
         noza_make_idle_context(i);
     }
+}
 
-    // create user service name lookup thread
-    extern void name_lookup_init(void *param);
-    noza_os_thread_create(name_lookup_init, NULL, 0); // create the first thread for name lookup service (user level)
-    noza_os_scheduler(); // start os scheduler
+// TODO: move the service to user space library
+void noza_root_task(void *param)
+{
+    extern void root_task(void *param);
+    extern void noza_run_services(); // application code
+
+    noza_run_services();
+    root_task(param);
+}
+
+static void noza_run()
+{
+    noza_os_thread_create(noza_root_task, NULL, 0); // create the first thread for name lookup service (user level)
+    noza_os_scheduler(); // start os scheduler and never return
 }
 
 // Noza OS scheduler
@@ -409,30 +421,6 @@ static void noza_os_remove_thread(thread_list_t *list, thread_t *thread)
 }
 
 typedef struct {
-    uint32_t r8;
-    uint32_t r9;
-    uint32_t r10;
-    uint32_t r11;
-    uint32_t r4;
-    uint32_t r5;
-    uint32_t r6;
-    uint32_t r7;
-    uint32_t lr;
-} user_stack_t;
-
-// registered saved by hardware, not by software
-typedef struct {
-    uint32_t r0;
-    uint32_t r1;
-    uint32_t r2;
-    uint32_t r3;
-    uint32_t r12; // r12 is not saved by hardware, but by software (isr_svcall)
-    uint32_t lr;
-    uint32_t pc;
-    uint32_t xpsr; // psr thumb bit
-} interrupted_stack_t;
-
-typedef struct {
     uint32_t idle_stack[64];
     uint32_t *idle_stack_ptr;
 } idle_task_t;
@@ -449,31 +437,16 @@ static void idle_entry()
 }
 #endif
 
-#define NOZA_OS_THREAD_PSP       0xFFFFFFFD  // exception return behavior (thread mode)
-uint32_t *noza_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
-{
-    uint32_t *new_ptr = stack + size - 17; // end of task_stack
-    user_stack_t *u = (user_stack_t *) new_ptr;
-    u->lr = (uint32_t) NOZA_OS_THREAD_PSP; // return to thread mode, use PSP
-
-    interrupted_stack_t *is = (interrupted_stack_t *)(new_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-    is->pc = (uint32_t) entry;
-    is->xpsr = (uint32_t) 0x01000000; // thumb bit
-    is->r0 = (uint32_t) param;
-    is->r1 = thread_id;
-
-    return new_ptr;
-}
-
+extern uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param);
 static void noza_make_idle_context(uint32_t core)
 {
     idle_task_t *t = &idle_task[core];
-    t->idle_stack_ptr = noza_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), platform_idle, (void *)0);
+    t->idle_stack_ptr = platform_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), platform_idle, (void *)0);
 }
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
 {
-    th->stack_ptr = noza_build_stack(thread_get_pid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
+    th->stack_ptr = platform_build_stack(thread_get_pid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
 static uint32_t noza_os_thread_create( void (*entry)(void *param), void *param, uint32_t pri)
@@ -674,15 +647,8 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
 
 static void nozaos_core_dump(thread_t *th)
 {
-    uint32_t *stack_ptr = th->stack_ptr - 17;
-    user_stack_t *us = (user_stack_t *)stack_ptr;
-    interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-
-    printf("core dump:\n");
-    printf("r0  %08x   r1 %08x  r2 %08x  r3   %08x\n", is->r0, is->r1, is->r2, is->r3);
-    printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
-    printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
-    printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
+    extern void platform_core_dump(void *stack_ptr);
+    platform_core_dump(th->stack_ptr);
 }
 
 uint32_t *noza_os_resume_thread(uint32_t *stack);
@@ -715,11 +681,8 @@ static void noza_os_scheduler()
             for (;;) {
                 noza_os.running[core]= running;
                 if (running->trap.state == SYSCALL_OUTPUT) {
-                    interrupted_stack_t *is = (interrupted_stack_t *)(running->stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-                    is->r0 = running->trap.r0;
-                    is->r1 = running->trap.r1;
-                    is->r2 = running->trap.r2;
-                    is->r3 = running->trap.r3;
+                    extern void platform_trap(void *_stack_ptr, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
+                    platform_trap(running->stack_ptr, running->trap.r0, running->trap.r1, running->trap.r2, running->trap.r3);
                     running->trap.state = SYSCALL_DONE;
                 }
                 SCHEDULE(running->stack_ptr)
@@ -786,13 +749,8 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
     #endif
 }
 
-int noza_main()
-{
-    noza_start();
-    return 0;
-}
-
 int main()
 {
-    noza_main();
+    noza_init();
+    noza_run();
 }

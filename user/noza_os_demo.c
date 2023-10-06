@@ -30,7 +30,7 @@ void tflm_debug(const char *s)
 }
 #endif
 
-void __user_start()
+void root_task(void *param)
 {
     builtin_table_t table;
     memset(&table, 0, sizeof(table));
@@ -58,34 +58,6 @@ void __user_start()
 #ifdef NOZAOS_TFLM_PERSON_DETECTION
     extern int person_detection_main(int argc, char **argv);
     builtin_add(&table, "person_detection", person_detection_main, "tensorflow lite demo -- person detection");
-#endif
-
-#if 0
-    extern int hello_world_main(int argc, char **argv);
-    extern int magic_wand_main(int argc, char **argv);
-    extern int micro_speech_main(int argc, char **argv);
-    extern int person_detection_main(int argc, char **argv);
-
-    builtin_add(&table, "hello_world", hello_world_main, "tensorflow lite demo -- hello world");
-    builtin_add(&table, "magic_wand", magic_wand_main, "tensorflow lite demo -- magic wand");
-    builtin_add(&table, "micro_speech", micro_speech_main, "tensorflow lite demo -- micro speech");
-    builtin_add(&table, "person_detection", person_detection_main, "tensorflow lite demo -- person detection");
-#endif
-
-#if 0
-#ifdef NOZAOS_TFLM
-    extern int hello_world_main(int argc, char **argv);
-    extern int magic_wand_main(int argc, char **argv);
-    extern int micro_speech_main(int argc, char **argv);
-    extern int person_detection_main(int argc, char **argv);
-    extern void RegisterDebugLogCallback(void (*cb)(const char* s));
-    RegisterDebugLogCallback(tflm_debug);
-
-    builtin_add(&table, "hello_world", hello_world_main, "tensorflow lite demo -- hello world");
-    builtin_add(&table, "magic_wand", magic_wand_main, "tensorflow lite demo -- magic wand");
-    builtin_add(&table, "micro_speech", micro_speech_main, "tensorflow lite demo -- micro speech");
-    builtin_add(&table, "person_detection", person_detection_main, "tensorflow lite demo -- person detection");
-#endif
 #endif
 
 #ifdef NOZAOS_UNITTEST

@@ -15,8 +15,9 @@ project(noza_os C CXX ASM)
 pico_sdk_init()
 
 # declare the project apps
-set(NOZAOS_UNITTEST					0)
+set(NOZAOS_UNITTEST					1)
 set(NOZAOS_LUA						0)
+set(NOZAOS_MUTEX					1)
 
 # tensorflow lite micro
 set(NOZAOS_TFLM						0)
@@ -68,22 +69,24 @@ endif()
 # the noza kernel and user space application
 add_executable(
 	noza
-	kernel/context_switch.S
-	kernel/noza_os.c
+	kernel/platform/rp2040_context_switch.S
 	kernel/platform/rp2040.c
+	kernel/platform/rp2040_build_stack.c
+	kernel/noza_os.c
 
 	# lib and system call for user space application
 	user/libc/src/noza_syscall.S
-	user/libc/src/app_bootstrap.S
+	user/libc/src/app_run.S
 	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
 	user/libc/src/setjmp.S
 
 	# services
 	service/name_lookup/name_lookup.c
-	service/memory/mem_serv.c
-	service/vfs/rootfs.c
-	service/vfs/romfs.c
+	service/mutex/mutex_serv.c
+	#service/memory/mem_serv.c
+	#service/vfs/rootfs.c
+	#service/vfs/romfs.c
 
 	# applciation demo
 	user/noza_os_demo.c
