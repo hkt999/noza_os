@@ -26,12 +26,10 @@ typedef struct name_msg_s {
     uint32_t pid;
 } name_msg_t;
 
-extern void __user_start(void *param, uint32_t pid);
 static void do_name_lookup(void *param, uint32_t pid)
 {
     noza_msg_t msg;
     memset(name_lookup_table, 0, sizeof(name_lookup_table));
-    noza_thread_create(__user_start, NULL, 0);
     for (;;) {
         if (noza_recv(&msg) == 0) {
             name_msg_t *name_msg = (name_msg_t *)msg.ptr;
@@ -85,28 +83,6 @@ static void do_name_lookup(void *param, uint32_t pid)
     }
 }
 
-typedef struct {
-	void (*user_entry)(void *param, uint32_t pid);
-	void *user_param;
-	uint32_t *stack_ptr;
-	uint32_t stack_size;
-	uint32_t created;
-} boot_info_t;
-
-extern void app_bootstrap(void *param, uint32_t pid);
-
-void name_lookup_init(void *param, uint32_t pid)
-{
-	boot_info_t boot_info;
-	boot_info.user_entry = do_name_lookup;
-	boot_info.user_param = param;
-	boot_info.stack_ptr = (uint32_t *)malloc(1024); // TODO: use noza memory allocator
-	boot_info.stack_size = 1024;
-	boot_info.created = 0;
-    app_bootstrap(&boot_info, pid);
-}
-
-
 // the client api
 int name_lookup_register(const char *name, uint32_t pid)
 {
@@ -133,4 +109,12 @@ int name_lookup_unregister(uint32_t pid)
     noza_msg_t noza_msg = {.pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
     noza_call(&noza_msg);
     return msg.reply;
+}
+
+// root service for naming
+void __attribute__((constructor(101))) name_lookup_init(void *param, uint32_t pid)
+{
+    // TODO: move the external declaraction into a header file
+    extern void noza_add_service(void (*entry)(void *param, uint32_t pid));
+    noza_add_service(do_name_lookup);
 }
