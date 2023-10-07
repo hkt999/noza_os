@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "nozaos.h"
+#include "unity.h"
 
 #ifdef NOZAOS_UNITTEST
 int test_task(void *param, uint32_t pid)
@@ -11,7 +12,7 @@ int test_task(void *param, uint32_t pid)
     int ms = rand() % 700 + 200;
     while (do_count-->0) {
         printf("working thread id: %lu, count_down: %d, tick=%d ms\n", pid, do_count, ms);
-        noza_thread_sleep(ms);
+        TEST_ASSERT_EQUAL(0, noza_thread_sleep(ms));
     }
     printf("test_task [pid: %lu] done\n", pid);
     return pid;
@@ -19,6 +20,7 @@ int test_task(void *param, uint32_t pid)
 
 int task_test(int argc, char **argv)
 {
+    UNITY_BEGIN();
     if (argc < 2) {
         printf("Usage: %s <number_of_threads>\n", argv[0]);
         return 1;
@@ -39,18 +41,11 @@ int task_test(int argc, char **argv)
     }
 
     for (int i = 0; i < num_threads; i++) {
-        int exit_code = noza_thread_join(th[i]);
-        printf("thread %d exit code: %d\n", i, exit_code);
+        TEST_ASSERT_EQUAL(th[i], noza_thread_join(th[i])); // TODO: consider join order...
     }
-#if 0
-    int sleep_count = 15;
-    while (sleep_count-- > 0) {
-        printf("sleep count down: %ld\n", sleep_count);
-        noza_thread_sleep(1000);
-    }
-#endif
 
     printf("finish test\n");
+    UNITY_END();
     return 0;
 }
 
@@ -99,13 +94,14 @@ void client_thread(void *param, uint32_t mypid)
 
 int message_test(int argc, char **argv)
 {
+    UNITY_BEGIN();
     uint32_t pid = noza_thread_create(server_thread, NULL, 0);
     printf("** server pid: %ld\n", pid);
     printf("** client start\n");
     client_thread((void *)pid, 0);
-    int exit_code = noza_thread_join(pid);
-
-    printf("test finish code=%d\n", exit_code);
+    TEST_ASSERT_EQUAL(pid, noza_thread_join(pid));
+    printf("test finish code=%d\n", pid);
+    UNITY_END();
     return 0;
 }
 
@@ -142,6 +138,7 @@ int thread_join_test(int argc, char **argv)
         printf("usage: test_join <thread count>\n");
         return 0;
     }
+    UNITY_BEGIN();
     srand(time(0));
     int count = atoi(argv[1]);
     if (count > 8 || count < 1) {
@@ -153,8 +150,8 @@ int thread_join_test(int argc, char **argv)
     for (int i=0; i<count; i++) {
         noza_thread_create(thread_working, (void *)master, 0);
     }
-    int exit_code = noza_thread_join(master); // main thread also wait for master thread
-    printf("finish: main thread join master thread, exit_code=%d\n", exit_code);
+    TEST_ASSERT_EQUAL(master, noza_thread_join(master));
+    UNITY_END();
     return 0;
 }
 
@@ -163,23 +160,27 @@ int thread_join_test(int argc, char **argv)
 
 jmp_buf env;
 
+#define JUMP_VALUE 123
 void foo(void)
 {
     printf("entering foo\n");
-    longjmp(env, 1);
+    longjmp(env, JUMP_VALUE);
     printf("exiting foo\n");
 }
 
 int setjmp_test(int argc, char **argv)
 {
+    UNITY_BEGIN();
     int ret = setjmp(env);
     if (ret == 0) {
         printf("initial call to setjmp\n");
         foo();
     } else {
         printf("returned from longjmp with value %d\n", ret);
+        TEST_ASSERT_EQUAL(JUMP_VALUE, ret);
     }
     printf("finish test\n");
+    UNITY_END();
 
     return 0;
 }

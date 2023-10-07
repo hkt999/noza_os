@@ -116,6 +116,7 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
+	${CMAKE_CURRENT_LIST_DIR}/3rd_party/Unity/src
 )
 
 # Add the standard library to the build
