@@ -7,5 +7,5 @@ typedef struct {
     const char *help_msg;
 } builtin_cmd_t;
 
-void console_start(void *param, uint32_t pid);
+int console_start(void *param, uint32_t pid);
 int console_stop();

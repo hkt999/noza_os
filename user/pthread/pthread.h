@@ -10,6 +10,7 @@ typedef struct {
 typedef struct {
 } pthread_attr_t;
 
+
 typedef struct {
 	uint32_t id;
     void *(*start_routine)(void *);

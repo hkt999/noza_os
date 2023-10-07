@@ -5,7 +5,7 @@
 #include "nozaos.h"
 
 #ifdef NOZAOS_UNITTEST
-void test_task(void *param, uint32_t pid)
+int test_task(void *param, uint32_t pid)
 {
     int do_count = rand() % 10 + 2;
     int ms = rand() % 700 + 200;
@@ -14,6 +14,7 @@ void test_task(void *param, uint32_t pid)
         noza_thread_sleep(ms);
     }
     printf("test_task [pid: %lu] done\n", pid);
+    return pid;
 }
 
 int task_test(int argc, char **argv)
@@ -37,18 +38,24 @@ int task_test(int argc, char **argv)
         th[i] = noza_thread_create(test_task, NULL, (uint32_t)i%4);
     }
 
+    for (int i = 0; i < num_threads; i++) {
+        int exit_code = noza_thread_join(th[i]);
+        printf("thread %d exit code: %d\n", i, exit_code);
+    }
+#if 0
     int sleep_count = 15;
     while (sleep_count-- > 0) {
         printf("sleep count down: %ld\n", sleep_count);
         noza_thread_sleep(1000);
     }
+#endif
 
     printf("finish test\n");
     return 0;
 }
 
 // message passing
-void server_thread(void *param, uint32_t pid)
+int server_thread(void *param, uint32_t pid)
 {
     for (;;) {
         noza_msg_t msg;
@@ -62,6 +69,7 @@ void server_thread(void *param, uint32_t pid)
             printf("server recv error: %d\n", ret);
         }
     }
+    return 0;
 }
 
 void client_thread(void *param, uint32_t mypid)
@@ -95,13 +103,13 @@ int message_test(int argc, char **argv)
     printf("** server pid: %ld\n", pid);
     printf("** client start\n");
     client_thread((void *)pid, 0);
-    noza_thread_join(pid);
+    int exit_code = noza_thread_join(pid);
 
-    printf("test finish\n");
+    printf("test finish code=%d\n", exit_code);
     return 0;
 }
 
-void thread_working(void *param, uint32_t pid)
+int thread_working(void *param, uint32_t pid)
 {
     uint32_t master = (uint32_t) param;
     uint32_t counter = 5;
@@ -111,18 +119,21 @@ void thread_working(void *param, uint32_t pid)
         noza_thread_sleep(1000);
     }
     printf("enter join state\n");
-    noza_thread_join(master);
-    printf("-- detect master thread terminated\n");
+    int exit_code = noza_thread_join(master);
+    printf("-- detect master thread terminated exit_code=%d\n", exit_code);
+
+    return pid;
 }
 
-void thread_master(void *param, uint32_t pid)
+int thread_master(void *param, uint32_t pid)
 {
     uint32_t counter = 10;
     while (counter-- > 0) {
         printf("master count down: %ld\n", counter);
         noza_thread_sleep(1000);
     }
-    printf("** master thread terminated\n");
+    printf("** master thread terminated (%d)\n", pid);
+    return pid;
 }
 
 int thread_join_test(int argc, char **argv)
@@ -142,8 +153,8 @@ int thread_join_test(int argc, char **argv)
     for (int i=0; i<count; i++) {
         noza_thread_create(thread_working, (void *)master, 0);
     }
-    noza_thread_join(master); // main thread also wait for master thread
-    printf("finish: main thread join master thread\n");
+    int exit_code = noza_thread_join(master); // main thread also wait for master thread
+    printf("finish: main thread join master thread, exit_code=%d\n", exit_code);
     return 0;
 }
 
@@ -173,7 +184,7 @@ int setjmp_test(int argc, char **argv)
     return 0;
 }
 
-void normal_task(void *param, uint32_t pid)
+int normal_task(void *param, uint32_t pid)
 {
     int counter = 10;
     while (counter-->0) {
@@ -181,9 +192,10 @@ void normal_task(void *param, uint32_t pid)
         noza_thread_sleep(500);
     }
     printf("normal_task end. finish test\n");
+    return pid;
 }
 
-void fault_task(void *param, uint32_t pid)
+int fault_task(void *param, uint32_t pid)
 {
     int counter = 10;
     while (counter-->0) {
@@ -201,8 +213,8 @@ int hardfault_test(int argc, char **argv)
     printf("test hardfault\n");
     noza_thread_create(normal_task, NULL, 0);
     uint32_t fid = noza_thread_create(fault_task, NULL, 0);
-    noza_thread_join(fid);
-    printf("fault catch by main thread\n");
+    int exit_code = noza_thread_join(fid);
+    printf("fault catch by main thread exit_code=%d\n", exit_code);
 }
 
 #endif // end of unittest

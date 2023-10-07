@@ -132,7 +132,7 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 // global console
 
 static noza_console_t noza_console;
-void console_start(void *param, uint32_t pid)
+int console_start(void *param, uint32_t pid)
 {
 	noza_console_init(&noza_console, "noza> ", param);
 	for (;;) {
@@ -142,6 +142,7 @@ void console_start(void *param, uint32_t pid)
 		else
 			cmd_line_putc(&noza_console.cmd, ch);
 	}
+	return 0;
 }
 
 int console_stop()
