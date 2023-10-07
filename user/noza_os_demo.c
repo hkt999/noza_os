@@ -81,5 +81,5 @@ void root_task(void *param)
     uint32_t th = noza_thread_create(console_start, &table.builtin_cmds[0], 0);
 
     noza_thread_join(th);
-    noza_thread_terminate();
+    noza_thread_terminate(0);
 }

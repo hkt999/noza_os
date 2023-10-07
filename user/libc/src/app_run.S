@@ -21,7 +21,9 @@ app_run:
     mov r3, r1      // mov function entry to r3
     mov r1, r6      // pass thread id in r1: r1 = r6
     blx r3          // branch to func_entry: func_entry(r0)
+    mov r3, r0      // save the return value
     pop {r0, r1}    // r0 -> stack base, r1 -> stack pointer
     mov sp, r1      // restore the old stack pointer
-    bl free_stack
-    bl noza_thread_terminate
+    bl free_stack   // free stack pointer
+    mov r0, r3       // move the return value to parameter 
+    bl noza_thread_terminate // call noza terminate to deallocate the resource

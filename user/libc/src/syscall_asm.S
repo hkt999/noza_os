@@ -26,7 +26,7 @@ noza_thread_yield:
 .global noza_thread_join
 noza_thread_join:
 	push {r4-r7, lr}		// save r4-r11 and lr
-	mov r1, r0
+	mov r1, r0				// move the pid to r1
 	movs r0, #NSC_THREAD_JOIN	// set r0 to the value of NSC_THREAD_JOIN
 	svc #0 					// system call, return value in r0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
@@ -57,6 +57,7 @@ noza_thread_change_priority:
 .global noza_thread_terminate
 noza_thread_terminate:
 	push {r4-r7, lr}		// save r4-r11 and lr
+	mov r1, r0 				// move the terminate code to r1
 	movs r0, #NSC_THREAD_TERMINATE	// set r0 to the value of NSC_THREAD_TERMINATE
 	svc #0 					// system call, return value in r0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
