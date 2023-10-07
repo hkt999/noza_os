@@ -67,9 +67,7 @@ make
 After completing these steps, you should have successfully built and uploaded the Noza microkernel to your Raspberry Pi Pico.
 
 # Future works
-1. Utilize the ARM Cortex-M0 MPU to protect kernel stack and data structures.
-2. Implement a memory management service to provide heap and stack memory for newly created threads.
-3. Develop a virtual file system service to facilitate file operations.
-4. Implement an ELF object loader to dynamically load applications from the virtual file system.
+1. POSIX Style API
+2. Virtual file system interface
 
 
