@@ -33,11 +33,12 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
     return mutex_unlock(mutex);
 }
 
-static void noza_thread_stub(void *param, uint32_t pid)
+static int noza_thread_stub(void *param, uint32_t pid)
 {
     pthread_t *th = param;
     th->id = pid;
     th->start_routine(th->arg);
+    return 0; // TODO: handle the return code
 }
 
 // pthread routines

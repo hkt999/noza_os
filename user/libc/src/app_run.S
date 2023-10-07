@@ -24,6 +24,7 @@ app_run:
     mov r3, r0      // save the return value
     pop {r0, r1}    // r0 -> stack base, r1 -> stack pointer
     mov sp, r1      // restore the old stack pointer
+    push {r3}       // push the return value to the stack
     bl free_stack   // free stack pointer
-    mov r0, r3       // move the return value to parameter 
+    pop {r0}        // pop the return value to r0
     bl noza_thread_terminate // call noza terminate to deallocate the resource
