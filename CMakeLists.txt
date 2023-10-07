@@ -18,6 +18,7 @@ pico_sdk_init()
 set(NOZAOS_UNITTEST					1)
 set(NOZAOS_LUA						0)
 set(NOZAOS_MUTEX					1)
+set(NOZAOS_PTHREAD					1)
 
 # tensorflow lite micro
 set(NOZAOS_TFLM						0)
@@ -84,6 +85,7 @@ add_executable(
 	# services
 	service/name_lookup/name_lookup.c
 	service/mutex/mutex_serv.c
+	service/mutex/mutex_client.c
 	#service/memory/mem_serv.c
 	#service/vfs/rootfs.c
 	#service/vfs/romfs.c
@@ -99,6 +101,9 @@ add_executable(
 
 	# unit test
 	user/unit_test.c
+
+	# pthread
+	user/pthread/pthread.c
 )
 
 target_include_directories(

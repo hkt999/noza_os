@@ -6,7 +6,7 @@
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
 
 typedef struct boot_info {
-	void (*user_entry)(void *param, uint32_t pid);
+	int (*user_entry)(void *param, uint32_t pid);
 	void *user_param;
 	uint32_t *stack_ptr;
 	uint32_t stack_size;
@@ -40,7 +40,7 @@ void noza_run_services()
     }
 }
 
-int noza_thread_create_with_stack(void (*entry)(void *, uint32_t pid), void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
+int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
 {
 	volatile boot_info_t boot_info;
 	boot_info.user_entry = entry;
@@ -56,8 +56,8 @@ int noza_thread_create_with_stack(void (*entry)(void *, uint32_t pid), void *par
 	return ret;
 }
 
-#define DEFAULT_STACK_SIZE 4096
-int noza_thread_create(void (*entry)(void *, uint32_t), void *param, uint32_t priority)
+#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
+int noza_thread_create(int (*entry)(void *, uint32_t), void *param, uint32_t priority)
 {
 	uint8_t *stack_ptr = (uint8_t *)malloc(DEFAULT_STACK_SIZE);
 	uint32_t stack_size = DEFAULT_STACK_SIZE;

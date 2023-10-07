@@ -513,9 +513,10 @@ static void syscall_thread_change_priority(thread_t *running)
 
 static void syscall_thread_terminate(thread_t *running)
 {
+    uint32_t exit_code = running->trap.r1;
     while (running->join_list.count > 0) {
         thread_t *joiner = (thread_t *)running->join_list.head->value;
-        noza_os_set_return_value(joiner, 0); // TODO: return the terminate code of running thread
+        noza_os_set_return_value(joiner, exit_code); // set the return value of the joiner
         noza_os_change_state(joiner, &running->join_list, &noza_os.ready[joiner->info.priority]);
     }
     running->info.port_state = PORT_WAIT_LISTEN;
@@ -580,7 +581,7 @@ static void serv_syscall(uint32_t core)
 {
     thread_t *source = noza_os_get_running_thread();
     if (source->trap.r0 >= 0 && source->trap.r0 < NSC_NUM_SYSCALLS) {
-        syscall_func_t syscall = syscall_func[source->trap.r0];
+        syscall_func_t syscall = syscall_func[source->trap.r0]; // r0 is the syscall number, r1 is the parameter
         source->trap.state = SYSCALL_SERVING;
         syscall(source);
     } else {

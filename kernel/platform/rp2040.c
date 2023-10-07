@@ -10,6 +10,10 @@
 #include "hardware/structs/scb.h" 
 #include "hardware/regs/m0plus.h"
 #include "hardware/sync.h"
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/regs/rosc.h"
+#include "hardware/regs/addressmap.h"
 
 void platform_io_init()
 {
@@ -119,4 +123,17 @@ void platform_os_lock(uint32_t core) {
 void platform_os_unlock(uint32_t core) {
     spin_unlock_unsafe(spinlock);
     restore_interrupts(interrupt_state[core]);
+}
+
+uint32_t platform_get_random(void)
+{
+    uint32_t k, random=0;
+    volatile uint32_t *rnd_reg=(uint32_t *)(ROSC_BASE + ROSC_RANDOMBIT_OFFSET);
+    
+    for (k=0; k<32; k++) {
+        random = random << 1;
+        random=random + (0x00000001 & (*rnd_reg));
+    }
+
+    return random;
 }
