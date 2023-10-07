@@ -514,6 +514,7 @@ static void syscall_thread_change_priority(thread_t *running)
 static void syscall_thread_terminate(thread_t *running)
 {
     uint32_t exit_code = running->trap.r1;
+    // loop through join list and set the return value
     while (running->join_list.count > 0) {
         thread_t *joiner = (thread_t *)running->join_list.head->value;
         noza_os_set_return_value(joiner, exit_code); // set the return value of the joiner

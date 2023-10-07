@@ -31,7 +31,9 @@ add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 # define sub module built and test
 
 if (NOZAOS_UNITTEST)
+	set(NOZAOS_UNITY_LIB "unity")
 	add_definitions(-DNOZAOS_UNITTEST)
+	add_subdirectory(3rd_party/unity_port)
 endif()
 
 if (NOZAOS_LUA)
@@ -121,6 +123,7 @@ target_link_libraries(
 	noza
 	pico_stdlib
 	pico_multicore
+	${NOZAOS_UNITY_LIB}
 	${NOZAOS_LUA_LIB}
 	${NOZAOS_TFLM_HELLO_LIB}
 	${NOZAOS_TFLM_MAGIC_WAND_LIB}
