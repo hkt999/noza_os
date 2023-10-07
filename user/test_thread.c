@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
+#include "unity.h"
 #include "nozaos.h"
 
 /* Entry function for the heavy loading thread */
