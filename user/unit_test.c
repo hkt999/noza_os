@@ -20,12 +20,12 @@ int test_task(void *param, uint32_t pid)
 
 int task_test(int argc, char **argv)
 {
-    UNITY_BEGIN();
     if (argc < 2) {
         printf("Usage: %s <number_of_threads>\n", argv[0]);
         return 1;
     }
 
+    UNITY_BEGIN();
     int num_threads = atoi(argv[1]);
 
     if (num_threads < 2 || num_threads > 8) {
@@ -41,6 +41,7 @@ int task_test(int argc, char **argv)
     }
 
     for (int i = 0; i < num_threads; i++) {
+        printf("join thread %d, id=%d\n", i, th[i]);
         TEST_ASSERT_EQUAL(th[i], noza_thread_join(th[i])); // TODO: consider join order...
     }
 

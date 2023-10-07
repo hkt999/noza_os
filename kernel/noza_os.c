@@ -14,6 +14,7 @@
 #define THREAD_READY            2
 #define THREAD_WAITING          3
 #define THREAD_SLEEP            4
+#define THREAD_ZOMBIE           5
 #define THREAD_HARDFAULT        6
 
 #define SYSCALL_DONE            0
@@ -72,10 +73,13 @@ typedef struct thread_s {
     cdl_node_t          state_node;          // node for managing the thread state
     info_t              info;                // thread information
     uint32_t            expired_time;        // time when the thread expires
+    uint32_t            flags;               // reserved flags
+    uint32_t            exit_code;           // the exit code
     kernel_trap_info_t  trap;                // kernel trap information
     noza_os_port_t      port;                // port information
     noza_os_message_t   message;             // message passing mechanism for the thread
-    thread_list_t       join_list;           // list of threads waiting to join this thread
+    //thread_list_t       join_list;           // list of threads waiting to join this thread
+    thread_t            *join_th;             // thread waiting to join this thread
     uint32_t            stack_area[NOZA_OS_STACK_SIZE]; // stack memory area for the thread
 } thread_t;
 
@@ -85,6 +89,7 @@ typedef struct {
     thread_list_t   ready[NOZA_OS_PRIORITY_LIMIT];       // array of ready threads for each priority level
     thread_list_t   wait;                                // list of threads in waiting state
     thread_list_t   sleep;                               // list of threads in sleeping state
+    thread_list_t   zombie;                              // list of threads in zombie state
     thread_list_t   hardfault;                           // list of threads in hardfault state
     thread_list_t   free;                                // list of free/available threads
     // context
@@ -267,6 +272,7 @@ static void noza_os_reply(thread_t *running, uint32_t pid, void *msg, uint32_t s
 
 static void noza_os_join(thread_t *running, uint32_t pid)
 {
+    // sanity check
     if (pid >= NOZA_OS_TASK_LIMIT) {
         noza_os_set_return_value(running, -1); // error
         return;
@@ -276,9 +282,17 @@ static void noza_os_join(thread_t *running, uint32_t pid)
         noza_os_set_return_value(running, -1); // error
         return;
     }
-
-    noza_os_add_thread(&th->join_list, running);
-    noza_os_clear_running_thread();
+    if (th->info.state == THREAD_ZOMBIE) {
+        noza_os_set_return_value(running, th->exit_code); // success, return exit_code
+        noza_os_change_state(th, &noza_os.zombie, &noza_os.free); // free the thread
+        return;
+    }
+    if (th->join_th == NULL) {
+        th->join_th = running;
+        noza_os_clear_running_thread();
+    } else {
+        noza_os_set_return_value(running, -1); // already join
+   }
 }
 
 static void noza_make_idle_context(uint32_t core);
@@ -298,6 +312,7 @@ static void noza_init()
     noza_os.wait.state_id = THREAD_WAITING;
     noza_os.sleep.state_id = THREAD_SLEEP;
     noza_os.free.state_id = THREAD_FREE;
+    noza_os.zombie.state_id = THREAD_ZOMBIE;
     noza_os.hardfault.state_id = THREAD_HARDFAULT;
 
     // init all thread structure
@@ -306,7 +321,8 @@ static void noza_init()
         noza_os_add_thread(&noza_os.free, &noza_os.thread[i]);
         noza_os.thread[i].port.pending_list.state_id = THREAD_WAITING;
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING;
-        noza_os.thread[i].join_list.state_id = THREAD_WAITING;
+        noza_os.thread[i].join_th = NULL;
+        //noza_os.thread[i].join_list.state_id = THREAD_WAITING;
     }
 
     // init all running thread to NULL
@@ -345,13 +361,15 @@ static thread_t *noza_thread_alloc()
     return th;
 }
 
-static void noza_thread_clear(thread_t *th)
+static void noza_thread_clear_messages(thread_t *th)
 {
+    // release all pending threads for messages
     while (th->port.pending_list.count>0) {
         thread_t *pending = (thread_t *)th->port.pending_list.head->value;
         noza_os_set_return_value(pending, -1);
         noza_os_change_state(pending, &th->port.pending_list, &noza_os.ready[pending->info.priority]);
     }
+
     while (th->port.reply_list.count>0) {
         thread_t *reply = (thread_t *)th->port.reply_list.head->value;
         noza_os_set_return_value(reply, -1);
@@ -453,6 +471,7 @@ static uint32_t noza_os_thread_create( void (*entry)(void *param), void *param, 
 {
     thread_t *th = noza_thread_alloc();
     th->info.priority = pri;
+    th->flags = 0x0;
     noza_os_add_thread(&noza_os.ready[pri], th);
     noza_make_app_context(th, entry, param);
 
@@ -514,18 +533,20 @@ static void syscall_thread_change_priority(thread_t *running)
 static void syscall_thread_terminate(thread_t *running)
 {
     uint32_t exit_code = running->trap.r1;
-    // loop through join list and set the return value
-    while (running->join_list.count > 0) {
-        thread_t *joiner = (thread_t *)running->join_list.head->value;
-        noza_os_set_return_value(joiner, exit_code); // set the return value of the joiner
-        noza_os_change_state(joiner, &running->join_list, &noza_os.ready[joiner->info.priority]);
-    }
     running->info.port_state = PORT_WAIT_LISTEN;
-    noza_os_add_thread(&noza_os.free, running);
-    if (running == noza_os_get_running_thread())
+    if (running->join_th == NULL) {
+        noza_os_add_thread(&noza_os.zombie, running);
+        running->exit_code = exit_code;
+    } else {
+        noza_os_set_return_value(running->join_th, exit_code);
+        noza_os_add_thread(&noza_os.ready[running->join_th->info.priority], running->join_th);
+        running->join_th = NULL; // clear the join thread
+    }
+    // if the running thread is the current thread on current core, then clear it
+    if (running == noza_os_get_running_thread()) // TODO: reconsider why need compare ??
         noza_os_clear_running_thread();
 
-    noza_thread_clear(running); // TODO: rename this
+    noza_thread_clear_messages(running); 
     running->trap.state = SYSCALL_DONE; // thread is terminated, it is fine to remove this line
 }
 
