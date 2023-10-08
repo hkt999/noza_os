@@ -75,7 +75,6 @@ int pthread_exit(void *retval)
 
 int pthread_detach(pthread_t thread)
 {
-    // return noza_thread_detach(thread.id)
     return noza_thread_detach(thread.id);
 }
 
