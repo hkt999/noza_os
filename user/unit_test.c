@@ -24,8 +24,6 @@ int task_test(int argc, char **argv)
         printf("Usage: %s <number_of_threads>\n", argv[0]);
         return 1;
     }
-
-    UNITY_BEGIN();
     int num_threads = atoi(argv[1]);
 
     if (num_threads < 2 || num_threads > 8) {
@@ -33,6 +31,7 @@ int task_test(int argc, char **argv)
         return 1;
     }
 
+    UNITY_BEGIN();
     uint32_t th[num_threads];
     srand(time(0));
 
@@ -46,8 +45,6 @@ int task_test(int argc, char **argv)
         TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
         TEST_ASSERT_EQUAL(th[i], exit_code);
     }
-
-    printf("finish test\n");
     UNITY_END();
     return 0;
 }

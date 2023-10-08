@@ -9,7 +9,7 @@ app_run:
 
     mov r6, r1
     // load the info structure, r1 -> func_entry, r2 -> func_param, r3 -> stack_base, r4 -> stack_size
-    ldmia  r0!, {r1, r2, r3, r4} 
+    ldmia  r0!, {r1, r2, r3, r4, r7} 
     movs r5, #1
     str r5, [r0]    // set created flag: info->created = 1
     mov r5, r3
@@ -20,11 +20,16 @@ app_run:
     mov r0, r2      // pass function parameter in r0: r0 = r2
     mov r3, r1      // mov function entry to r3
     mov r1, r6      // pass thread id in r1: r1 = r6
+    push {r7}
     blx r3          // branch to func_entry: func_entry(r0)
+    pop {r7}
     mov r3, r0      // save the return value
     pop {r0, r1}    // r0 -> stack base, r1 -> stack pointer
     mov sp, r1      // restore the old stack pointer
-    push {r3}       // push the return value to the stack
+    push {r3}       // push the entry return value to the stack
+    cmp r7, #0
+    beq no_free_stack   // free stack pointer
     bl free_stack   // free stack pointer
-    pop {r0}        // pop the return value to r0
+no_free_stack:
+    pop {r0}        // pop the entry return value to r0
     bl noza_thread_terminate // call noza terminate to deallocate the resource

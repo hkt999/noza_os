@@ -559,11 +559,12 @@ static void syscall_thread_terminate(thread_t *running)
     running->exit_code = running->trap.r1; // r0 is the # of syscall, r1 is the exit code
     running->info.port_state = PORT_WAIT_LISTEN;
     if (th == NULL) {
-        if (th->flags & FLAG_DETACH)
+        if (running->flags & FLAG_DETACH) {
             // if the thread is detached, then free the thread
             noza_os_change_state(running, &noza_os.ready[running->info.priority], &noza_os.free);
-        else 
+        } else {
             noza_os_add_thread(&noza_os.zombie, running); // move the thread to zombie list
+        }
     } else {
         noza_os_set_return_value2(th, 0, running->exit_code);
         noza_os_add_thread(&noza_os.ready[th->info.priority], th); // move the join thread to ready list

@@ -10,6 +10,7 @@ typedef struct boot_info {
 	void *user_param;
 	uint32_t *stack_ptr;
 	uint32_t stack_size;
+	uint32_t need_free_stack;
 	uint32_t created;
 } boot_info_t;
 
@@ -47,6 +48,7 @@ int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *para
 	boot_info.user_param = param;
 	boot_info.stack_ptr = (uint32_t *)user_stack;
 	boot_info.stack_size = size;
+	boot_info.need_free_stack = 1;
 	boot_info.created = 0;
     int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t) &boot_info, priority);
 	while (boot_info.created==0) {
