@@ -24,14 +24,25 @@ struct sched_param {
     int sched_priority;
 };
 
+#define PTHREAD_PROCESS_PRIVATE 0
+#define PTHREAD_PROCESS_SHARED  1
+
+#define PTHREAD_MUTEX_DEFAULT       0
+#define PTHREAD_MUTEX_NORMAL        1
+#define PTHREAD_MUTEX_ERRORCHECK    2
+#define PTHREAD_MUTEX_RECURSIVE     3
+#define NUM_MUTEX_TYPE              4
+
 typedef struct {
+    uint32_t shared:8;
+    uint32_t type:8;
 } pthread_mutexattr_t;
 
 typedef struct {
-    uint32_t policy:4;
-    uint32_t inheritsched:4;
-    uint32_t detachstate:4;
-    uint32_t scope:4;
+    uint32_t policy:8;
+    uint32_t inheritsched:8;
+    uint32_t detachstate:8;
+    uint32_t scope:8;
 
     uint32_t stacksize;
     uint32_t guardsize;
@@ -95,11 +106,35 @@ int pthread_attr_setscope(pthread_attr_t *attr, int scope);
 int pthread_attr_getscope(const pthread_attr_t *attr, int *scope);
 
 // mutex
+// mutex initialization
 int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr);
+
+// destroy the mutex
 int pthread_mutex_destroy(pthread_mutex_t *mutex);
-int pthread_mutex_lock (pthread_mutex_t *mutex);
-int pthread_mutex_trylock (pthread_mutex_t *mutex);
+
+// lock the mutex
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+
+// try to lock the mutex
+int pthread_mutex_trylock(pthread_mutex_t *mutex);
+
+// unlock the mutex
 int pthread_mutex_unlock(pthread_mutex_t *mutex);
 
+// initialize a mutex attributes object
+int pthread_mutexattr_init(pthread_mutexattr_t *attr);
+
+// destroy a mutex attributes object
+int pthread_mutexattr_destroy(pthread_mutexattr_t *attr);
+
+// set and get the process-shared attribute
+int pthread_mutexattr_getpshared(const pthread_mutexattr_t *attr, int *pshared);
+int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared);
+
+// set and get the type attribute (e.g., PTHREAD_MUTEX_NORMAL)
+int pthread_mutexattr_gettype(const pthread_mutexattr_t *attr, int *type);
+int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type);
+
+///////////////////////////////////////////////////////////
 // not supported
 int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void));
