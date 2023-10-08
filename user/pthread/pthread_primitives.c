@@ -21,8 +21,12 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     thread->start_routine = start_routine;
     thread->arg = arg;
 
-    //int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
-    uint32_t pid = noza_thread_create(noza_thread_stub, thread, wa->schedparam.sched_priority);
+    uint32_t pid;
+    if (wa->stackaddr != NULL) {
+        pid = noza_thread_create_with_stack(noza_thread_stub, thread, wa->schedparam.sched_priority, wa->stackaddr, wa->stacksize, NO_AUTO_FREE_STACK);
+    } else {
+        pid = noza_thread_create(noza_thread_stub, thread, wa->schedparam.sched_priority, wa->stacksize);
+    }
     if (wa->detachstate == PTHREAD_CREATE_DETACHED) {
         noza_thread_detach(pid);
     }
