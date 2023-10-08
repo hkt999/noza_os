@@ -23,11 +23,15 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     thread->arg = arg;
 
     uint32_t pid, priority = NOZA_OS_PRIORITY_LIMIT - 1 - wa->schedparam.sched_priority;
+    uint32_t ret_code;
 
     if (wa->stackaddr != NULL) {
-        pid = noza_thread_create_with_stack(noza_thread_stub, thread, priority, wa->stackaddr, wa->stacksize, NO_AUTO_FREE_STACK);
+        ret_code = noza_thread_create_with_stack(&pid, noza_thread_stub, thread, priority, wa->stackaddr, wa->stacksize, NO_AUTO_FREE_STACK);
     } else {
-        pid = noza_thread_create(noza_thread_stub, thread, priority, wa->stacksize);
+        ret_code = noza_thread_create(&pid, noza_thread_stub, thread, priority, wa->stacksize);
+    }
+    if (ret_code != 0) {
+        return ret_code;
     }
     if (wa->detachstate == PTHREAD_CREATE_DETACHED) {
         noza_thread_detach(pid);

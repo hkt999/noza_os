@@ -10,8 +10,9 @@ app_run:
     mov r6, r1
     // load the info structure, r1 -> func_entry, r2 -> func_param, r3 -> stack_base, r4 -> stack_size
     ldmia  r0!, {r1, r2, r3, r4, r7} 
-    movs r5, #1
-    str r5, [r0]    // set created flag: info->created = 1
+    //movs r5, #1
+    //str r5, [r0]    // set created flag: info->created = 1
+    str r6, [r0] 
     mov r5, r3
     add r5, r5, r4  // r5 = stack_base + stack_size --> new stack base
     mov r4, sp      // r4 = old stack pointer

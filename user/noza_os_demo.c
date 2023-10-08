@@ -79,8 +79,8 @@ void root_task(void *param)
     extern int lua_main(int argc, char **argv);
     builtin_add(&table, "lua", lua_main, "run Lua interpreter");
 #endif
-    
-    uint32_t th = noza_thread_create(console_start, &table.builtin_cmds[0], 0, 1024);
+    uint32_t th;
+    noza_thread_create(&th, console_start, &table.builtin_cmds[0], 0, 1024);
     noza_thread_join(th, NULL);
     noza_thread_terminate(0);
 }
