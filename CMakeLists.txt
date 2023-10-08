@@ -18,7 +18,7 @@ pico_sdk_init()
 set(NOZAOS_UNITTEST					1)
 set(NOZAOS_LUA						0)
 set(NOZAOS_MUTEX					1)
-set(NOZAOS_PTHREAD					1)
+set(NOZAOS_POSIX					1)
 
 # tensorflow lite micro
 set(NOZAOS_TFLM						0)
@@ -34,6 +34,11 @@ if (NOZAOS_UNITTEST)
 	set(NOZAOS_UNITY_LIB "unity")
 	add_definitions(-DNOZAOS_UNITTEST)
 	add_subdirectory(3rd_party/unity_port)
+endif()
+
+if (NOZAOS_POSIX)
+	set(NOZAOS_POSIX_LIB "pthread")
+	add_subdirectory(3rd_party/posix)
 endif()
 
 if (NOZAOS_LUA)
@@ -103,14 +108,6 @@ add_executable(
 
 	# unit test
 	user/unit_test.c
-
-	# pthread
-	user/pthread/pthread_primitives.c
-	user/pthread/pthread_mutex.c
-	user/pthread/pthread_mutex_attr.c
-	user/pthread/pthread_attr.c
-	user/pthread/pthread_sched.c
-	user/pthread/pthread_not_supported.c
 )
 
 target_include_directories(
@@ -129,6 +126,7 @@ target_link_libraries(
 	noza
 	pico_stdlib
 	pico_multicore
+	${NOZAOS_POSIX_LIB}
 	${NOZAOS_UNITY_LIB}
 	${NOZAOS_LUA_LIB}
 	${NOZAOS_TFLM_HELLO_LIB}

@@ -54,7 +54,7 @@ int pthread_exit(void *retval)
     if (retval) {
         exit_code = *((int *)retval);
     }
-    noza_thread_terminate(exit_code);
+    noza_thread_terminate(exit_code); // TODO: fix this with setjmp/longjump, or some method to free stack
     return 0;
 }
 
