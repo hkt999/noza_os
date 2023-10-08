@@ -109,6 +109,7 @@ add_executable(
 	user/pthread/pthread_mutex.c
 	user/pthread/pthread_mutex_attr.c
 	user/pthread/pthread_attr.c
+	user/pthread/pthread_sched.c
 	user/pthread/pthread_not_supported.c
 )
 

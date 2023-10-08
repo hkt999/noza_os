@@ -6,9 +6,9 @@ int pthread_attr_init(pthread_attr_t *attr)
 {
     memset(attr, 0, sizeof(pthread_attr_t));
     attr->detachstate = PTHREAD_CREATE_JOINABLE;
-    attr->stacksize = 0x1000;
-    attr->guardsize = 0x1000 - 16;
-    attr->schedparam.sched_priority = 0; // TODO: consider the range
+    attr->stacksize = 0;
+    attr->guardsize = 0;
+    attr->schedparam.sched_priority = 0;
     attr->policy = SCHED_RR;
     attr->inheritsched = PTHREAD_EXPLICIT_SCHED;
     attr->scope = PTHREAD_SCOPE_SYSTEM;
