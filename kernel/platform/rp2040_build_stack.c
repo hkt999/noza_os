@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "../platform.h"
 
 typedef struct {
     uint32_t r0;
@@ -55,14 +56,14 @@ void platform_core_dump(void *_stack_ptr)
     printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
 }
 
-void platform_trap(void *_stack_ptr, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
+void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
 {
     uint32_t *stack_ptr = (uint32_t *)_stack_ptr;
     interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-    is->r0 = r0;
-    is->r1 = r1;
-    is->r2 = r2;
-    is->r3 = r3;
+    is->r0 = info->r0;
+    is->r1 = info->r1;
+    is->r2 = info->r2;
+    is->r3 = info->r3;
     /*
     is->r0 = running->trap.r0;
     is->r1 = running->trap.r1;

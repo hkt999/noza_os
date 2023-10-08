@@ -27,5 +27,5 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 int pthread_join(pthread_t thread, void **retval);
 int pthread_exit(void *retval);
 int pthread_detach(pthread_t thread);
-void pthread_yield(void);
+int pthread_yield(void);
 int pthread_equal(pthread_t t1, pthread_t t2);
