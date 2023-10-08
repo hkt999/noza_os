@@ -25,11 +25,10 @@ set(CMAKE_CXX_FLAGS "-mcpu=cortex-m0plus -march=armv6-m -mthumb -O3 \
 	-ffunction-sections -fdata-sections -fno-exceptions -fno-rtti -fno-unwind-tables \
 	-fno-asynchronous-unwind-tables -fno-threadsafe-statics -DPROJECT_GENERATION")
 
-set(UNITY_PATH ${CMAKE_CURRENT_LIST_DIR}/../Unity)
 set(NOZAOS_PATH ${CMAKE_CURRENT_LIST_DIR}/../..)
 add_library(
     unity
-    ${UNITY_PATH}/src/unity.c
+    unity.c
 )
 
 add_definitions(-DUNITY_INCLUDE_CONFIG_H)
@@ -37,5 +36,4 @@ target_include_directories(
     unity
     PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}
-    ${UNITY_PATH}
 )
