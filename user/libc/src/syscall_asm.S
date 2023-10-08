@@ -6,12 +6,13 @@
 .equ NSC_THREAD_CREATE, 2
 .equ NSC_THREAD_CHANGE_PRIORITY, 3
 .equ NSC_THREAD_JOIN, 4
-.equ NSC_THREAD_TERMINATE, 5
-.equ NSC_RECV, 6
-.equ NSC_REPLY, 7
-.equ NSC_CALL, 8
-.equ NSC_NB_RECV, 9
-.equ NSC_NB_CALL, 10
+.equ NSC_THREAD_DETACH, 5
+.equ NSC_THREAD_TERMINATE, 6
+.equ NSC_RECV, 7
+.equ NSC_REPLY, 8
+.equ NSC_CALL, 9
+.equ NSC_NB_RECV, 10
+.equ NSC_NB_CALL, 11
 
 .type noza_thread_yield, %function
 .global noza_thread_yield
@@ -24,13 +25,27 @@ noza_thread_yield:
 
 .type noza_thread_join, %function
 .global noza_thread_join
-noza_thread_join:
+noza_thread_join: 				// noza_thread_join(uint32_t pid, uint32_t *retval)
+	push {r4-r7, lr}			// save r4-r11 and lr
+	push {r1}					// push the pointer to retval to the stack
+	mov r1, r0					// move the pid to r1
+	movs r0, #NSC_THREAD_JOIN	// set r0 to the value of NSC_THREAD_JOIN
+	svc #0 						// system call, return value in r0
+	pop {r2}					// pop the pointer to retval from the stack	
+	cmp r2, #0					// check if the return value is 0
+	beq noza_thread_join_end	// if it is, jump to the end
+	str r1, [r2]				// store the return value in the memory pointed by r2
+noza_thread_join_end:
+	pop {r4-r7, pc} 			// restore r4-r11 and lr
+
+.type noza_thread_detach, %function
+.global noza_thread_detach
+noza_thread_detach:
 	push {r4-r7, lr}		// save r4-r11 and lr
 	mov r1, r0				// move the pid to r1
-	movs r0, #NSC_THREAD_JOIN	// set r0 to the value of NSC_THREAD_JOIN
+	movs r0, #NSC_THREAD_DETACH	// set r0 to the value of NSC_THREAD_DETACH
 	svc #0 					// system call, return value in r0
-	pop {r4-r7, pc} 		// restore r4-r11 and lr
-
+	pop {r4-r7, pc} 		// restore r4-r11 and lr	
 
 .type noza_thread_sleep, %function
 .global noza_thread_sleep

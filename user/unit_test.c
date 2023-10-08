@@ -38,11 +38,13 @@ int task_test(int argc, char **argv)
 
     for (int i = 0; i < num_threads; i++) {
         th[i] = noza_thread_create(test_task, NULL, (uint32_t)i%4);
+        TEST_ASSERT_NOT_EQUAL(0, th[i]);
     }
 
     for (int i = 0; i < num_threads; i++) {
-        printf("join thread %d, id=%d\n", i, th[i]);
-        TEST_ASSERT_EQUAL(th[i], noza_thread_join(th[i])); // TODO: consider join order...
+        uint32_t exit_code = 0;
+        TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
+        TEST_ASSERT_EQUAL(th[i], exit_code);
     }
 
     printf("finish test\n");
@@ -95,12 +97,14 @@ void client_thread(void *param, uint32_t mypid)
 
 int message_test(int argc, char **argv)
 {
+    uint32_t code;
     UNITY_BEGIN();
     uint32_t pid = noza_thread_create(server_thread, NULL, 0);
     printf("** server pid: %ld\n", pid);
     printf("** client start\n");
     client_thread((void *)pid, 0);
-    TEST_ASSERT_EQUAL(pid, noza_thread_join(pid));
+    noza_thread_join(pid, &code);
+    TEST_ASSERT_EQUAL(pid, code);
     printf("test finish code=%d\n", pid);
     UNITY_END();
     return 0;
@@ -108,6 +112,7 @@ int message_test(int argc, char **argv)
 
 int thread_working(void *param, uint32_t pid)
 {
+    uint32_t exit_code;
     uint32_t master = (uint32_t) param;
     uint32_t counter = 5;
     uint32_t sleep_ms = rand() % 500 + 500;
@@ -116,7 +121,7 @@ int thread_working(void *param, uint32_t pid)
         noza_thread_sleep(1000);
     }
     printf("enter join state\n");
-    int exit_code = noza_thread_join(master);
+    noza_thread_join(master, &exit_code);
     printf("-- detect master thread terminated exit_code=%d\n", exit_code);
 
     return pid;
@@ -151,7 +156,9 @@ int thread_join_test(int argc, char **argv)
     for (int i=0; i<count; i++) {
         noza_thread_create(thread_working, (void *)master, 0);
     }
-    TEST_ASSERT_EQUAL(master, noza_thread_join(master));
+    uint32_t exit_code;
+    noza_thread_join(master, &exit_code);
+    TEST_ASSERT_EQUAL(master, exit_code);
     UNITY_END();
     return 0;
 }
@@ -215,7 +222,8 @@ int hardfault_test(int argc, char **argv)
     printf("test hardfault\n");
     noza_thread_create(normal_task, NULL, 0);
     uint32_t fid = noza_thread_create(fault_task, NULL, 0);
-    int exit_code = noza_thread_join(fid);
+    uint32_t exit_code;
+    noza_thread_join(fid, &exit_code);
     printf("fault catch by main thread exit_code=%d\n", exit_code);
 }
 

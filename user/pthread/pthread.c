@@ -53,10 +53,14 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 int pthread_join(pthread_t thread, void **retval)
 {
+    uint32_t code;
+    int ret;
+
+    ret = noza_thread_join(thread.id, &code); // TODO: handle the return code
     if (retval != 0) {
-        *retval = 0;
+        *retval = (void *)code;
     }
-    return noza_thread_join(thread.id); // TODO: handle the return code
+    return ret;
 }
 
 int pthread_exit(void *retval)
@@ -71,12 +75,13 @@ int pthread_exit(void *retval)
 
 int pthread_detach(pthread_t thread)
 {
-    return 0; // TODO: handle the detach logic
+    // return noza_thread_detach(thread.id)
+    return noza_thread_detach(thread.id);
 }
 
-void pthread_yield(void)
+int pthread_yield(void)
 {
-    noza_thread_yield();
+    return noza_thread_yield();
 }
 
 int pthread_equal(pthread_t t1, pthread_t t2)
