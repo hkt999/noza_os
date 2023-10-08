@@ -11,7 +11,7 @@ typedef struct boot_info {
 	uint32_t *stack_ptr;
 	uint32_t stack_size;
 	uint32_t need_free_stack;
-	uint32_t created;
+	uint32_t pid;
 } boot_info_t;
 
 void free_stack(void *ptr)
@@ -38,13 +38,14 @@ void noza_run_services()
 {
     // initial all registered service
     for (int i = 0; i < service_count; i++) {
-        noza_thread_create(service_entry[i], NULL, SERVICE_PRIORITY, 1024);
+		uint32_t th;
+        noza_thread_create(&th, service_entry[i], NULL, SERVICE_PRIORITY, 1024);
     }
 }
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK	1
-int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, void *user_stack, uint32_t size, uint32_t auto_free_stack)
+int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, void *user_stack, uint32_t size, uint32_t auto_free_stack)
 {
 	volatile boot_info_t boot_info;
 	boot_info.user_entry = entry;
@@ -52,19 +53,22 @@ int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *para
 	boot_info.stack_ptr = (uint32_t *)user_stack;
 	boot_info.stack_size = size;
 	boot_info.need_free_stack = auto_free_stack;
-	boot_info.created = 0;
+	boot_info.pid = -1;
     int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t) &boot_info, priority);
-	while (boot_info.created==0) {
-		noza_thread_yield(); // TODO: check if the thread is higher then child, then this never happen !!
+	if (ret == 0) {
+		while (boot_info.pid==-1) {
+			noza_thread_yield(); // TODO: check if the thread is higher then child, then this never happen !!
+		}
+		*pth = boot_info.pid;
 	}
 
 	return ret;
 }
 
 //#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
-int noza_thread_create(int (*entry)(void *, uint32_t), void *param, uint32_t priority, uint32_t stack_size)
+int noza_thread_create(uint32_t *pth, int (*entry)(void *, uint32_t), void *param, uint32_t priority, uint32_t stack_size)
 {
 	uint8_t *stack_ptr = (uint8_t *)malloc(stack_size);
-	return noza_thread_create_with_stack(entry, param, priority, stack_ptr, stack_size, AUTO_FREE_STACK);
+	return noza_thread_create_with_stack(pth, entry, param, priority, stack_ptr, stack_size, AUTO_FREE_STACK);
 }
 
