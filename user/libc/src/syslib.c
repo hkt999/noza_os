@@ -33,36 +33,38 @@ void noza_add_service(void (*entry)(void *param, uint32_t pid))
     service_entry[service_count++] = entry;
 }
 
+#define SERVICE_PRIORITY	0
 void noza_run_services()
 {
     // initial all registered service
     for (int i = 0; i < service_count; i++) {
-        noza_thread_create(service_entry[i], NULL, 0);
+        noza_thread_create(service_entry[i], NULL, SERVICE_PRIORITY, 1024);
     }
 }
 
-int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, uint8_t *user_stack, uint32_t size)
+#define NO_AUTO_FREE_STACK	0
+#define AUTO_FREE_STACK	1
+int noza_thread_create_with_stack(int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, void *user_stack, uint32_t size, uint32_t auto_free_stack)
 {
 	volatile boot_info_t boot_info;
 	boot_info.user_entry = entry;
 	boot_info.user_param = param;
 	boot_info.stack_ptr = (uint32_t *)user_stack;
 	boot_info.stack_size = size;
-	boot_info.need_free_stack = 1;
+	boot_info.need_free_stack = auto_free_stack;
 	boot_info.created = 0;
     int ret =  noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t) &boot_info, priority);
 	while (boot_info.created==0) {
-		noza_thread_yield();
+		noza_thread_yield(); // TODO: check if the thread is higher then child, then this never happen !!
 	}
 
 	return ret;
 }
 
-#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
-int noza_thread_create(int (*entry)(void *, uint32_t), void *param, uint32_t priority)
+//#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
+int noza_thread_create(int (*entry)(void *, uint32_t), void *param, uint32_t priority, uint32_t stack_size)
 {
-	uint8_t *stack_ptr = (uint8_t *)malloc(DEFAULT_STACK_SIZE);
-	uint32_t stack_size = DEFAULT_STACK_SIZE;
-	return noza_thread_create_with_stack(entry, param, priority, stack_ptr, stack_size);
+	uint8_t *stack_ptr = (uint8_t *)malloc(stack_size);
+	return noza_thread_create_with_stack(entry, param, priority, stack_ptr, stack_size, AUTO_FREE_STACK);
 }
 

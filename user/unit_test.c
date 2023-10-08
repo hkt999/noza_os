@@ -36,7 +36,7 @@ int task_test(int argc, char **argv)
     srand(time(0));
 
     for (int i = 0; i < num_threads; i++) {
-        th[i] = noza_thread_create(test_task, NULL, (uint32_t)i%4);
+        th[i] = noza_thread_create(test_task, NULL, (uint32_t)i%4, 1024);
         TEST_ASSERT_NOT_EQUAL(0, th[i]);
     }
 
@@ -96,7 +96,7 @@ int message_test(int argc, char **argv)
 {
     uint32_t code;
     UNITY_BEGIN();
-    uint32_t pid = noza_thread_create(server_thread, NULL, 0);
+    uint32_t pid = noza_thread_create(server_thread, NULL, 0, 1024);
     printf("** server pid: %ld\n", pid);
     printf("** client start\n");
     client_thread((void *)pid, 0);
@@ -149,9 +149,9 @@ int thread_join_test(int argc, char **argv)
         return 0;
     }
     printf("create %d working threads\n", count);
-    uint32_t master = noza_thread_create(thread_master, NULL, 0);
+    uint32_t master = noza_thread_create(thread_master, NULL, 0, 1024);
     for (int i=0; i<count; i++) {
-        noza_thread_create(thread_working, (void *)master, 0);
+        noza_thread_create(thread_working, (void *)master, 0, 1024);
     }
     uint32_t exit_code;
     noza_thread_join(master, &exit_code);
@@ -217,8 +217,8 @@ int fault_task(void *param, uint32_t pid)
 int hardfault_test(int argc, char **argv)
 {
     printf("test hardfault\n");
-    noza_thread_create(normal_task, NULL, 0);
-    uint32_t fid = noza_thread_create(fault_task, NULL, 0);
+    noza_thread_create(normal_task, NULL, 0, 1024);
+    uint32_t fid = noza_thread_create(fault_task, NULL, 0, 1024);
     uint32_t exit_code;
     noza_thread_join(fid, &exit_code);
     printf("fault catch by main thread exit_code=%d\n", exit_code);
