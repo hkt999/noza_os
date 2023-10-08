@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <time.h>
 #include <pthread.h>
-
 #include "nozaos.h"
 
 #define NUM_SENDER_THREADS 4
@@ -17,14 +16,14 @@ void sender_entry(void *param) {
         noza_msg_t message;
         message.pid = 0;
         char payload[16];
-        sprintf(payload, "Message %d from thread %d", i, (int)pthread_self());
+        sprintf(payload, "message %d from thread %d", i, (int)pthread_self());
         message.ptr = payload;
         message.size = sizeof(payload);
 
         /* Send message to receiver */
         noza_call(&message);
 
-        printf("Sender thread %d sent message: %s\n", (int)pthread_self(), (char*)message.ptr);
+        printf("sender thread %d sent message: %s\n", (int)pthread_self(), (char*)message.ptr);
 
         noza_thread_sleep(500);
     }
@@ -39,7 +38,7 @@ void receiver_entry(void *param) {
         noza_msg_t message;
         noza_recv(&message);
 
-        printf("Receiver thread received message: %s\n", (char*)message.ptr);
+        printf("receiver thread received message: %s\n", (char*)message.ptr);
 
         /* Reply to sender */
         noza_reply(&message);

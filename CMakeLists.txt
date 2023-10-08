@@ -105,7 +105,10 @@ add_executable(
 	user/unit_test.c
 
 	# pthread
-	user/pthread/pthread.c
+	user/pthread/pthread_primitives.c
+	user/pthread/pthread_mutex.c
+	user/pthread/pthread_attr.c
+	user/pthread/pthread_not_supported.c
 )
 
 target_include_directories(
