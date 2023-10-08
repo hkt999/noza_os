@@ -25,6 +25,8 @@
 #define PORT_WAIT_LISTEN        0
 #define PORT_READY              1
 
+#define FLAG_DETACH             0x01
+
 typedef struct cdl_node_s cdl_node_t;
 struct cdl_node_s {
     cdl_node_t *next;
@@ -323,6 +325,7 @@ static thread_t *noza_thread_alloc()
 
     thread_t *th = (thread_t *)noza_os.free.head->value;
     noza_os_remove_thread(&noza_os.free, th);
+    th->flags = 0; // reset the thread flags (says, detached)
 
     return th;
 }
@@ -488,6 +491,11 @@ static void syscall_thread_join(thread_t *running)
         noza_os_set_return_value1(running, -1); // error
         return;
     }
+    // if the flags is set to detach, then return error (cannot be join)
+    if (th->flags & FLAG_DETACH) {
+        noza_os_set_return_value1(running, -1); // error
+        return;
+    }
 
     // if the thread is in zombie state, then return the exit code, and free the thread
     if (th->info.state == THREAD_ZOMBIE) {
@@ -503,6 +511,30 @@ static void syscall_thread_join(thread_t *running)
     } else {
         noza_os_set_return_value1(running, -1); // already join, return error
    }
+}
+
+static void syscall_thread_detach(thread_t *running)
+{
+    uint32_t pid = running->trap.r1;
+    // sanity check
+    if (pid >= NOZA_OS_TASK_LIMIT) {
+        noza_os_set_return_value1(running, -1); // error
+        return;
+    }
+    thread_t *th = &noza_os.thread[pid];
+    if (th->info.state == THREAD_FREE) {
+        noza_os_set_return_value1(running, -1); // error
+        return;
+    }
+    // if the thread is in zombie state, then return the exit code, and free the thread
+    if (th->info.state == THREAD_ZOMBIE) {
+        noza_os_set_return_value1(running, -1);
+        noza_os_change_state(th, &noza_os.zombie, &noza_os.free); // free the thread
+        return;
+    }
+    // set the detach flag, and return success
+    th->flags |= FLAG_DETACH;
+    noza_os_set_return_value1(running, 0); // success
 }
 
 static void syscall_thread_change_priority(thread_t *running)
@@ -577,6 +609,7 @@ static syscall_func_t syscall_func[] = {
     [NSC_THREAD_CREATE] = syscall_thread_create,
     [NSC_THREAD_CHANGE_PRIORITY] = syscall_thread_change_priority,
     [NSC_THREAD_JOIN] = syscall_thread_join,
+    [NSC_THREAD_DETACH] = syscall_thread_detach,
     [NSC_THREAD_TERMINATE] = syscall_thread_terminate,
 
     // messages and ports
