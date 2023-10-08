@@ -16,9 +16,11 @@ pico_sdk_init()
 
 # declare the project apps
 set(NOZAOS_UNITTEST					1)
-set(NOZAOS_LUA						0)
 set(NOZAOS_MUTEX					1)
 set(NOZAOS_POSIX					1)
+
+# lua interpreter
+set(NOZAOS_LUA						0)
 
 # tensorflow lite micro
 set(NOZAOS_TFLM						0)
@@ -119,6 +121,7 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party/Unity/src
+	${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port
 )
 
 # Add the standard library to the build

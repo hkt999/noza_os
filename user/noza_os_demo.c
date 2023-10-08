@@ -61,16 +61,18 @@ void root_task(void *param)
 #endif
 
 #ifdef NOZAOS_UNITTEST
-    extern int task_test(int argc, char **argv);
-    extern int message_test(int argc, char **argv);
-    extern int thread_join_test(int argc, char **argv);
-    extern int setjmp_test(int argc, char **argv);
-    extern int hardfault_test(int argc, char **argb);
-    builtin_add(&table, "test_task", task_test, "a demo program for task creation and scheduling");
-    builtin_add(&table, "test_msg", message_test, "a demo program for message passing");
-    builtin_add(&table, "test_join", thread_join_test, "a demo program for thread synchronization join");
-    builtin_add(&table, "test_setjmp", setjmp_test, "test setjmp/longjmp");
-    builtin_add(&table, "hardfault_test", hardfault_test, "test hardfault");
+    extern int test_thread(int argc, char **argv);
+    extern int test_msg(int argc, char **argv);
+    extern int test_join(int argc, char **argv);
+    extern int test_setjmp(int argc, char **argv);
+    extern int test_hardfault(int argc, char **argv);
+    extern int test_all(int argc, char **argv);
+    builtin_add(&table, "test_thread", test_thread, "a test program for task creation and scheduling");
+    builtin_add(&table, "test_msg", test_msg, "a test program for message passing");
+    builtin_add(&table, "test_join", test_join, "a test program for thread synchronization join");
+    builtin_add(&table, "test_setjmp", test_setjmp, "test setjmp/longjmp");
+    builtin_add(&table, "test_hardfault", test_hardfault, "test hardfault");
+    builtin_add(&table, "test_all", test_all, "test all");
 #endif
 
 #ifdef NOZAOS_LUA
