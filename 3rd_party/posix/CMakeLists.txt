@@ -34,6 +34,7 @@ add_library(
 	pthread_cond.c
 	pthread_sched.c
 	pthread_not_supported.c
+	semaphore.c
 	noza_time.c
 )
 
