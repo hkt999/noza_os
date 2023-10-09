@@ -69,6 +69,12 @@ int pthread_yield(void)
 {
     return noza_thread_yield();
 }
+pthread_t pthread_self(void)
+{
+    pthread_t th = {0};
+    noza_thread_self(&th.id);
+    return th;
+}
 
 int pthread_equal(pthread_t t1, pthread_t t2)
 {
