@@ -31,8 +31,10 @@ add_library(
 	pthread_mutex_attr.c
 	pthread_primitives.c
 	pthread_mutex.c
+	pthread_cond.c
 	pthread_sched.c
 	pthread_not_supported.c
+	noza_time.c
 )
 
 target_include_directories(

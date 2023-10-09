@@ -48,9 +48,9 @@ typedef struct {
 } noza_os_port_t;
 
 typedef struct {
-    uint32_t    priority:4;
-    uint32_t    state:4;
-    uint32_t    port_state:1;       // PORT_WAIT_LISTEN or PORT_READY
+    uint32_t    priority:8;
+    uint32_t    state:8;
+    uint32_t    port_state:8;       // PORT_WAIT_LISTEN or PORT_READY
 } info_t;
 
 typedef struct {
@@ -67,13 +67,12 @@ typedef struct thread_s {
     uint32_t            *stack_ptr;          // pointer to the thread's stack
     cdl_node_t          state_node;          // node for managing the thread state
     info_t              info;                // thread information
-    uint32_t            expired_time;        // time when the thread expires
+    int64_t             expired_time;        // time when the thread expires
     uint32_t            flags;               // reserved flags
     uint32_t            exit_code;           // the exit code
     kernel_trap_info_t  trap;                // kernel trap information
     noza_os_port_t      port;                // port information
     noza_os_message_t   message;             // message passing mechanism for the thread
-    //thread_list_t       join_list;           // list of threads waiting to join this thread
     thread_t            *join_th;             // thread waiting to join this thread
     uint32_t            stack_area[NOZA_OS_STACK_SIZE]; // stack memory area for the thread
 } thread_t;
@@ -463,18 +462,47 @@ static void noza_switch_handler(uint32_t core)
     noza_init_kernel_stack(dummy+32);
 }
 
-static void syscall_yield(thread_t *running)
+static void syscall_thread_yield(thread_t *running)
 {
     noza_os_set_return_value1(running, 0);
     noza_os_clear_running_thread(); // force select the next thread
     noza_os_add_thread(&noza_os.ready[running->info.priority], running); // insert the thread back to ready queue
 }
 
-static void syscall_sleep(thread_t *running)
+static void syscall_thread_sleep(thread_t *running)
 {
-    running->expired_time = platform_get_absolute_time() + running->trap.r1; // setup expired time
+    int64_t duration = ((int64_t)running->trap.r1) << 32 | running->trap.r2;
+    running->expired_time = platform_get_absolute_time_us() + duration; // setup expired time
     noza_os_add_thread(&noza_os.sleep, running);
     noza_os_clear_running_thread();
+}
+
+static void syscall_thread_kill(thread_t *running)
+{
+    uint32_t picked = running->trap.r1;
+
+    // sanity check
+    if (picked >= NOZA_OS_TASK_LIMIT) {
+        noza_os_set_return_value1(running, ESRCH); // error
+        return;
+    }
+    thread_t *th = &noza_os.thread[picked];
+    if (th->info.state == THREAD_SLEEP) {
+        // move to ready list
+        noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
+        int64_t now_time = platform_get_absolute_time_us();
+        if (now_time < th->expired_time) {
+            int64_t remain = th->expired_time - now_time;
+            uint32_t high = (uint32_t)(remain >> 32);
+            uint32_t low = (uint32_t)(remain & 0xffffffff);
+            noza_os_set_return_value3(th, EINTR, high, low);
+        } else {
+            noza_os_set_return_value3(th, EINTR, 0, 0);
+        }
+        th->expired_time = 0;
+    }
+
+    noza_os_set_return_value1(running, 0);
 }
 
 static void syscall_thread_create(thread_t *running)
@@ -633,8 +661,9 @@ typedef void (*syscall_func_t)(thread_t *source);
 
 static syscall_func_t syscall_func[] = {
     // scheduling
-    [NSC_YIELD] = syscall_yield,
-    [NSC_SLEEP] = syscall_sleep,
+    [NSC_YIELD] = syscall_thread_yield,
+    [NSC_SLEEP] = syscall_thread_sleep,
+    [NSC_KILL] = syscall_thread_kill,
     [NSC_THREAD_CREATE] = syscall_thread_create,
     [NSC_THREAD_CHANGE_PRIORITY] = syscall_thread_change_priority,
     [NSC_THREAD_JOIN] = syscall_thread_join,
@@ -682,7 +711,7 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
     if (noza_os.sleep.count == 0)
         return slice;
 
-    uint32_t now = platform_get_absolute_time();
+    int64_t now = platform_get_absolute_time_us();
     for (;;) {
         cdl_node_t *cursor = noza_os.sleep.head;
         for (int i=0; i<noza_os.sleep.count; i++) {
@@ -704,7 +733,7 @@ static uint32_t noza_check_sleep_thread(uint32_t slice)
             for (int i=0; i<counter; i++) {
                 thread_t *th = expired_thread[i];
                 noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
-                noza_os_set_return_value1(th, 0); // return 0
+                noza_os_set_return_value3(th, 0, 0, 0); // return 0, successfully timeout
             }
             counter = 0;
         } else

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "errno.h"
+#include "noza_time.h"
 #include <service/mutex/mutex_client.h>
 
 #define PTHREAD_CREATE_JOINABLE 0
@@ -135,6 +136,31 @@ int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared);
 // set and get the type attribute (e.g., PTHREAD_MUTEX_NORMAL)
 int pthread_mutexattr_gettype(const pthread_mutexattr_t *attr, int *type);
 int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type);
+
+
+typedef struct {
+    mutex_t internal_mutex;
+    mutex_t *user_mutex;
+    uint32_t signaled;
+    uint32_t waiters;
+} pthread_cond_t;
+
+typedef struct {
+} pthread_condattr_t;
+
+int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr);
+int pthread_cond_destroy(pthread_cond_t *cond);
+int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex);
+int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime);
+int pthread_cond_signal(pthread_cond_t *cond);
+int pthread_cond_broadcast(pthread_cond_t *cond);
+int pthread_condattr_init(pthread_condattr_t *attr);
+int pthread_condattr_destroy(pthread_condattr_t *attr);
+int pthread_condattr_setpshared(pthread_condattr_t *attr, int pshared);
+int pthread_condattr_getpshared(const pthread_condattr_t *restrict attr, int *restrict pshared);
+int pthread_condattr_setclock(pthread_condattr_t *attr, clockid_t clock_id);
+int pthread_condattr_getclock(const pthread_condattr_t *restrict attr, clockid_t *restrict clock_id);
+
 
 ///////////////////////////////////////////////////////////
 // not supported

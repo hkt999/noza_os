@@ -19,6 +19,7 @@ typedef struct thread_info {
 	uint32_t need_free_stack;
 	uint32_t pid;
 	jmp_buf jmp_buf;
+	uint32_t errno;
 } thread_info_t;
 static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0};
 
@@ -89,6 +90,7 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	thread_info->priority = priority;
 	thread_info->need_free_stack = auto_free_stack;
 	thread_info->pid = -1;
+	thread_info->errno = 0;
 	int ret, th;
     noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t)thread_info, priority);
 	asm volatile("mov %0, r0" : "=r"(ret) : : "memory");
@@ -112,4 +114,31 @@ void noza_thread_exit(uint32_t exit_code)
 	uint32_t pid;
 	noza_thread_self(&pid);
 	longjmp(THREAD_INFO[pid]->jmp_buf, exit_code);
+}
+
+int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
+{
+	uint32_t r0 = (uint32_t)(us >> 32);
+	uint32_t r1 = (uint32_t)(us & 0xFFFFFFFF);
+	uint32_t r2;
+
+	extern void _noza_thread_sleep(uint32_t r0, uint32_t r1); // in assembly
+	_noza_thread_sleep(r0, r1);
+	asm volatile("mov %0, r0" : "=r"(r0) : : "memory");
+	asm volatile("mov %0, r1" : "=r"(r1) : : "memory");
+	asm volatile("mov %0, r2" : "=r"(r2) : : "memory");
+	if (remain_us) {
+		*remain_us = ((uint64_t)r0 << 32) | r1;
+	}
+	return r0;
+}
+
+int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms)
+{
+	int64_t remain_us;
+	int ret = noza_thread_sleep_us(ms * 1000, &remain_us);
+	if (remain_ms) {
+		*remain_ms = remain_us / 1000;
+	}
+	return ret;
 }
