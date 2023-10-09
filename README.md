@@ -14,7 +14,8 @@ The design of Noza is partly inspired by the limitations of some real-time opera
 * `noza_thread_sleep(uint32_t ms)`: Puts the current thread to sleep for the specified number of milliseconds. 
 * `noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)`: Creates a new thread with the given entry function, parameter, and priority. 
 * `noza_thread_change_priority(uint32_t thread_id, uint32_t priority)`: Changes the priority of the specified thread. 
-* `noza_thread_terminate()`: Terminates the current thread. 
+* `noza_thread_terminate()`: Terminates the current thread.
+* 'noza_thread_self(uint32_t *id)': Get running thread ID
 * `noza_recv(noza_msg_t *msg)`: Receives a message from another process, blocking until a message is received. 
 * `noza_reply(noza_msg_t *msg)`: Replies to a message received from another process. 
 * `noza_call(noza_msg_t *msg)`: Sends a message to another process and waits for a reply, blocking until the reply is received. 
