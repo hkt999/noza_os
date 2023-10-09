@@ -4,33 +4,23 @@
 .type app_run, %function
 .global app_run, noza_thread_terminate, free_stack
 app_run:
-    // r0: the pointer to the info structure
-    // r1: thread id
+    // r0: the pointer to the boot info structure
+    // r1: thread_id
 
-    mov r6, r1
-    // load the info structure, r1 -> func_entry, r2 -> func_param, r3 -> stack_base, r4 -> stack_size
-    ldmia  r0!, {r1, r2, r3, r4, r7} 
-    //movs r5, #1
-    //str r5, [r0]    // set created flag: info->created = 1
-    str r6, [r0] 
-    mov r5, r3
-    add r5, r5, r4  // r5 = stack_base + stack_size --> new stack base
-    mov r4, sp      // r4 = old stack pointer
-    mov sp, r5      // set the stack pointer: sp = r5
-    push {r3, r4}   // r3 -> stack base, r4 -> stack pointer
-    mov r0, r2      // pass function parameter in r0: r0 = r2
-    mov r3, r1      // mov function entry to r3
-    mov r1, r6      // pass thread id in r1: r1 = r6
-    push {r7}
-    blx r3          // branch to func_entry: func_entry(r0)
-    pop {r7}
-    mov r3, r0      // save the return value
-    pop {r0, r1}    // r0 -> stack base, r1 -> stack pointer
-    mov sp, r1      // restore the old stack pointer
-    push {r3}       // push the entry return value to the stack
-    cmp r7, #0
-    beq no_free_stack   // free stack pointer
-    bl free_stack   // free stack pointer
-no_free_stack:
-    pop {r0}        // pop the entry return value to r0
+    // r2 -> func_entry, r3 -> func_param, r4 -> stack_base, r5 -> stack_size
+    ldmia r0!, {r2, r3, r4, r5}
+    add r4, r4, r5  // r3 = stack_base + stack_size --> new stack base
+    mov r0, sp      // r7 = old stack pointer
+    mov sp, r4      // set the new stack pointer
+
+    push {r0, r1}   // save the old stack pointer
+    mov r0, r3      // pass function parameter in r0, and keep r1 as thread id
+    blx r2
+    pop {r2, r3}    // pop old stack pointer, thread i
+
+    mov sp, r2      // restore the old stack pointer
+    push {r0}
+    mov r0, r3
+    bl free_stack
+    pop {r0}
     bl noza_thread_terminate // call noza terminate to deallocate the resource
