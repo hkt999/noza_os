@@ -12,6 +12,7 @@ typedef struct {
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK	1
+
 // Noza thread & scheduling
 int     noza_thread_sleep(uint32_t ms);
 int     noza_thread_create(uint32_t *pth, int (*entry)(void *param, uint32_t pid), void *param, uint32_t priority, uint32_t stack_size);
@@ -21,6 +22,7 @@ int     noza_thread_yield();
 int     noza_thread_detach(uint32_t thread_id);
 int     noza_thread_join(uint32_t thread_id, uint32_t *code);
 void    noza_thread_terminate(int exit_code);
+int     noza_thread_self(uint32_t *pid);
 
 // NOza message
 int noza_recv(noza_msg_t *msg);

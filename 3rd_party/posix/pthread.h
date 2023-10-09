@@ -59,7 +59,7 @@ typedef struct {
 // pthread primitives
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg);
 int pthread_join(pthread_t thread, void **retval);
-int pthread_exit(void *retval);
+void pthread_exit(void *retval);
 int pthread_detach(pthread_t thread);
 int pthread_yield(void);
 int pthread_equal(pthread_t t1, pthread_t t2);

@@ -8,11 +8,12 @@
 .equ NSC_THREAD_JOIN, 4
 .equ NSC_THREAD_DETACH, 5
 .equ NSC_THREAD_TERMINATE, 6
-.equ NSC_RECV, 7
-.equ NSC_REPLY, 8
-.equ NSC_CALL, 9
-.equ NSC_NB_RECV, 10
-.equ NSC_NB_CALL, 11
+.equ NSC_THREAD_SELF, 7
+.equ NSC_RECV, 8
+.equ NSC_REPLY, 9
+.equ NSC_CALL, 10
+.equ NSC_NB_RECV, 11
+.equ NSC_NB_CALL, 12
 
 .type noza_thread_yield, %function
 .global noza_thread_yield
@@ -77,6 +78,16 @@ noza_thread_terminate:
 	svc #0 					// system call, return value in r0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
 
+.type noza_thread_self, %function
+.global noza_thread_self
+noza_thread_self:
+	push {r4-r7, lr}		// save r4-r11 and lr
+	push {r0}				// save parameter address (r0)	
+	movs r0, #NSC_THREAD_SELF	// set r0 to the value of NSC_THREAD_SELF
+	svc #0 					// system call, return value in r0
+	pop {r2}
+	str r0, [r2]			// store the return value in the memory pointed by r2
+	pop {r4-r7, pc} 		// restore r4-r11 and lr
 
 .type noza_recv, %function
 .global noza_recv

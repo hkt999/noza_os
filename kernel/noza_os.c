@@ -594,6 +594,11 @@ static void syscall_thread_terminate(thread_t *running)
     running->trap.state = SYSCALL_DONE; // thread is terminated, it is fine to remove this line
 }
 
+static void syscall_thread_self(thread_t *running)
+{
+    noza_os_set_return_value1(running, thread_get_pid(running));
+}
+
 static void syscall_recv(thread_t *running)
 {
     noza_os_recv(running);
@@ -635,6 +640,7 @@ static syscall_func_t syscall_func[] = {
     [NSC_THREAD_JOIN] = syscall_thread_join,
     [NSC_THREAD_DETACH] = syscall_thread_detach,
     [NSC_THREAD_TERMINATE] = syscall_thread_terminate,
+    [NSC_THREAD_SELF] = syscall_thread_self,
 
     // messages and ports
     [NSC_RECV] = syscall_recv,

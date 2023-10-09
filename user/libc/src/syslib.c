@@ -3,6 +3,7 @@
 #include "nozaos.h"
 #include "kernel/syscall.h"
 #include "kernel/noza_config.h"
+#include "setjmp.h"
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK		1
@@ -17,6 +18,7 @@ typedef struct thread_info {
 	uint32_t priority;
 	uint32_t need_free_stack;
 	uint32_t pid;
+	jmp_buf jmp_buf;
 } thread_info_t;
 static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0};
 
@@ -44,9 +46,19 @@ void noza_run_services()
     }
 }
 
+uint32_t save_exit_context(thread_info_t *thread_info, uint32_t pid)
+{
+	if (thread_info->pid != pid) {
+		// not setup yet, just setup
+		thread_info->pid = pid;
+		THREAD_INFO[pid] = thread_info;
+	}
+
+	return setjmp(thread_info->jmp_buf);
+}
+
 void free_stack(uint32_t pid)
 {
-	// TODO: consider free before set (because of thread priority)
 	// sanity check
 	if (pid >= NOZA_OS_TASK_LIMIT) {
 		printf("fatal: free_stack: invalid pid: %ld\n", pid);
@@ -74,7 +86,9 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	thread_info->user_param = param;
 	thread_info->stack_ptr = (uint32_t *)user_stack;
 	thread_info->stack_size = size;
+	thread_info->priority = priority;
 	thread_info->need_free_stack = auto_free_stack;
+	thread_info->pid = -1;
 	int ret, th;
     noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t)thread_info, priority);
 	asm volatile("mov %0, r0" : "=r"(ret) : : "memory");
@@ -93,3 +107,9 @@ int noza_thread_create(uint32_t *pth, int (*entry)(void *, uint32_t), void *para
 	return noza_thread_create_with_stack(pth, entry, param, priority, stack_ptr, stack_size, AUTO_FREE_STACK);
 }
 
+void noza_thread_exit(uint32_t exit_code)
+{
+	uint32_t pid;
+	noza_thread_self(&pid);
+	longjmp(THREAD_INFO[pid]->jmp_buf, exit_code);
+}

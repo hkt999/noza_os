@@ -5,8 +5,7 @@ static int noza_thread_stub(void *param, uint32_t pid)
 {
     pthread_t *th = param;
     th->id = pid;
-    th->start_routine(th->arg);
-    return 0; // TODO: handle the return code
+    return (int) th->start_routine(th->arg);
 }
 
 #include "noza_config.h"
@@ -54,14 +53,11 @@ int pthread_join(pthread_t thread, void **retval)
     return ret;
 }
 
-int pthread_exit(void *retval)
+void pthread_exit(void *retval)
 {
-    int exit_code = 0;
-    if (retval) {
-        exit_code = *((int *)retval);
-    }
-    noza_thread_terminate(exit_code); // TODO: fix this with setjmp/longjump, or some method to free stack
-    return 0;
+    extern void noza_thread_exit(uint32_t exit_code);
+    uint32_t exit_code = (uint32_t)retval;
+    noza_thread_exit(exit_code);
 }
 
 int pthread_detach(pthread_t thread)
