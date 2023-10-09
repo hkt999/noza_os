@@ -57,9 +57,9 @@ void platform_multicore_init(void (*noza_os_scheduler)(void))
 #endif
 }
 
-uint32_t platform_get_absolute_time()
+int64_t platform_get_absolute_time_us()
 {
-    return to_ms_since_boot(get_absolute_time());
+    return to_us_since_boot(get_absolute_time());
 }
 
 void platform_systick_config(unsigned int n)

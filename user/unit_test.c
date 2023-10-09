@@ -22,7 +22,7 @@ static int test_task(void *param, uint32_t pid)
     int ms = rand() % 700 + 200;
     while (do_count-->0) {
         TEST_PRINTF("working thread id: %lu, count_down: %d, tick=%d ms", pid, do_count, ms);
-        TEST_ASSERT_EQUAL(0, noza_thread_sleep(ms));
+        TEST_ASSERT_EQUAL(0, noza_thread_sleep_ms(ms, NULL));
     }
     TEST_PRINTF("test_task [pid: %lu] done", pid);
     return pid;
@@ -86,7 +86,7 @@ static void client_thread(void *param, uint32_t mypid)
         msg.size = strlen(s)+1;
         TEST_PRINTF("client call (%s)", s);
         TEST_ASSERT_EQUAL(0, noza_call(&msg));
-        noza_thread_sleep(300);
+        noza_thread_sleep_ms(300, NULL);
     }
     strncpy(s, "kill", sizeof(s));
     msg.pid = pid;
@@ -122,7 +122,7 @@ static int thread_working(void *param, uint32_t pid)
     uint32_t sleep_ms = rand() % 500 + 500;
     while (counter-->0) {
         TEST_PRINTF("thread_id: %lu, join count down: %ld", pid, counter);
-        noza_thread_sleep(sleep_ms);
+        noza_thread_sleep_ms(sleep_ms, NULL);
     }
     return p;
 }
@@ -190,7 +190,7 @@ static int normal_task(void *param, uint32_t pid)
     int counter = 10;
     while (counter-->0) {
         TEST_PRINTF("normal task: %lu, count down: %ld", pid, counter);
-        noza_thread_sleep(500);
+        noza_thread_sleep_ms(500, NULL);
     }
     TEST_PRINTF("normal_task end. exit thread (%d)", pid);
     return pid;
@@ -201,7 +201,7 @@ static int fault_task(void *param, uint32_t pid)
     int counter = 10;
     while (counter-->0) {
         TEST_PRINTF("fault task: %lu, fault count down: %ld", pid, counter);
-        noza_thread_sleep(500);
+        noza_thread_sleep_ms(500, NULL);
     }
     TEST_PRINTF("raise fault (write memory address #00000000)!!");
     int *p = 0;

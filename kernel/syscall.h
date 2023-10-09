@@ -1,21 +1,20 @@
 #pragma once
 
-enum {
-    // thread & scheduling
-    NSC_YIELD = 0,
-    NSC_SLEEP,
-    NSC_THREAD_CREATE,
-    NSC_THREAD_CHANGE_PRIORITY,
-    NSC_THREAD_JOIN,
-    NSC_THREAD_DETACH,
-    NSC_THREAD_TERMINATE,
-    NSC_THREAD_SELF,
-    // IPC
-    NSC_RECV,
-    NSC_REPLY,
-    NSC_CALL,
-    NSC_NB_RECV,
-    NSC_NB_CALL,
-    NSC_NUM_SYSCALLS,
-};
+// thread & scheduling
+#define NSC_YIELD                       0
+#define NSC_SLEEP                       1
+#define NSC_KILL                        2
+#define NSC_THREAD_CREATE               3
+#define NSC_THREAD_CHANGE_PRIORITY      4
+#define NSC_THREAD_JOIN                 5
+#define NSC_THREAD_DETACH               6
+#define NSC_THREAD_TERMINATE            7
+#define NSC_THREAD_SELF                 8
+// IPC
+#define NSC_RECV                        9
+#define NSC_REPLY                       10
+#define NSC_CALL                        11
+#define NSC_NB_RECV                     12
+#define NSC_NB_CALL                     13
+#define NSC_NUM_SYSCALLS                14
 

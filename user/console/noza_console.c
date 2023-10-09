@@ -4,12 +4,11 @@
 #include <stdio.h>
 #include "cmd_line.h"
 #include "noza_console.h"
-
+#include "nozaos.h"
 #include "pico/stdlib.h"
 
 extern int getchar_timeout_us(uint32_t timeout_us);
 extern int putchar_raw(int c);
-extern void noza_thread_sleep(int ms);
 
 static void noza_char_putc(int c)
 {
@@ -138,7 +137,7 @@ int console_start(void *param, uint32_t pid)
 	for (;;) {
 		int ch = noza_console.cmd.driver.getc();
 		if (ch < 0)
-			noza_thread_sleep(20);
+			noza_thread_sleep_ms(20, NULL);
 		else
 			cmd_line_putc(&noza_console.cmd, ch);
 	}
