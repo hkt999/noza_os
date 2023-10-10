@@ -67,6 +67,7 @@ static dblink_item_t *dblist_remove_head(dblink_item_t *head)
 
 static void do_mutex_server(void *param, uint32_t pid)
 {
+	printf("do_mutex_server pid=%d\n", pid);
 	static mutex_store_t mutex_store[MAX_LOCKS];
 	memset(mutex_store, 0, sizeof(mutex_store));
 	DBLIST_INIT(mutex_store, MAX_LOCKS);
@@ -83,6 +84,7 @@ static void do_mutex_server(void *param, uint32_t pid)
     noza_msg_t msg;
     for (;;) {
         if (noza_recv(&msg) == 0) {
+			printf("mutex server got msg: %s\n", (char *)msg.ptr);
 			mutex_msg_t *mutex_msg = (mutex_msg_t *)msg.ptr;
 			// sanity check
 			if (mutex_msg->mid >= MAX_LOCKS) {
@@ -188,8 +190,10 @@ static void do_mutex_server(void *param, uint32_t pid)
     }
 }
 
+uint32_t mutex_pid;
 void __attribute__((constructor(110))) mutex_servier_init(void *param, uint32_t pid)
 {
+	mutex_pid = pid;
     // TODO: move the external declaraction into a header file
     extern void noza_add_service(void (*entry)(void *param, uint32_t pid));
 	noza_add_service(do_mutex_server);

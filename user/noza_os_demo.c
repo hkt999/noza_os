@@ -66,11 +66,13 @@ void root_task(void *param)
     extern int test_join(int argc, char **argv);
     extern int test_setjmp(int argc, char **argv);
     extern int test_hardfault(int argc, char **argv);
+    extern int test_mutex(int argc, char **argv);
     extern int test_all(int argc, char **argv);
     builtin_add(&table, "test_thread", test_thread, "a test program for task creation and scheduling");
     builtin_add(&table, "test_msg", test_msg, "a test program for message passing");
     builtin_add(&table, "test_join", test_join, "a test program for thread synchronization join");
     builtin_add(&table, "test_setjmp", test_setjmp, "test setjmp/longjmp");
+    builtin_add(&table, "test_mutex", test_mutex, "test mutex");
     builtin_add(&table, "test_hardfault", test_hardfault, "test hardfault");
     builtin_add(&table, "test_all", test_all, "test all");
 #endif

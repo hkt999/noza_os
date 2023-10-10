@@ -1,12 +1,18 @@
+#include <stdio.h>
 #include "mutex_serv.h"
 #include "mutex_client.h"
 #include "nozaos.h"
 
+
+extern uint32_t mutex_pid;
 int mutex_acquire(mutex_t *mutex)
 {
+	printf("mutex_pid=%d\n", mutex_pid);
 	mutex_msg_t msg = {.cmd = MUTEX_ACQUIRE };
 	noza_msg_t noza_msg = {.pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
+	printf("0, mutex_acquire: %d\n", sizeof(msg));
 	noza_call(&noza_msg);
+	printf("1, mutex_acquire: %d\n", sizeof(msg));
 	if (msg.code == MUTEX_SUCCESS) {
 		mutex->mid = msg.mid;
 		mutex->token = msg.token;

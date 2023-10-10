@@ -4,22 +4,6 @@
 #include "errno.h"
 #include "noza_time.h"
 
-int pthread_condattr_init(pthread_condattr_t *attr)
-{
-    if (attr == NULL)
-        return EINVAL;
-
-    return 0;
-}
-
-int pthread_condattr_destroy(pthread_condattr_t *attr)
-{
-    if (attr == NULL)
-        return EINVAL;
-
-    return 0;
-}
-
 int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr)
 {
     if (cond == NULL)
@@ -127,25 +111,5 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
     cond->signaled = 0;
     pthread_mutex_unlock(&cond->internal_mutex);
     #endif
-    return 0;
-}
-
-int pthread_condattr_setpshared(pthread_condattr_t *attr, int pshared)
-{
-    return 0;
-}
-
-int pthread_condattr_getpshared(const pthread_condattr_t *restrict attr, int *restrict pshared)
-{
-    return 0;
-}
-
-int pthread_condattr_setclock(pthread_condattr_t *attr, clockid_t clock_id)
-{
-    return 0;
-}
-
-int pthread_condattr_getclock(const pthread_condattr_t *restrict attr, clockid_t *restrict clock_id)
-{
     return 0;
 }
