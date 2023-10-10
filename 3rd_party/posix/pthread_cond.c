@@ -44,73 +44,56 @@ int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict m
     return pthread_cond_timedwait(cond, mutex, NULL);
 }
 
-int __pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime)
-{
-    pthread_mutex_lock(&cond->internal_mutex);
-    cond->user_mutex = mutex;
-
-    while (!cond->signaled) {
-        pthread_mutex_unlock(mutex);                    // release user's mutex
-        pthread_mutex_unlock(&cond->internal_mutex);    // release internal mutex to allow signaling
-
-        // check timeout here
-        sched_yield(); // give up the processor for efficiency. This is a form of "busy-waiting".
-
-        pthread_mutex_lock(&cond->internal_mutex);      // re-acquire internal mutex
-        if (cond->signaled) {
-            pthread_mutex_lock(mutex);                  // re-acquire user's mutex before returning
-            cond->signaled = 0;                         // reset for potential future waits
-        }
-    }
-
-    pthread_mutex_unlock(&cond->internal_mutex);
-    return 0;
-}
-
 int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime)
 {
+    int result = 0, error = 0;
     if (cond == NULL || mutex == NULL || abstime == NULL) {
         return EINVAL;
     }
+
     pthread_mutex_lock(&cond->internal_mutex);
     cond->user_mutex = mutex;
-    cond->waiters++;
-    int result = 0;
-    while (!cond->signaled && result != ETIMEDOUT) {
-        struct timespec now;
-        noza_clock_gettime(CLOCK_REALTIME, &now);
+    int64_t remaining = -1;
+    if (abstime) {
+        remaining = abstime->tv_sec * 1000000 + abstime->tv_nsec / 1000;
+    }
 
-        if (now.tv_sec > abstime->tv_sec || (now.tv_sec == abstime->tv_sec && now.tv_nsec >= abstime->tv_nsec)) {
-            result = ETIMEDOUT;
-            break;
+    while (!cond->signaled) {
+        cond->waiters++;
+        pthread_mutex_unlock(mutex); // release mutex
+        pthread_mutex_unlock(&cond->internal_mutex); // releae internal mutex for other threads to signal or wait
+
+        struct timespec d, r;
+        if (remaining == -1) { // forever
+            d.tv_sec = 10;
+            d.tv_nsec = 0;
+            noza_nanosleep(&d, &r); // sleep for 10 seconds
+            pthread_mutex_lock(&cond->internal_mutex);
+            cond->waiters--;
+            pthread_mutex_lock(mutex);
+        } else {
+            d.tv_sec = remaining / 1000000;
+            d.tv_nsec = (remaining % 1000000) * 1000;
+            result = noza_nanosleep(&d, &r); // sleep for the remaining time
+            remaining = r.tv_sec * 1000000 + r.tv_nsec / 1000;
+            if (result == 0) {
+                pthread_mutex_lock(&cond->internal_mutex); // release internal mutex
+                cond->waiters--; // update waiters count
+                pthread_mutex_lock(mutex); // lock user's mutex
+                error = ETIMEDOUT;
+                break;
+            }
         }
-        struct timespec remaining;
-        remaining.tv_sec = abstime->tv_sec - now.tv_sec;
-        remaining.tv_nsec = abstime->tv_nsec - now.tv_nsec;
-        if (remaining.tv_nsec < 0) {
-            remaining.tv_sec--;
-            remaining.tv_nsec += 1000000000;
-        }
-        pthread_mutex_unlock(mutex);
-        pthread_mutex_unlock(&cond->internal_mutex);
-
-        struct timespec sleep_time;
-        sleep_time.tv_sec = remaining.tv_nsec / 1000000000;
-        sleep_time.tv_nsec = remaining.tv_nsec % 1000000000;
-        result = noza_nanosleep(&sleep_time, &remaining);
-
-        pthread_mutex_lock(&cond->internal_mutex);
-        pthread_mutex_lock(mutex);
     }
 
     if (cond->signaled) {
         pthread_mutex_lock(mutex);
-        cond->signaled = 0;
+        cond->signaled = 0; // clear the signal for future waiters
     }
 
     cond->waiters--;
     pthread_mutex_unlock(&cond->internal_mutex);
-    return result;
+    return error;
 }
 
 int pthread_cond_signal(pthread_cond_t *cond)
@@ -128,6 +111,7 @@ int pthread_cond_signal(pthread_cond_t *cond)
 // TODO: reconsider again !!
 int pthread_cond_broadcast(pthread_cond_t *cond)
 {
+    #if 0
     if (cond == NULL) {
         return EINVAL;
     }
@@ -142,6 +126,7 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
     }
     cond->signaled = 0;
     pthread_mutex_unlock(&cond->internal_mutex);
+    #endif
     return 0;
 }
 

@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include "nozaos.h"
+#include "posix/bits/signum.h"
+#include "kernel/noza_config.h"
+#include "errno.h"
 
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
@@ -19,10 +22,13 @@ void tearDown()
 static int test_task(void *param, uint32_t pid)
 {
     int do_count = rand() % 10 + 2;
-    int ms = rand() % 700 + 200;
+    int ms = rand() % 300 + 200;
     while (do_count-->0) {
-        TEST_PRINTF("working thread id: %lu, count_down: %d, tick=%d ms", pid, do_count, ms);
-        TEST_ASSERT_EQUAL(0, noza_thread_sleep_ms(ms, NULL));
+        int ret = noza_thread_sleep_ms(ms, NULL);
+        if (ret != 0) {
+            TEST_ASSERT_EQUAL(EINTR, ret);
+            break;
+        }
     }
     TEST_PRINTF("test_task [pid: %lu] done", pid);
     return pid;
@@ -34,11 +40,31 @@ static void do_test_thread()
     uint32_t th[NUM_THREADS];
     srand(time(0));
 
+    TEST_MESSAGE("test thread creation with random priority and sleep time");
     for (int i = 0; i < NUM_THREADS; i++) {
-        TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%4, 1024));
+        TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
         TEST_ASSERT_NOT_EQUAL(0, th[i]);
     }
 
+    TEST_MESSAGE("join all threads");
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t exit_code = 0;
+        TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
+        TEST_ASSERT_EQUAL(th[i], exit_code);
+    }
+
+    TEST_MESSAGE("test thread creation with random priority and signal in 100ms");
+    for (int i = 0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
+        TEST_ASSERT_NOT_EQUAL(0, th[i]);
+    }
+    noza_thread_sleep_ms(100, NULL);
+    TEST_MESSAGE("send signal to all threads");
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t sig = 0;
+        TEST_ASSERT_EQUAL(0, noza_thread_kill(th[i], SIGALRM));
+    }
+    TEST_MESSAGE("join all threads");
     for (int i = 0; i < NUM_THREADS; i++) {
         uint32_t exit_code = 0;
         TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
