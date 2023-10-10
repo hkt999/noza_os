@@ -28,10 +28,11 @@ set(CMAKE_CXX_FLAGS "-mcpu=cortex-m0plus -march=armv6-m -mthumb -O3 \
 add_library(
 	pthread
 	pthread_attr.c
-	pthread_mutex_attr.c
 	pthread_primitives.c
 	pthread_mutex.c
+	pthread_mutex_attr.c
 	pthread_cond.c
+	pthread_cond_attr.c
 	pthread_sched.c
 	pthread_not_supported.c
 	semaphore.c

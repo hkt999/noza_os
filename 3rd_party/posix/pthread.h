@@ -35,15 +35,15 @@ struct sched_param {
 #define NUM_MUTEX_TYPE              4
 
 typedef struct {
-    uint32_t shared:8;
-    uint32_t type:8;
+    uint8_t shared;
+    uint8_t type;
 } pthread_mutexattr_t;
 
 typedef struct {
-    uint32_t policy:8;
-    uint32_t inheritsched:8;
-    uint32_t detachstate:8;
-    uint32_t scope:8;
+    uint8_t policy;
+    uint8_t inheritsched;
+    uint8_t detachstate;
+    uint8_t scope;
 
     uint32_t stacksize;
     uint32_t guardsize;
@@ -146,6 +146,8 @@ typedef struct {
 } pthread_cond_t;
 
 typedef struct {
+    clockid_t clock_id;
+    uint8_t shared;
 } pthread_condattr_t;
 
 int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr);

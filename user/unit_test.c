@@ -7,9 +7,11 @@
 #include "posix/bits/signum.h"
 #include "kernel/noza_config.h"
 #include "errno.h"
+#include <service/mutex/mutex_client.h>
 
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
+
 
 void setUp()
 {
@@ -145,9 +147,9 @@ static int thread_working(void *param, uint32_t pid)
 {
     uint32_t p = (uint32_t)param;
     uint32_t counter = 5;
-    uint32_t sleep_ms = rand() % 500 + 500;
+    uint32_t sleep_ms = rand() % 300 + 400;
     while (counter-->0) {
-        TEST_PRINTF("thread_id: %lu, join count down: %ld", pid, counter);
+        // do nothing, just wait
         noza_thread_sleep_ms(sleep_ms, NULL);
     }
     return p;
@@ -253,6 +255,32 @@ int test_hardfault(int argc, char **argv)
     UNITY_END();
 }
 
+void do_test_mutex()
+{
+    mutex_t noza_mutex;
+    TEST_MESSAGE("test mutex acquire/release");
+    TEST_ASSERT_EQUAL(0, mutex_acquire(&noza_mutex));
+    TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
+    TEST_MESSAGE("test mutex lock/unlock");
+    TEST_ASSERT_EQUAL(0, mutex_acquire(&noza_mutex));
+    TEST_ASSERT_EQUAL(0, mutex_lock(&noza_mutex));
+    TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
+    TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
+    #if 0
+    TEST_MESSAGE("test mutex trylock");
+    TEST_ASSERT_EQUAL(0, mutex_trylock(&noza_mutex));
+    TEST_ASSERT_EQUAL(EBUSY, mutex_trylock(&noza_mutex));
+    TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
+    #endif
+}
+
+int test_mutex(int argc, char **argv)
+{
+    UNITY_BEGIN();
+    RUN_TEST(do_test_mutex);
+    UNITY_END();
+}
+
 int test_all(int argc, char **argv)
 {
     UNITY_BEGIN();
@@ -260,6 +288,7 @@ int test_all(int argc, char **argv)
     RUN_TEST(do_test_thread);
     RUN_TEST(do_test_msg);
     RUN_TEST(do_test_join);
+    RUN_TEST(do_test_mutex);
     //RUN_TEST(do_test_hardfault);
     UNITY_END();
     return 0;

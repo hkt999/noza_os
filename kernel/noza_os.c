@@ -174,6 +174,7 @@ inline static void noza_os_clear_running_thread()
 // 
 static void noza_os_send(thread_t *running, thread_t *target, void *msg, uint32_t size)
 {
+    // sanity check
     running->message.pid.target = thread_get_pid(target); 
     running->message.ptr = msg;
     running->message.size = size;
@@ -642,6 +643,11 @@ static void syscall_reply(thread_t *running)
 static void syscall_call(thread_t *running)
 {
     kernel_trap_info_t *running_trap = &running->trap;
+    // sanity check
+    if (running_trap->r1 >= NOZA_OS_TASK_LIMIT) {
+        noza_os_set_return_value1(running, ESRCH); // error
+        return;
+    }
     thread_t *target = &noza_os.thread[running_trap->r1];
     noza_os_send(running, target, (void *)running_trap->r2, running_trap->r3);
 }
@@ -649,6 +655,11 @@ static void syscall_call(thread_t *running)
 static void syscall_nbcall(thread_t *running)
 {
     kernel_trap_info_t *running_trap = &running->trap;
+    // sanity check
+    if (running_trap->r1 >= NOZA_OS_TASK_LIMIT) {
+        noza_os_set_return_value1(running, ESRCH); // error
+        return;
+    }
     thread_t *target = &noza_os.thread[running_trap->r1];
     noza_os_nonblock_send(running, target, (void *)running_trap->r1, running_trap->r2);
 }
