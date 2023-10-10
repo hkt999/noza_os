@@ -480,6 +480,7 @@ static void syscall_thread_sleep(thread_t *running)
 static void syscall_thread_kill(thread_t *running)
 {
     uint32_t picked = running->trap.r1;
+    int sig = running->trap.r2;
 
     // sanity check
     if (picked >= NOZA_OS_TASK_LIMIT) {

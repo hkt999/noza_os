@@ -59,11 +59,12 @@ _noza_thread_sleep:
 	svc #0 					// system call, return value in r0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
 
-.type noza_thread_signal, %function
-noza_thread_signal:
+.type noza_thread_kill, %function
+.global noza_thread_kill
+noza_thread_kill:
 	push {r4-r7, lr}		// save r4-r11 and lr
+	mov r2, r1
 	mov r1, r0
-	mov r1, r2
 	movs r0, #NSC_KILL		// set r0 to the value of NSC_KILL
 	svc #0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
