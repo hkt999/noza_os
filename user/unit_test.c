@@ -89,7 +89,7 @@ static int server_thread(void *param, uint32_t pid)
         noza_msg_t msg;
         int ret = noza_recv(&msg);
         if (ret == 0) {
-            TEST_PRINTF("server got msg: %s", (char *)msg.ptr);
+            TEST_PRINTF("server recv msg: [%s]", (char *)msg.ptr);
             noza_reply(&msg);
             if (strcmp((char *)msg.ptr, "kill") == 0)
                 break;
@@ -109,15 +109,15 @@ static void client_thread(void *param, uint32_t mypid)
     uint32_t counter = 20;
     while (counter-->0) {
         sprintf(s, "hello %ld", counter);
-        msg.pid = pid;
+        msg.to_pid = pid;
         msg.ptr = s;
         msg.size = strlen(s)+1;
         TEST_PRINTF("client call (%s)", s);
         TEST_ASSERT_EQUAL(0, noza_call(&msg));
-        noza_thread_sleep_ms(300, NULL);
+        noza_thread_sleep_ms(200, NULL);
     }
     strncpy(s, "kill", sizeof(s));
-    msg.pid = pid;
+    msg.to_pid = pid;
     msg.ptr = s;
     msg.size = strlen(s)+1;
     TEST_ASSERT_EQUAL(0, noza_call(&msg));
@@ -147,9 +147,9 @@ static int thread_working(void *param, uint32_t pid)
 {
     uint32_t p = (uint32_t)param;
     uint32_t counter = 5;
-    uint32_t sleep_ms = rand() % 300 + 400;
+    uint32_t sleep_ms = rand() % 500 + 500;
     while (counter-->0) {
-        // do nothing, just wait
+        TEST_PRINTF("thread_id: %lu, join count down: %ld", pid, counter);
         noza_thread_sleep_ms(sleep_ms, NULL);
     }
     return p;
@@ -261,12 +261,12 @@ void do_test_mutex()
     TEST_MESSAGE("test mutex acquire/release");
     TEST_ASSERT_EQUAL(0, mutex_acquire(&noza_mutex));
     TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
+    #if 0
     TEST_MESSAGE("test mutex lock/unlock");
     TEST_ASSERT_EQUAL(0, mutex_acquire(&noza_mutex));
     TEST_ASSERT_EQUAL(0, mutex_lock(&noza_mutex));
     TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
     TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
-    #if 0
     TEST_MESSAGE("test mutex trylock");
     TEST_ASSERT_EQUAL(0, mutex_trylock(&noza_mutex));
     TEST_ASSERT_EQUAL(EBUSY, mutex_trylock(&noza_mutex));

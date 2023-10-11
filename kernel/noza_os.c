@@ -186,7 +186,8 @@ static void noza_os_send(thread_t *running, thread_t *target, void *msg, uint32_
             noza_os_add_thread(&target->port.reply_list, running);
             // target thread should be in the wait list already, because the port state is PORT_READY
             // so just change the state from wait list to ready list
-            noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]); // TODO: BUG....what if target is not on wait list?
+            // TODO: BUG....what if target is not on wait list?
+            noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]); 
             noza_os_set_return_value4(target, 0, thread_get_pid(running), (uint32_t) msg, size); // 0 --> success
             target->info.port_state = PORT_WAIT_LISTEN; 
             break;

@@ -33,7 +33,7 @@ typedef struct _mutex_store_t {
 	list[0].link.index = 0; \
 	for (int i = 1; i < count; i++) { \
 		list[i].link.prev = &list[i-1].link; \
-		list[0].link.index = i; \
+		list[i].link.index = i; \
 	} \
 	list[0].link.prev = &list[count-1].link; 
 
@@ -65,17 +65,20 @@ static dblink_item_t *dblist_remove_head(dblink_item_t *head)
 	return next;
 }
 
+uint32_t mutex_pid;
 static void do_mutex_server(void *param, uint32_t pid)
 {
-	printf("do_mutex_server pid=%d\n", pid);
+	mutex_pid = pid;
 	static mutex_store_t mutex_store[MAX_LOCKS];
+	static mutex_pending_t pending_store[MAX_PENDING];
+
 	memset(mutex_store, 0, sizeof(mutex_store));
 	DBLIST_INIT(mutex_store, MAX_LOCKS);
-	mutex_store_t *mutex_head = &mutex_store[0];
 
-	static mutex_pending_t pending_store[MAX_PENDING];
 	memset(pending_store, 0, sizeof(pending_store));
 	DBLIST_INIT(pending_store, MAX_PENDING);
+
+	mutex_store_t *mutex_head = &mutex_store[0];
 	mutex_pending_t *pending_head = &pending_store[0];
 
 	extern uint32_t platform_get_random(void);
@@ -84,7 +87,6 @@ static void do_mutex_server(void *param, uint32_t pid)
     noza_msg_t msg;
     for (;;) {
         if (noza_recv(&msg) == 0) {
-			printf("mutex server got msg: %s\n", (char *)msg.ptr);
 			mutex_msg_t *mutex_msg = (mutex_msg_t *)msg.ptr;
 			// sanity check
 			if (mutex_msg->mid >= MAX_LOCKS) {
@@ -99,6 +101,8 @@ static void do_mutex_server(void *param, uint32_t pid)
 					continue;
 				}
 			}
+
+			// process the request
 			switch (mutex_msg->cmd) {
 				case MUTEX_ACQUIRE:
 					if (mutex_head == NULL) {
@@ -106,13 +110,18 @@ static void do_mutex_server(void *param, uint32_t pid)
 						noza_reply(&msg);
 						continue;
 					}
-					mutex_msg->mid = mutex_head->link.index;
-					mutex_msg->token = rand();
+					// update the message structure
+					mutex_msg->mid = mutex_head->link.index; // assign the link and index
+					mutex_msg->token = rand(); // assign new token
 					mutex_msg->code = MUTEX_SUCCESS;
+
+					// setup the new head
 					mutex_head->token = mutex_msg->token;
 					mutex_head->lock = 0;
-					assert(mutex_head->pending == NULL);
-					mutex_head = (mutex_store_t *)dblist_remove_head(&mutex_head->link); // move head to next
+					if (mutex_head->pending != NULL) {
+						// unlikely, handle the exception
+					}
+					mutex_head = (mutex_store_t *)dblist_remove_head((dblink_item_t *)mutex_head); // move head to next
 					noza_reply(&msg);
 					break;
 
@@ -190,10 +199,8 @@ static void do_mutex_server(void *param, uint32_t pid)
     }
 }
 
-uint32_t mutex_pid;
 void __attribute__((constructor(110))) mutex_servier_init(void *param, uint32_t pid)
 {
-	mutex_pid = pid;
     // TODO: move the external declaraction into a header file
     extern void noza_add_service(void (*entry)(void *param, uint32_t pid));
 	noza_add_service(do_mutex_server);

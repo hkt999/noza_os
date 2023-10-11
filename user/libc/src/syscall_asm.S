@@ -113,7 +113,6 @@ noza_recv:
     mov r0, r4         		// move the return value (in r4) back to r0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
 
-
 .type noza_reply, %function
 .global noza_reply
 noza_reply:
@@ -122,7 +121,6 @@ noza_reply:
 	movs r0, #NSC_REPLY		// set r0 to the value of NSC_REPLY
 	svc #0 					// system call, return value in r0
 	pop {r4-r7, pc} 		// restore r4-r11 and lr
-
 
 .type noza_call, %function
 .global noza_call
