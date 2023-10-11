@@ -40,12 +40,12 @@ static void do_name_lookup(void *param, uint32_t pid)
                             name_lookup_table[i].pid = name_msg->pid;
                             strncpy(name_lookup_table[i].name, name_msg->name, MAX_NAME_LEN);
                             name_msg->reply = 0; // success
-                            noza_reply(&msg);
+                            //noza_reply(&msg);
                             return;
                         }
                     }
                     name_msg->reply = -1;
-                    noza_reply(&msg);
+                    //noza_reply(&msg);
                     break;
 
                 case NAME_LOOKUP_LOOKUP:
@@ -53,12 +53,12 @@ static void do_name_lookup(void *param, uint32_t pid)
                         if (strncmp(name_lookup_table[i].name, name_msg->name, MAX_NAME_LEN) == 0) {
                             name_msg->reply = 0; // success
                             name_msg->pid = name_lookup_table[i].pid;
-                            noza_reply(&msg);
+                            //noza_reply(&msg);
                             return;
                         }
                     }
                     name_msg->reply = -2;
-                    noza_reply(&msg);
+                    //noza_reply(&msg);
                     break;
 
                 case NAME_LOOKUP_UNREGISTER:
@@ -66,17 +66,17 @@ static void do_name_lookup(void *param, uint32_t pid)
                         if (name_lookup_table[i].pid == name_msg->pid) {
                             name_lookup_table[i].pid = 0;
                             name_msg->reply = 0;
-                            noza_reply(&msg); // success
+                            //noza_reply(&msg); // success
                             return;
                         }
                     }
                     name_msg->reply = -3;
-                    noza_reply(&msg);
+                    //noza_reply(&msg);
                     break;
 
                 default:
                     name_msg->reply = -4;
-                    noza_reply(&msg);
+                    //noza_reply(&msg);
                     break;
             }
         }
@@ -87,7 +87,7 @@ static void do_name_lookup(void *param, uint32_t pid)
 int name_lookup_register(const char *name, uint32_t pid)
 {
     name_msg_t msg = {.cmd = NAME_LOOKUP_REGISTER, .name = name, .pid = 0};
-    noza_msg_t noza_msg = {.pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
+    noza_msg_t noza_msg = {.to_pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
     noza_call(&noza_msg);
     return msg.reply;
 }
@@ -95,7 +95,7 @@ int name_lookup_register(const char *name, uint32_t pid)
 int name_lookup_lookup(const char *name, uint32_t *pid)
 {
     name_msg_t msg = {.cmd = NAME_LOOKUP_LOOKUP, .name = name};
-    noza_msg_t noza_msg = {.pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
+    noza_msg_t noza_msg = {.to_pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
     noza_call(&noza_msg);
     if (msg.reply == 0) {
         *pid = msg.pid;
@@ -106,7 +106,7 @@ int name_lookup_lookup(const char *name, uint32_t *pid)
 int name_lookup_unregister(uint32_t pid)
 {
     name_msg_t msg = {.cmd = NAME_LOOKUP_UNREGISTER, .pid = pid};
-    noza_msg_t noza_msg = {.pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
+    noza_msg_t noza_msg = {.to_pid = 0, .ptr = (void *)&msg, .size = sizeof(msg)};
     noza_call(&noza_msg);
     return msg.reply;
 }
