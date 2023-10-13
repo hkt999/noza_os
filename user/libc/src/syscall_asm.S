@@ -30,13 +30,13 @@ noza_thread_yield:
 noza_thread_join: 				// noza_thread_join(uint32_t pid, uint32_t *retval)
 	push {r4-r7, lr}			// save r4-r11 and lr
 	push {r1}					// push the pointer to retval to the stack
-	mov r1, r0					// move the pid to r1
+	mov r1, r0					// move the joined's pid to r1
 	movs r0, #NSC_THREAD_JOIN	// set r0 to the value of NSC_THREAD_JOIN
 	svc #0 						// system call, return value in r0
-	pop {r2}					// pop the pointer to retval from the stack	
-	cmp r2, #0					// check if the return value is 0
+	pop {r3}					// pop the pointer to retval from the stack	
+	cmp r3, #0					// check if the pointer to return value is 0 or not
 	beq noza_thread_join_end	// if it is, jump to the end
-	str r1, [r2]				// store the return value in the memory pointed by r2
+	str r1, [r3]				// store the return value in the memory pointed by r2
 noza_thread_join_end:
 	pop {r4-r7, pc} 			// restore r4-r11 and lr
 
