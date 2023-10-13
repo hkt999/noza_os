@@ -56,6 +56,7 @@ void platform_core_dump(void *_stack_ptr)
     printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
 }
 
+// copy register from info to interrupt stack (for resume to user thread)
 void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
 {
     uint32_t *stack_ptr = (uint32_t *)_stack_ptr;
@@ -64,10 +65,39 @@ void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
     is->r1 = info->r1;
     is->r2 = info->r2;
     is->r3 = info->r3;
-    /*
-    is->r0 = running->trap.r0;
-    is->r1 = running->trap.r1;
-    is->r2 = running->trap.r2;
-    is->r3 = running->trap.r3;
-    */
+}
+
+#include "../syscall.h"
+const char *syscall_name[] = {
+    "NSC_YIELD",
+    "NSC_SLEEP",
+    "NSC_KILL",
+    "NSC_THREAD_CREATE",
+    "NSC_THREAD_CHANGE_PRIORITY",
+    "NSC_THREAD_JOIN",
+    "NSC_THREAD_DETACH",
+    "NSC_THREAD_TERMINATE",
+    "NSC_THREAD_SELF",
+    "NSC_RECV",
+    "NSC_REPLY",
+    "NSC_CALL",
+    "NSC_NB_RECV",
+    "NSC_NB_CALL"
+};
+
+static const char *id_to_name(uint32_t id) 
+{
+    if (id>=NSC_NUM_SYSCALLS) {
+        return "UNKNOWN";
+    }
+    return syscall_name[id];
+}
+
+void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid)
+{
+    if (callid != NSC_SLEEP) {
+        interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
+        printf("stack(%d) r0  %08x   r1 %08x  r2 %08x  r3   %08x (%s)\n", pid, is->r0, is->r1, is->r2, is->r3, syscall_name[callid]);
+        //printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
+    }
 }

@@ -72,6 +72,19 @@ static const char UNITY_PROGMEM UnityStrDetail2Name[]            = " " UNITY_DET
  * Pretty Printers & Test Result Output Handlers
  *-----------------------------------------------*/
 
+#include <string.h>
+const char* get_filename(const char* path)
+{
+    const char* filename = strrchr(path, '/');
+    if (filename == NULL) {
+        filename = path;
+    } else {
+        filename++;
+    }
+    return filename;
+}
+
+
 /*-----------------------------------------------*/
 /* Local helper function to print characters. */
 static void UnityPrintChar(const char* pch)
@@ -2105,21 +2118,9 @@ static void UnityPrintFVA(const char* format, va_list va)
     }
 }
 
-#include <string.h>
-const char* get_filename(const char* path)
-{
-    const char* filename = strrchr(path, '/');
-    if (filename == NULL) {
-        filename = path;
-    } else {
-        filename++;
-    }
-    return filename;
-}
-
 void UnityPrintF(const UNITY_LINE_TYPE line, const char* format, ...)
 {
-    UnityTestResultsBegin(get_filename(Unity.TestFile), line);
+    UnityTestResultsBegin(Unity.TestFile, line);
     UnityPrint("INFO");
     if(format != NULL)
     {
@@ -2232,13 +2233,13 @@ void UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, const int
 /*-----------------------------------------------*/
 void UnitySetTestFile(const char* filename)
 {
-    Unity.TestFile = filename;
+    Unity.TestFile = get_filename(filename);
 }
 
 /*-----------------------------------------------*/
 void UnityBegin(const char* filename)
 {
-    Unity.TestFile = filename;
+    Unity.TestFile = get_filename(filename);
     Unity.CurrentTestName = NULL;
     Unity.CurrentTestLineNumber = 0;
     Unity.NumberOfTests = 0;

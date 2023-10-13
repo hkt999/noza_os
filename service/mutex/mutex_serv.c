@@ -87,15 +87,19 @@ static void do_mutex_server(void *param, uint32_t pid)
     noza_msg_t msg;
     for (;;) {
         if (noza_recv(&msg) == 0) {
+			printf("mutex server get message\n");
 			mutex_msg_t *mutex_msg = (mutex_msg_t *)msg.ptr;
+			printf("command: %d\n", mutex_msg->cmd);
 			// sanity check
-			if (mutex_msg->mid >= MAX_LOCKS) {
-				mutex_msg->code = MUTEX_INVALID_ID;
-				noza_reply(&msg);
-				continue;
-			}
 			if (mutex_msg->cmd != MUTEX_ACQUIRE) {
+				if (mutex_msg->mid >= MAX_LOCKS) {
+					printf("invalid id: %d\n", mutex_msg->mid);
+					mutex_msg->code = MUTEX_INVALID_ID;
+					noza_reply(&msg);
+					continue;
+				}
 				if (mutex_store[mutex_msg->mid].token != mutex_msg->token) {
+					printf("token mismatch %d != %d\n", mutex_store[mutex_msg->mid].token, mutex_msg->token);
 					mutex_msg->code = MUTEX_INVALID_TOKEN;
 					noza_reply(&msg);
 					continue;
@@ -105,7 +109,9 @@ static void do_mutex_server(void *param, uint32_t pid)
 			// process the request
 			switch (mutex_msg->cmd) {
 				case MUTEX_ACQUIRE:
+					printf("enter SERVER MUTEX_ACQUIRE\n");
 					if (mutex_head == NULL) {
+						printf("no more resource\n");
 						mutex_msg->code = MUTEX_NOT_ENOUGH_RESOURCE;
 						noza_reply(&msg);
 						continue;
@@ -120,12 +126,15 @@ static void do_mutex_server(void *param, uint32_t pid)
 					mutex_head->lock = 0;
 					if (mutex_head->pending != NULL) {
 						// unlikely, handle the exception
+						printf("unlikely....\n");
 					}
 					mutex_head = (mutex_store_t *)dblist_remove_head((dblink_item_t *)mutex_head); // move head to next
 					noza_reply(&msg);
+					printf("leave SERVER MUTEX_ACQUIRE\n");
 					break;
 
 				case MUTEX_RELEASE:
+					printf("enter SERVER MUTEX_RELEASE\n");
 					while (mutex_store[mutex_msg->mid].pending) {
 						mutex_pending_t *pending = mutex_store[mutex_msg->mid].pending;
 						pending->mutex_msg.code = MUTEX_SUCCESS; // auto unlock
@@ -136,9 +145,17 @@ static void do_mutex_server(void *param, uint32_t pid)
 					mutex_head = (mutex_store_t *)dblist_insert_tail((dblink_item_t *)mutex_head, &mutex_store[mutex_msg->mid].link);
 					mutex_msg->code = 0; // success
 					noza_reply(&msg);
+					printf("leave SERVER MUTEX_RELEASE\n");
 					break;
 
 				case MUTEX_LOCK:
+					printf("enter SERVER MUTEX_LOCK\n");
+					mutex_msg->code = MUTEX_SUCCESS;
+					noza_reply(&msg);
+					printf("leave SERVER MUTEX_LOCK\n");
+					break;
+/*
+					printf("enter SERVER MUTEX_LOCK\n");
 					if (mutex_store[mutex_msg->mid].lock == 0) {
 						mutex_store[mutex_msg->mid].lock = 1;
 						mutex_msg->code = MUTEX_SUCCESS;
@@ -157,9 +174,17 @@ static void do_mutex_server(void *param, uint32_t pid)
 						mutex_store[mutex_msg->mid].pending = (mutex_pending_t *)dblist_insert_tail(
 							(dblink_item_t *)mutex_store[mutex_msg->mid].pending, &w->link);
 					}
+					printf("leave SERVER MUTEX_LOCK\n");
 					break;
+*/
 
 				case MUTEX_TRYLOCK:
+					printf("SERVER TRY_LOCK\n");
+					mutex_msg->code = MUTEX_SUCCESS;
+					noza_reply(&msg);
+					break;
+
+					/*
 					if (mutex_store[mutex_msg->mid].lock == 0) {
 						mutex_store[mutex_msg->mid].lock = 1;
 						mutex_msg->code = MUTEX_SUCCESS;
@@ -169,8 +194,16 @@ static void do_mutex_server(void *param, uint32_t pid)
 						noza_reply(&msg);
 					}
 					break;
+					*/
 
 				case MUTEX_UNLOCK:
+					printf("SERVER UNLOCK\n");
+					mutex_msg->code = MUTEX_SUCCESS;
+					noza_reply(&msg);
+					printf("ok\n");
+					break;
+/*
+					printf("enter SERVER MUTEX_UNLOCK\n");
 					if (mutex_store[mutex_msg->mid].lock == 0) {
 						mutex_msg->code = MUTEX_LOCK_FAIL;
 						noza_reply(&msg);
@@ -188,7 +221,9 @@ static void do_mutex_server(void *param, uint32_t pid)
 							noza_reply(&msg);
 						}
 					}
+					printf("leave SERVER MUTEX_UNLOCK\n");
 					break;
+*/
 
 				default:
 					mutex_msg->code = MUTEX_INVALID_OP;
