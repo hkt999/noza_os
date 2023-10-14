@@ -48,6 +48,12 @@ isr_pendsv:
 .type isr_svcall, %function
 .global isr_svcall
 isr_svcall:
+    cmp r0, #13
+    ble go_service
+    cmp r0, #255
+    beq go_service
+    bx lr
+go_service:
     save_context
     bl noza_os_trap_info
     restore_context

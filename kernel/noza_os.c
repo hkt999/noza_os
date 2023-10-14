@@ -738,6 +738,7 @@ static void serv_syscall(uint32_t core)
         syscall_func[source->callid](source); 
     } else {
         if (source->callid == 255) {
+            printf("hard fault !\n");
             // hardfault
             noza_os_add_thread(&noza_os.hardfault, source); // insert the thread back to ready queue
             noza_os_clear_running_thread(); // remove the running thread
@@ -849,6 +850,12 @@ static void noza_os_scheduler()
                 SCHEDULE(running->stack_ptr)
                 if (running->trap.state == SYSCALL_PENDING) {
                     running->callid = running->trap.r0;
+                    #if defined(DEBUG)
+                    if (running->callid >= NSC_NUM_SYSCALLS && running->callid != 255) {
+                        printf("----------------------------------> resume fatal error ! %d (pid:%d)\n",
+                            running->callid, thread_get_pid(running));
+                    }
+                    #endif
                     serv_syscall(core);
                     if (noza_os_get_running_thread() == NULL)
                         break;
@@ -888,7 +895,7 @@ static void noza_os_scheduler()
 // called from assembly SVC0 handler, copy register to trap structure
 void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 {
-    uint32_t core = platform_get_running_core(); // get the core which raise SVC #0 interrupt
+    // uint32_t core = platform_get_running_core(); // get the core which raise SVC #0 interrupt
     // callback from SVC servie routine, make system call pending
     // and trap into kernel later
     thread_t *th = noza_os_get_running_thread();
@@ -901,9 +908,10 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->state = SYSCALL_PENDING;
     } else {
         // TODO: unlikely case, no running thread, what to do ?
+        printf("---------------------------- fatal error, th=NULL !\n");
     }
 
-    #if 0 // TODO: issue the PendSV interrupt
+    #if 0 // TODO: raise the PendSV interrupt
     if (r0==255) {
         scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
     }

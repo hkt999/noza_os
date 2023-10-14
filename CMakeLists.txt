@@ -80,7 +80,7 @@ endif()
 add_executable(
 	noza
 	kernel/platform/rp2040_context_switch.S
-	kernel/platform/rp2040.c
+	kernel/platform/rp2040_platform.c
 	kernel/platform/rp2040_build_stack.c
 	kernel/noza_os.c
 
