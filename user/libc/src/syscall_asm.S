@@ -1,29 +1,19 @@
 .thumb
 .syntax unified
 
-.equ NSC_YIELD,						0
-.equ NSC_SLEEP,						1
-.equ NSC_KILL,						2
-.equ NSC_THREAD_CREATE,				3
-.equ NSC_THREAD_CHANGE_PRIORITY,	4
-.equ NSC_THREAD_JOIN,				5
-.equ NSC_THREAD_DETACH,				6
-.equ NSC_THREAD_TERMINATE,			7
-.equ NSC_THREAD_SELF,				8
-.equ NSC_RECV,						9
-.equ NSC_REPLY,						10
-.equ NSC_CALL,						11
-.equ NSC_NB_RECV,					12
-.equ NSC_NB_CALL,					13
-
-.type noza_thread_yield, %function
-.global noza_thread_yield
-noza_thread_yield:
-	push {r4-r7, lr}		// save r4-r11 and lr
-	movs r0, #NSC_YIELD		// set r0 to the value of NSC_YIELD
-	svc #0 					// system call, return value in r0
-	pop {r4-r7, pc} 		// restore r4-r11 and lr
-
+.equ NSC_THREAD_SLEEP,				0
+.equ NSC_THREAD_KILL,				1
+.equ NSC_THREAD_CREATE,				2
+.equ NSC_THREAD_CHANGE_PRIORITY,	3
+.equ NSC_THREAD_JOIN,				4
+.equ NSC_THREAD_DETACH,				5
+.equ NSC_THREAD_TERMINATE,			6
+.equ NSC_THREAD_SELF,				7
+.equ NSC_RECV,						8
+.equ NSC_REPLY,						9
+.equ NSC_CALL,						10
+.equ NSC_NB_RECV,					11
+.equ NSC_NB_CALL,					12
 
 .type noza_thread_join, %function
 .global noza_thread_join
@@ -43,31 +33,31 @@ noza_thread_join_end:
 .type noza_thread_detach, %function
 .global noza_thread_detach
 noza_thread_detach:
-	push {r4-r7, lr}		// save r4-r11 and lr
-	mov r1, r0				// move the pid to r1
-	movs r0, #NSC_THREAD_DETACH	// set r0 to the value of NSC_THREAD_DETACH
-	svc #0 					// system call, return value in r0
-	pop {r4-r7, pc} 		// restore r4-r11 and lr	
+	push {r4-r7, lr}			// save r4-r11 and lr
+	mov r1, r0					// move the pid to r1
+	movs r0, #NSC_THREAD_DETACH
+	svc #0 						// system call, return value in r0
+	pop {r4-r7, pc} 			// restore r4-r11 and lr	
 
 .type noza_thread_sleep, %function
 .global _noza_thread_sleep
 _noza_thread_sleep:
-	push {r4-r7, lr}		// save r4-r11 and lr
+	push {r4-r7, lr}			// save r4-r11 and lr
 	mov r2, r1
 	mov r1, r0
-	movs r0, #NSC_SLEEP		// set r0 to the value of NSC_SLEEP
-	svc #0 					// system call, return value in r0
-	pop {r4-r7, pc} 		// restore r4-r11 and lr
+	movs r0, #NSC_THREAD_SLEEP	// set r0 to the value of NSC_SLEEP
+	svc #0 						// system call, return value in r0
+	pop {r4-r7, pc} 			// restore r4-r11 and lr
 
 .type noza_thread_kill, %function
 .global noza_thread_kill
 noza_thread_kill:
-	push {r4-r7, lr}		// save r4-r11 and lr
+	push {r4-r7, lr}			// save r4-r11 and lr
 	mov r2, r1
 	mov r1, r0
-	movs r0, #NSC_KILL		// set r0 to the value of NSC_KILL
+	movs r0, #NSC_THREAD_KILL	// set r0 to the value of NSC_KILL
 	svc #0
-	pop {r4-r7, pc} 		// restore r4-r11 and lr
+	pop {r4-r7, pc} 			// restore r4-r11 and lr
 
 .type noza_thread_change_priority, %function
 .global noza_thread_change_priority

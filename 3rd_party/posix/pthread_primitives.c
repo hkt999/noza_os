@@ -67,8 +67,9 @@ int pthread_detach(pthread_t thread)
 
 int pthread_yield(void)
 {
-    return noza_thread_yield();
+    return noza_thread_sleep_us(0, NULL);
 }
+
 pthread_t pthread_self(void)
 {
     pthread_t th = {0};

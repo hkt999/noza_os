@@ -69,20 +69,19 @@ void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
 
 #include "../syscall.h"
 const char *syscall_name[] = {
-    "NSC_YIELD",
-    "NSC_SLEEP",
-    "NSC_KILL",
-    "NSC_THREAD_CREATE",
-    "NSC_THREAD_CHANGE_PRIORITY",
-    "NSC_THREAD_JOIN",
-    "NSC_THREAD_DETACH",
-    "NSC_THREAD_TERMINATE",
-    "NSC_THREAD_SELF",
-    "NSC_RECV",
-    "NSC_REPLY",
-    "NSC_CALL",
-    "NSC_NB_RECV",
-    "NSC_NB_CALL"
+    [NSC_THREAD_SLEEP] = "NSC_THREAD_SLEEP",
+    [NSC_THREAD_KILL] = "NSC_THREAD_KILL",
+    [NSC_THREAD_CREATE] = "NSC_THREAD_CREATE",
+    [NSC_THREAD_CHANGE_PRIORITY] = "NSC_THREAD_CHANGE_PRIORITY",
+    [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
+    [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
+    [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
+    [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
+    [NSC_RECV] = "NSC_RECV",
+    [NSC_REPLY] = "NSC_REPLY",
+    [NSC_CALL] = "NSC_CALL",
+    [NSC_NB_RECV] = "NSC_NB_RECV",
+    [NSC_NB_CALL] = "NSC_NB_CALL"
 };
 
 static const char *id_to_name(uint32_t id) 
@@ -95,9 +94,9 @@ static const char *id_to_name(uint32_t id)
 
 void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid)
 {
-    if (callid != NSC_SLEEP) {
+    if (callid != NSC_THREAD_SLEEP) {
         interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-        printf("stack(%d) r0  %08x   r1 %08x  r2 %08x  r3   %08x (%s)\n", pid, is->r0, is->r1, is->r2, is->r3, syscall_name[callid]);
+        printf("stack (pid:%d) r0: %08x r1: %08x r2: %08x r3: %08x (%s)\n", pid, is->r0, is->r1, is->r2, is->r3, syscall_name[callid]);
         //printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
     }
 }

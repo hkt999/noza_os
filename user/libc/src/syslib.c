@@ -124,21 +124,20 @@ int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
 
 	extern void _noza_thread_sleep(uint32_t r0, uint32_t r1); // in assembly
 	_noza_thread_sleep(r0, r1);
-	asm volatile("mov %0, r0" : "=r"(r0) : : "memory");
-	asm volatile("mov %0, r1" : "=r"(r1) : : "memory");
-	asm volatile("mov %0, r2" : "=r"(r2) : : "memory");
+	asm volatile("mov %0, r0" : "=r"(r0) : : "memory"); // return code
+	asm volatile("mov %0, r1" : "=r"(r1) : : "memory"); // high 32bits
+	asm volatile("mov %0, r2" : "=r"(r2) : : "memory"); // low 32bits
 	if (remain_us) {
-		*remain_us = ((uint64_t)r0 << 32) | r1;
+		*remain_us = ((uint64_t)r1 << 32) | r2;
 	}
 	return r0;
 }
 
 int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms)
 {
-	int64_t remain_us;
-	int ret = noza_thread_sleep_us(ms * 1000, &remain_us);
+	int ret = noza_thread_sleep_us(ms * 1000, remain_ms);
 	if (remain_ms) {
-		*remain_ms = remain_us / 1000;
+		*remain_ms /= 1000;
 	}
 	return ret;
 }
