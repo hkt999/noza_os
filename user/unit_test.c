@@ -35,9 +35,9 @@ static int test_task(void *param, uint32_t pid)
     return pid;
 }
 
-static int test_yield_test(void *param, uint32_t pid)
+static int yield_test_func(void *param, uint32_t pid)
 {
-    #define YIELD_ITER  1000000
+    #define YIELD_ITER  10000
     uint32_t value = 0;
     for (int i=0; i<YIELD_ITER; i++) {
         value = value + i;
@@ -47,7 +47,7 @@ static int test_yield_test(void *param, uint32_t pid)
     return value;
 }
 
-static int test_heavy_test(void *param, uint32_t pid)
+static int heavy_test_func(void *param, uint32_t pid)
 {
     #define HEAVY_ITER  10000000
     uint32_t value = 0;
@@ -60,7 +60,7 @@ static int test_heavy_test(void *param, uint32_t pid)
 
 static void do_test_thread()
 {
-    #define NUM_THREADS 2
+    #define NUM_THREADS 8
     #define NUM_LOOP    8
     uint32_t th[NUM_THREADS];
     uint32_t pid;
@@ -107,12 +107,11 @@ static void do_test_thread()
 #if 1
         TEST_MESSAGE("---- test heavy loading ----");
         for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_heavy_test, NULL, 1, 1024));
+            TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], heavy_test_func, NULL, 1, 1024));
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            noza_thread_join(th[i], &exit_code);
-            //TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
+            TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
             TEST_ASSERT_EQUAL_UINT(2280707264, exit_code);
         }
 #endif
@@ -120,14 +119,12 @@ static void do_test_thread()
 #if 1
         TEST_MESSAGE("---- test yield ----");
         for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_yield_test, NULL, 1, 1024));
+            TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], yield_test_func, NULL, 1, 1024));
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            //noza_thread_join(th[i], &exit_code);
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
-            TEST_PRINTF("thread %d exit code: %u", th[i], exit_code);
-            TEST_ASSERT_EQUAL_UINT(2280707264, exit_code);
+            TEST_ASSERT_EQUAL(49995000, exit_code);
         }
 #endif
     }

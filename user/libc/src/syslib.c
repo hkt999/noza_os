@@ -4,6 +4,7 @@
 #include "kernel/syscall.h"
 #include "kernel/noza_config.h"
 #include "setjmp.h"
+#include "posix/errno.h"
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK		1
@@ -106,6 +107,9 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 int noza_thread_create(uint32_t *pth, int (*entry)(void *, uint32_t), void *param, uint32_t priority, uint32_t stack_size)
 {
 	uint8_t *stack_ptr = (uint8_t *)malloc(stack_size);
+	if (stack_ptr == NULL) {
+		return EAGAIN;
+	}
 	return noza_thread_create_with_stack(pth, entry, param, priority, stack_ptr, stack_size, AUTO_FREE_STACK);
 }
 
