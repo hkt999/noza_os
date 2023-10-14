@@ -83,7 +83,6 @@ void platform_tick(uint32_t ms)
     if (get_core_num()==0) {
         multicore_fifo_push_blocking(0); // tick core1
         platform_systick_config(ms);
-        //noza_systick_config(noza_check_sleep_thread(NOZA_OS_TIME_SLICE));
     }
 #endif
 }
@@ -117,9 +116,10 @@ void platform_os_lock_init() {
 }
 
 void platform_os_lock(uint32_t core) {
-    interrupt_state[core] = save_and_disable_interrupts();
+    interrupt_state[core] = save_and_disable_interrupts(); // save current core
     spin_lock_unsafe_blocking(spinlock);
 }
+
 void platform_os_unlock(uint32_t core) {
     spin_unlock_unsafe(spinlock);
     restore_interrupts(interrupt_state[core]);
