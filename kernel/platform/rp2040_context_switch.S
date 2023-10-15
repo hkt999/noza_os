@@ -43,12 +43,12 @@ isr_hardfault:
 .type isr_pendsv, %function
 .global isr_pendsv
 isr_pendsv:
-    b isr_systick // do context switch
+    b isr_systick // do timer context switch
 
 .type isr_svcall, %function
 .global isr_svcall
 isr_svcall:
-    cmp r0, #13
+    cmp r0, #12
     ble go_service
     cmp r0, #255
     beq go_service
