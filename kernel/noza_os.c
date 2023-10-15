@@ -6,7 +6,7 @@
 #include "platform.h"
 #include "errno.h"
 
-//#define DEBUG
+#define DEBUG
 
 //////////////////////////////////////////////////////////////
 //
@@ -185,11 +185,6 @@ inline static thread_t *noza_os_get_running_thread()
     return noza_os.running[platform_get_running_core()];
 }
 
-inline static void noza_os_set_running_thread(thread_t *th)
-{
-    noza_os.running[platform_get_running_core()] = th;
-}
-
 inline static void noza_os_clear_running_thread()
 {
     noza_os.running[platform_get_running_core()] = NULL;
@@ -320,6 +315,7 @@ static void noza_init()
         noza_os.thread[i].port.pending_list.state_id = THREAD_WAITING;
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING;
         noza_os.thread[i].join_th = NULL;
+        noza_os.thread[i].callid = -1;
     }
 
     // init all running thread to NULL
@@ -557,21 +553,25 @@ static void syscall_thread_join(thread_t *running)
     // sanity check
     if (pid >= NOZA_OS_TASK_LIMIT) {
         noza_os_set_return_value1(running, ESRCH); // error
+        printf("j1\n");
         return;
     }
     thread_t *th = &noza_os.thread[pid];
     if (th->info.state == THREAD_FREE) {
         noza_os_set_return_value1(running, ESRCH); // error
+        printf("j2\n");
         return;
     }
     // if the flags is set to detach, then return error (cannot be join)
     if (th->flags & FLAG_DETACH) {
+        printf("j3\n");
         noza_os_set_return_value1(running, EINVAL); // error
         return;
     }
 
     // if the thread is in zombie state, then return the exit code, and free the thread
     if (th->info.state == THREAD_ZOMBIE) {
+        printf("j4\n");
         noza_os_set_return_value2(running, 0, th->exit_code);
         noza_os_change_state(th, &noza_os.zombie, &noza_os.free); // free the thread
         return;
@@ -579,9 +579,11 @@ static void syscall_thread_join(thread_t *running)
 
     // if the thread is in ready state, then change the state to waiting state directly
     if (th->join_th == NULL) {
+        printf("j5\n");
         th->join_th = running;
         noza_os_clear_running_thread();
     } else {
+        printf("j6\n");
         noza_os_set_return_value1(running, EINVAL); // already join, return error
     }
 }
@@ -730,7 +732,6 @@ static syscall_func_t syscall_func[] = {
 
 static void serv_syscall(uint32_t core)
 {
-    //thread_t *source = noza_os_get_running_thread();
     thread_t *source = noza_os.running[core];
     // sanity check
     if (source->callid >= 0 && source->callid < NSC_NUM_SYSCALLS) {
@@ -738,7 +739,7 @@ static void serv_syscall(uint32_t core)
         syscall_func[source->callid](source); 
     } else {
         if (source->callid == 255) {
-            printf("hard fault !\n");
+            printf("hard fault ! core dump\n");
             // hardfault
             noza_os_add_thread(&noza_os.hardfault, source); // insert the thread back to ready queue
             noza_os_clear_running_thread(); // remove the running thread
@@ -821,11 +822,11 @@ static void noza_os_scheduler()
     // TODO: for lock, consider the case PendSV interrupt goes here, 
     // and some other high priority interrupt is triggered, could cause deadlock ere
     // maybe need to disable all interrupts here with spin lock
+    thread_t *running = NULL;
     noza_os_lock(core);
     for (;;) {
-        // core = platform_get_running_core(); // update the core number whenever the scheduler is called
-        thread_t *running = NULL;
-
+pickup_thread:
+        running = NULL;
         // travel the ready queue list and find the highest priority thread
         for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
             if (noza_os.ready[i].count > 0) {
@@ -834,37 +835,47 @@ static void noza_os_scheduler()
                 break;
             }
         }
+
         if (running) { // a ready thread is picked
             running->info.state = THREAD_RUNNING;
+            noza_os.running[core]= running;
             for (;;) {
-                noza_os.running[core]= running;
-                if (running->trap.state == SYSCALL_OUTPUT) {
-                    platform_trap(running->stack_ptr, &running->trap);
-                    running->trap.state = SYSCALL_DONE;
-                    #if defined(DEBUG)
-                    void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid);
-                    dump_interrupt_stack(running->stack_ptr, running->callid, thread_get_pid(running));
-                    #endif
-                    running->callid = -1;
-                }
-                SCHEDULE(running->stack_ptr)
                 if (running->trap.state == SYSCALL_PENDING) {
-                    running->callid = running->trap.r0;
+                    running->callid = running->trap.r0; // save the callid
                     #if defined(DEBUG)
                     if (running->callid >= NSC_NUM_SYSCALLS && running->callid != 255) {
                         printf("----------------------------------> resume fatal error ! %d (pid:%d)\n",
                             running->callid, thread_get_pid(running));
                     }
                     #endif
-                    serv_syscall(core);
-                    if (noza_os_get_running_thread() == NULL)
-                        break;
+                    serv_syscall(core); // serve, change the state to SYSCALL_SERVING
+                    if (noza_os.running[core] == NULL) {
+                        noza_os_add_thread(&noza_os.ready[noza_os.running[core]->info.priority], running);
+                        goto pickup_thread;
+                    }
+                } 
+                if (running->trap.state == SYSCALL_OUTPUT) {
+                    platform_trap(running->stack_ptr, &running->trap); // copy trap status to interrupt stack
+                    running->trap.state = SYSCALL_DONE;
+                    #if defined(DEBUG)
+                    void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid);
+                    dump_interrupt_stack(running->stack_ptr, running->callid, thread_get_pid(running));
+                    #endif
+                    running->callid = -1; // clear call id
                 }
+
+                // context switch
+                SCHEDULE(running->stack_ptr) 
+                goto pickup_thread;
             }
-            if (noza_os.running[core] != NULL) {
+#if 0
+            if (noza_os.running[core] != running) {
+                // if the active is not running thread, put running thread back to ready list
                 noza_os_add_thread(&noza_os.ready[noza_os.running[core]->info.priority], noza_os.running[core]);
                 noza_os_clear_running_thread();
             }
+#endif
+
         } else {
             // no task here, switch to idle thread, and config the next tick
             if (core==0) {
@@ -895,7 +906,6 @@ static void noza_os_scheduler()
 // called from assembly SVC0 handler, copy register to trap structure
 void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 {
-    // uint32_t core = platform_get_running_core(); // get the core which raise SVC #0 interrupt
     // callback from SVC servie routine, make system call pending
     // and trap into kernel later
     thread_t *th = noza_os_get_running_thread();
