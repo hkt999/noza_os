@@ -86,7 +86,7 @@ add_executable(
 
 	# lib and system call for user space application
 	user/libc/src/app_run.S
-	user/libc/src/syscall_asm_bak.S
+	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
 	user/libc/src/setjmp.S
 
