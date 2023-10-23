@@ -291,21 +291,20 @@ static void noza_os_reply(thread_t *running, uint32_t pid, void *msg, uint32_t s
 {
     // sanity check
     if (running->info.port_state != PORT_WAIT_LISTEN) {
-        printf("unexpected: running thread (pid:%ld), port is not PORT_WAIT_LISTEN\n", thread_get_pid(running));
+        printf("unexpected error: running thread (pid:%ld), port is not PORT_WAIT_LISTEN\n", thread_get_pid(running));
         HALT();
     }
     // search if pid is in the reply list (sanity check)
-    printf("--------------> noza_os_reply to pid=%d\n", pid);
+    // printf("--------------> noza_os_reply to pid=%d\n", pid);
     thread_t *head_th = (thread_t *)running->port.reply_list.head->value;
     thread_t *th = head_th;
     while (th) {
         if (thread_get_pid(th) == pid) {
-            printf("OK ----> found in reply list: pid=%ld\n", pid);
             break;
         }
         th = th->state_node.next->value;
         if (th == head_th) { // not found in reply list !
-            printf("ERROR ----> not found in reply list: pid=%ld\n", pid);
+            printf("unexpected error: noza_os_reply thread not found in reply list: pid=%ld\n", pid);
             HALT();
             noza_os_set_return_value1(running, ESRCH); // error, not found
             return;
@@ -1021,7 +1020,7 @@ pick_thread:
                 if (now >= expired) {
                     break;
                 }
-                dump_threads();
+                //dump_threads();
             }
             #else
             // no task here, switch to idle thread, and config the next tick
@@ -1056,10 +1055,9 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->r2 = r2;
         trap->r3 = r3;
         trap->state = SYSCALL_PENDING;
-        printf("======================> trap r0: %d\n", r0);
     } else {
         // TODO: unlikely case, no running thread, what to do ?
-        printf("---------------------------- fatal error, th=NULL !\n");
+        printf("unexpected error, running thread == NULL when trap happen !\n");
     }
 
     #if 0 // TODO: raise the PendSV interrupt

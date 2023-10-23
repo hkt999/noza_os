@@ -49,11 +49,13 @@ isr_pendsv: // for context switching in an OS
 .global isr_svcall
 isr_svcall: // for system calls
     // get svc call number
+    /*
     mrs r0, msp
     subs r0, #4
     ldr r0, [r0]
-    lsls r0, r0, #24    
-    lsrs r0, r0, #24    
+    lsls r0, r0, #24
+    lsrs r0, r0, #24
+    */
 
     cmp r0, #12
     ble go_service
