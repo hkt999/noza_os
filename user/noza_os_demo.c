@@ -83,9 +83,13 @@ void root_task(void *param)
 #endif
     uint32_t th;
     // TODO: make console_start DETACHED
+    #if 0
     noza_thread_create(&th, console_start, &table.builtin_cmds[0], 0, 1024);
     while (1) {
         noza_thread_sleep_ms(1000, NULL);
     }
+    #else
+    console_start(&table.builtin_cmds[0], 0);
+    #endif
     //noza_thread_join(th, NULL);
 }

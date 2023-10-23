@@ -5,6 +5,7 @@
 #include "kernel/noza_config.h"
 #include "setjmp.h"
 #include "posix/errno.h"
+#include "service/memory/mem_client.h"
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK		1
@@ -27,15 +28,25 @@ static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0};
 extern void app_run(thread_info_t *info);
 
 #define MAX_SERVICES    8
-static void *service_entry[MAX_SERVICES];
+typedef struct service_entry {
+	int (*entry)(void *param, uint32_t pid);
+	void *stack;
+	uint32_t stack_size;
+} service_entry_t;
+
+//static void *service_entry[MAX_SERVICES];
+static service_entry_t service_entry[MAX_SERVICES];
 static int service_count = 0;
-void noza_add_service(void (*entry)(void *param, uint32_t pid))
+void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size)
 {
     if (service_count >= MAX_SERVICES) {
         printf("fatal: noza_add_service: too many services\n");
 		return;
     }
-    service_entry[service_count++] = entry;
+    service_entry[service_count].entry = entry;
+	service_entry[service_count].stack = stack;
+	service_entry[service_count].stack_size = stack_size;
+	service_count++;
 }
 
 #define SERVICE_PRIORITY	0
@@ -44,7 +55,8 @@ void noza_run_services()
     // initial all registered service
     for (int i = 0; i < service_count; i++) {
 		uint32_t th;
-        noza_thread_create(&th, service_entry[i], NULL, SERVICE_PRIORITY, 1024);
+		noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
+			service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
     }
 }
 
@@ -76,7 +88,7 @@ void free_stack(uint32_t pid)
 	}
 	// free user level stack
 	if (THREAD_INFO[pid]->need_free_stack == AUTO_FREE_STACK) {
-		free(THREAD_INFO[pid]->stack_ptr);
+		noza_free(THREAD_INFO[pid]->stack_ptr);
 	}
 	THREAD_INFO[pid] = NULL; // clear
 }
@@ -93,9 +105,16 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	thread_info->pid = -1;
 	thread_info->errno = 0;
 	int ret, th;
-    noza_syscall(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t)thread_info, priority);
-	asm volatile("mov %0, r0" : "=r"(ret) : : "memory");
-	asm volatile("mov %0, r1" : "=r"(th) : : "memory");
+	extern void noza_thread_create_primitive(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
+    noza_thread_create_primitive(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t)thread_info, priority);
+
+	asm volatile(
+		"mov %0, r0\n"
+		"mov %1, r1\n"
+		: "=r" (ret), "=r" (th)
+		:
+		: "memory"
+	);
 	thread_info->pid = th;
 	*pth = th;
 	THREAD_INFO[th] = thread_info;
@@ -106,7 +125,7 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 //#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
 int noza_thread_create(uint32_t *pth, int (*entry)(void *, uint32_t), void *param, uint32_t priority, uint32_t stack_size)
 {
-	uint8_t *stack_ptr = (uint8_t *)malloc(stack_size);
+	uint8_t *stack_ptr = (uint8_t *)noza_malloc(stack_size);
 	if (stack_ptr == NULL) {
 		return EAGAIN;
 	}
@@ -126,11 +145,17 @@ int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
 	uint32_t r1 = (uint32_t)(us & 0xFFFFFFFF);
 	uint32_t r2;
 
-	extern void _noza_thread_sleep(uint32_t r0, uint32_t r1); // in assembly
-	_noza_thread_sleep(r0, r1);
-	asm volatile("mov %0, r0" : "=r"(r0) : : "memory"); // return code
-	asm volatile("mov %0, r1" : "=r"(r1) : : "memory"); // high 32bits
-	asm volatile("mov %0, r2" : "=r"(r2) : : "memory"); // low 32bits
+	extern void noza_thread_sleep(uint32_t r0, uint32_t r1); // in assembly
+	noza_thread_sleep(r0, r1);
+	asm volatile(
+		"mov %0, r0\n"  // return code
+		"mov %1, r1\n"  // high 32bits
+		"mov %2, r2\n"  // low 32bits
+		: "=r" (r0), "=r" (r1), "=r" (r2)  // 輸出操作數
+		: 
+		: "memory"
+	);
+
 	if (remain_us) {
 		*remain_us = ((uint64_t)r1 << 32) | r2;
 	}

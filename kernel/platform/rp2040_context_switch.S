@@ -42,12 +42,19 @@ isr_hardfault:
 // interrupt service routine for supervisor calls (SVC)
 .type isr_pendsv, %function
 .global isr_pendsv
-isr_pendsv:
+isr_pendsv: // for context switching in an OS
     b isr_systick // do timer context switch
 
-.type isr_svcall, %function
+.type isr_svcall, %function 
 .global isr_svcall
-isr_svcall:
+isr_svcall: // for system calls
+    // get svc call number
+    mrs r0, msp
+    subs r0, #4
+    ldr r0, [r0]
+    lsls r0, r0, #24    
+    lsrs r0, r0, #24    
+
     cmp r0, #12
     ble go_service
     cmp r0, #255
@@ -64,18 +71,18 @@ go_service:
 isr_systick:
     // save user context (psp stack)
 	mrs r0, psp
-    subs r0, #4
-    mov r1, lr
-    str r1, [r0]
-    subs r0, #16
-    stmia r0!, {r4, r5, r6, r7}
-    mov	r4, r8
+    subs r0, #4                     // 1 register * 4 bytes
+    mov r1, lr                      // save LR
+    str r1, [r0]                    // save LR to stack
+    subs r0, #16                    // 4 registers * 4 bytes
+    stmia r0!, {r4, r5, r6, r7}     // save r4-r7 to stack
+    mov	r4, r8                  
 	mov	r5, r9
 	mov	r6, r10
 	mov	r7, r11
-    subs r0, #32
-    stmia r0!, {r4, r5, r6, r7}
-    subs r0, #16
+    subs r0, #32                    // reserve space for 8 registers
+    stmia r0!, {r4, r5, r6, r7}     // save r8-r11 to stack (4 registers)
+    subs r0, #16                    // come back to the stack pointer
 
 	// load kernel context (msp stack)
     pop {r1, r2, r3, r4, r5}
@@ -110,10 +117,8 @@ noza_os_resume_thread:
 	ldmia	r0!,{r4-r7}
     ldmia	r0!,{r1}
     mov lr, r1
-	msr psp, r0
-
-	// return to user
-	bx lr
+	msr psp, r0 // load user stack pointer (r0) to user stack pointer (psp)
+	bx lr // return to user
 
 // function to initialize the kernel stack and switch to the process stack
 .global noza_init_kernel_stack

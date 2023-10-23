@@ -41,22 +41,6 @@ uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t siz
     return new_ptr;
 }
 
-#include <stdio.h>
-extern uint32_t platform_get_running_core();
-void platform_core_dump(void *_stack_ptr)
-{
-    uint32_t *stack_ptr = (uint32_t *)_stack_ptr;
-    stack_ptr -= 17;
-    user_stack_t *us = (user_stack_t *)stack_ptr;
-    interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-
-    printf("core(%d) dump:\n", platform_get_running_core());
-    printf("r0  %08x   r1 %08x  r2 %08x  r3   %08x\n", is->r0, is->r1, is->r2, is->r3);
-    printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
-    printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
-    printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
-}
-
 // copy register from info to interrupt stack (for resume to user thread)
 void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
 {
@@ -87,18 +71,35 @@ const char *syscall_name[] = {
 
 static const char *syscall_id_to_name(uint32_t id) 
 {
-    if (id>=NSC_NUM_SYSCALLS) {
+    if (id >= NSC_NUM_SYSCALLS) {
         return "UNKNOWN";
     }
     return syscall_name[id];
 }
 
+#include <stdio.h>
 void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid)
 {
     if (callid != NSC_THREAD_SLEEP) {
         interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
         printf("core:%d, stack (pid:%d) r0: %08x r1: %08x r2: %08x r3: %08x (%s:%d)\n",
             platform_get_running_core(), pid, is->r0, is->r1, is->r2, is->r3, syscall_id_to_name(callid), callid);
-        //printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
+        printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n", is->r12, is->lr, is->pc, is->xpsr);
     }
+}
+
+#include <stdio.h>
+extern uint32_t platform_get_running_core();
+void platform_core_dump(void *_stack_ptr, uint32_t pid)
+{
+    uint32_t *stack_ptr = (uint32_t *)_stack_ptr;
+    stack_ptr -= 17;
+    user_stack_t *us = (user_stack_t *)stack_ptr;
+    interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
+
+    printf("core(%d) pid(%d) dump:\n", platform_get_running_core(), pid);
+    printf("r0  %08x   r1 %08x  r2 %08x  r3   %08x\n", is->r0, is->r1, is->r2, is->r3);
+    printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
+    printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
+    printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
 }

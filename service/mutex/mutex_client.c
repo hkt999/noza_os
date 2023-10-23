@@ -9,7 +9,7 @@ int mutex_acquire(mutex_t *mutex)
 {
 	mutex_msg_t msg = {.cmd = MUTEX_ACQUIRE, .mid = mutex->mid, .token = 0, .code = 0};
 	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
-	int ret = noza_call(&noza_msg);
+	int ret = noza_call(&noza_msg); // TODO: check return value
 	if (msg.code == MUTEX_SUCCESS) {
 		mutex->mid = msg.mid;
 		mutex->token = msg.token;
