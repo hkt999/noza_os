@@ -66,7 +66,7 @@ static dblink_item_t *dblist_remove_head(dblink_item_t *head)
 }
 
 uint32_t mutex_pid;
-static void do_mutex_server(void *param, uint32_t pid)
+static int do_mutex_server(void *param, uint32_t pid)
 {
 	mutex_pid = pid;
 	static mutex_store_t mutex_store[MAX_LOCKS];
@@ -232,11 +232,14 @@ static void do_mutex_server(void *param, uint32_t pid)
 			}
         }
     }
+
+	return 0;
 }
 
+static uint8_t mutex_server_stack[1024];
 void __attribute__((constructor(110))) mutex_servier_init(void *param, uint32_t pid)
 {
     // TODO: move the external declaraction into a header file
-    extern void noza_add_service(void (*entry)(void *param, uint32_t pid));
-	noza_add_service(do_mutex_server);
+    extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
+	noza_add_service(do_mutex_server, mutex_server_stack, sizeof(mutex_server_stack));
 }

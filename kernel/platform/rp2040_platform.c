@@ -77,12 +77,11 @@ void platform_systick_config(unsigned int n)
     systick_hw->csr = 0x03; // arm irq, start counter with 1 usec clock
 }
 
-void platform_tick(uint32_t ms)
+void platform_tick_cores()
 {
 #if NOZA_OS_NUM_CORES > 1
     if (get_core_num()==0) {
         multicore_fifo_push_blocking(0); // tick core1
-        platform_systick_config(ms);
     }
 #endif
 }

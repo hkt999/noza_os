@@ -26,7 +26,7 @@ typedef struct name_msg_s {
     uint32_t pid;
 } name_msg_t;
 
-static void do_name_lookup(void *param, uint32_t pid)
+static int do_name_lookup(void *param, uint32_t pid)
 {
     noza_msg_t msg;
     memset(name_lookup_table, 0, sizeof(name_lookup_table));
@@ -41,7 +41,7 @@ static void do_name_lookup(void *param, uint32_t pid)
                             strncpy(name_lookup_table[i].name, name_msg->name, MAX_NAME_LEN);
                             name_msg->reply = 0; // success
                             //noza_reply(&msg);
-                            return;
+                            break;
                         }
                     }
                     name_msg->reply = -1;
@@ -54,7 +54,7 @@ static void do_name_lookup(void *param, uint32_t pid)
                             name_msg->reply = 0; // success
                             name_msg->pid = name_lookup_table[i].pid;
                             //noza_reply(&msg);
-                            return;
+                            break;
                         }
                     }
                     name_msg->reply = -2;
@@ -67,7 +67,7 @@ static void do_name_lookup(void *param, uint32_t pid)
                             name_lookup_table[i].pid = 0;
                             name_msg->reply = 0;
                             //noza_reply(&msg); // success
-                            return;
+                            break;
                         }
                     }
                     name_msg->reply = -3;
@@ -81,6 +81,8 @@ static void do_name_lookup(void *param, uint32_t pid)
             }
         }
     }
+
+    return 0;
 }
 
 // the client api
@@ -112,9 +114,10 @@ int name_lookup_unregister(uint32_t pid)
 }
 
 // root service for naming
+static uint8_t name_lookup_stack[1024];
 void __attribute__((constructor(101))) name_lookup_init(void *param, uint32_t pid)
 {
     // TODO: move the external declaraction into a header file
-    extern void noza_add_service(void (*entry)(void *param, uint32_t pid));
-    noza_add_service(do_name_lookup);
+    extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
+    noza_add_service(do_name_lookup, name_lookup_stack, sizeof(name_lookup_stack));
 }

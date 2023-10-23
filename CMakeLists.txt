@@ -85,17 +85,17 @@ add_executable(
 	kernel/noza_os.c
 
 	# lib and system call for user space application
-	user/libc/src/noza_syscall.S
 	user/libc/src/app_run.S
-	user/libc/src/syscall_asm.S
+	user/libc/src/syscall_asm_bak.S
 	user/libc/src/syslib.c
 	user/libc/src/setjmp.S
 
 	# services
-	service/name_lookup/name_lookup.c
+	#service/name_lookup/name_lookup.c
+	service/memory/mem_serv.c
+	service/memory/mem_client.c
 	service/mutex/mutex_serv.c
 	service/mutex/mutex_client.c
-	#service/memory/mem_serv.c
 	#service/vfs/rootfs.c
 	#service/vfs/romfs.c
 

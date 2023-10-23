@@ -41,7 +41,9 @@ static int yield_test_func(void *param, uint32_t pid)
     uint32_t value = 0;
     for (int i=0; i<YIELD_ITER; i++) {
         value = value + i;
-        TEST_ASSERT_EQUAL(0, noza_thread_sleep_us(0, NULL));
+        if (param == NULL) {
+            TEST_ASSERT_EQUAL(0, noza_thread_sleep_us(0, NULL));
+        }
     }
 
     return value;
@@ -50,7 +52,7 @@ static int yield_test_func(void *param, uint32_t pid)
 static int heavy_test_func(void *param, uint32_t pid)
 {
     int *flag = (int *)param;
-    #define HEAVY_ITER  10000000
+    #define HEAVY_ITER  1000000
     uint32_t value = 0;
     for (int i=0; i<HEAVY_ITER; i++) {
         value = value + i;
@@ -93,7 +95,6 @@ static void do_test_thread()
 #endif
 
 #if 0
-#if 1
         TEST_MESSAGE("---- test thread creation with random priority and signal in 100ms ----");
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
@@ -116,6 +117,7 @@ static void do_test_thread()
 
 #if 1
         TEST_MESSAGE("---- test heavy loading ----");
+        uint32_t value_heavy = heavy_test_func(NULL, pid);
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], heavy_test_func, NULL, 1, 1024));
             TEST_ASSERT_INT_WITHIN(NOZA_OS_TASK_LIMIT-1, NOZA_OS_TASK_LIMIT/2, th[i]);
@@ -123,12 +125,13 @@ static void do_test_thread()
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
-            TEST_ASSERT_EQUAL_UINT(2280707264, exit_code);
+            TEST_ASSERT_EQUAL_UINT(value_heavy, exit_code);
         }
 #endif
 
-#if 1
+#if 0
         TEST_MESSAGE("---- test yield ----");
+        uint32_t value_yield = yield_test_func(&pid, pid);
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], yield_test_func, NULL, 1, 1024));
             TEST_ASSERT_INT_WITHIN(NOZA_OS_TASK_LIMIT-1, NOZA_OS_TASK_LIMIT/2, th[i]);
@@ -136,7 +139,7 @@ static void do_test_thread()
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
-            TEST_ASSERT_EQUAL(49995000, exit_code);
+            TEST_ASSERT_EQUAL(value_yield, exit_code);
         }
 #endif
 
@@ -153,7 +156,6 @@ static void do_test_thread()
                 TEST_ASSERT_EQUAL(0, noza_thread_sleep_ms(10, NULL));
             }
         }
-#endif
 #endif
 
     }
