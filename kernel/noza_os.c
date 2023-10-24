@@ -40,20 +40,19 @@ inline static void HALT()
     }
 }
 
-const char *state_str[] = {
-    [THREAD_FREE] = "THREAD_FREE",
-    [THREAD_RUNNING] = "THREAD_RUNNING",
-    [THREAD_READY] = "THREAD_READY",
-    [THREAD_WAITING_MSG] = "THREAD_WAITING_MSG",
-    [THREAD_WAITING_READ] = "THREAD_WAITING_READ",
-    [THREAD_WAITING_REPLY] = "THREAD_WAITING_REPLY",
-    [THREAD_SLEEP] = "THREAD_SLEEP",
-    [THREAD_ZOMBIE] = "THREAD_ZOMBIE",
-    [THREAD_PENDING_JOIN] = "THREAD_PENDING_JOIN"
-};
-
 const char *state_to_str(uint32_t id) 
 {
+    static const char *state_str[] = {
+        [THREAD_FREE] = "THREAD_FREE",
+        [THREAD_RUNNING] = "THREAD_RUNNING",
+        [THREAD_READY] = "THREAD_READY",
+        [THREAD_WAITING_MSG] = "THREAD_WAITING_MSG",
+        [THREAD_WAITING_READ] = "THREAD_WAITING_READ",
+        [THREAD_WAITING_REPLY] = "THREAD_WAITING_REPLY",
+        [THREAD_SLEEP] = "THREAD_SLEEP",
+        [THREAD_ZOMBIE] = "THREAD_ZOMBIE",
+        [THREAD_PENDING_JOIN] = "THREAD_PENDING_JOIN"
+    };
     if (id < sizeof(state_str)/sizeof(char *)) {
         return state_str[id];
     } else {
@@ -61,18 +60,55 @@ const char *state_to_str(uint32_t id)
     }
 }
 
-const char *port_state_str[] = {
-    [PORT_WAIT_LISTEN] = "PORT_WAIT_LISTEN",
-    [PORT_READY] = "PORT_READY"
-};
+const char *syscall_state_to_str(uint32_t id) 
+{
+    static const char *syscall_state[] = {
+        [SYSCALL_DONE] = "SYSCALL_DONE",
+        [SYSCALL_PENDING] = "SYSCALL_PENDING",
+        [SYSCALL_SERVING] = "SYSCALL_SERVING",
+        [SYSCALL_OUTPUT] = "SYSCALL_OUTPUT"
+    };
+    if (id < sizeof(syscall_state)/sizeof(char *)) {
+        return syscall_state[id];
+    } else {
+        return "SYSCALL_UNKNOWN";
+    }
+}
 
 const char *port_to_str(uint32_t id) 
 {
+    static const char *port_state_str[] = {
+        [PORT_WAIT_LISTEN] = "PORT_WAIT_LISTEN",
+        [PORT_READY] = "PORT_READY"
+    };
     if (id < sizeof(port_state_str)/sizeof(char *)) {
         return port_state_str[id];
     } else {
         return "PORT_UNKNOWN";
     }
+}
+
+const char *syscall_to_str(uint32_t callid)
+{
+    static const char *syscall_str[] = {
+        [NSC_THREAD_SLEEP] = "NSC_THREAD_SLEEP",
+        [NSC_THREAD_KILL] = "NSC_THREAD_KILL",
+        [NSC_THREAD_CREATE] = "NSC_THREAD_CREATE",
+        [NSC_THREAD_CHANGE_PRIORITY] = "NSC_THREAD_CHANGE_PRIORITY",
+        [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
+        [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
+        [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
+        [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
+        [NSC_RECV] = "NSC_RECV",
+        [NSC_REPLY] = "NSC_REPLY",
+        [NSC_CALL] = "NSC_CALL",
+        [NSC_NB_RECV] = "NSC_NB_RECV",
+        [NSC_NB_CALL] = "NSC_NB_CALL",
+    };
+    if (callid >= NSC_NUM_SYSCALLS) {
+        return "UNKNOWN";
+    }
+    return syscall_str[callid];
 }
 
 typedef struct cdl_node_s cdl_node_t;
@@ -161,6 +197,81 @@ static void     noza_os_scheduler();
 #define noza_os_lock_init()     (void)0
 #define noza_os_lock(core)      (void)0
 #define noza_os_unlock(core)    (void)0
+#endif
+
+#if defined(DEBUG)
+static inline void dump_threads()
+{
+    uint32_t core = platform_get_running_core(); // get working core
+    thread_t *running_thread = noza_os.running[core];
+    uint32_t total_threads = 0;
+    uint32_t ready_count = 0, join_pending_count = 0, waiting_read = 0, waiting_reply = 0;
+    if (running_thread) {
+        total_threads++;
+    }
+
+    for (int i=0; i < NOZA_OS_PRIORITY_LIMIT; i++) {
+        if (noza_os.ready[i].count > 0) {
+            ready_count += noza_os.ready[i].count;
+        }
+    }
+
+    for (int i=0; i < NOZA_OS_TASK_LIMIT; i++) {
+        if (noza_os.thread[i].join_th) {
+            join_pending_count++;
+        }
+    }
+
+    for (int i=0; i< NOZA_OS_TASK_LIMIT; i++) {
+        if (noza_os.thread[i].port.pending_list.count > 0) {
+            waiting_read++;
+        }
+        if (noza_os.thread[i].port.reply_list.count > 0) {
+            waiting_reply++;
+        }
+    }
+
+    total_threads += ready_count + join_pending_count + noza_os.wait.count + noza_os.sleep.count + noza_os.zombie.count + noza_os.free.count + waiting_read + waiting_reply;
+    printf("running: %d, pending_join: %d, ready: %d, wait: %d, sleep: %d, zombie: %d, free:% d, wait_read=%d, wait_reply=%d\n", running_thread ? 1 : 0, 
+        join_pending_count, ready_count,
+        noza_os.wait.count, noza_os.sleep.count, noza_os.zombie.count, noza_os.free.count, waiting_read, waiting_reply);
+    printf("total_threads=%d, NOZA_OS_TASK_LIMIT=%d\n", total_threads, NOZA_OS_TASK_LIMIT);
+    for (int i=0; i< NOZA_OS_TASK_LIMIT; i++) {
+        thread_t *th = &noza_os.thread[i];
+        if (th->info.state != THREAD_FREE) {
+            if (th->join_th) {
+                printf("pid: %d, %s, pending_join: %d\n", thread_get_pid(th),
+                    state_to_str(th->info.state), thread_get_pid(th->join_th));
+            } else {
+                printf("pid: %d, %s\n", thread_get_pid(th), state_to_str(th->info.state));
+            }
+            if (th->info.state == THREAD_WAITING_REPLY) {
+                printf("\tport status: %s\n", port_to_str(th->info.port_state));
+            }
+            if (th->port.pending_list.count > 0 || th->port.reply_list.count > 0) {
+                printf("\t* pending_count=%d, reply_count=%d\n", 
+                    th->port.pending_list.count,
+                    th->port.reply_list.count);
+            }
+            if (th->port.pending_list.count > 0) {
+                printf("\t\tpedding_list\n");
+                thread_t *pending = (thread_t *)th->port.pending_list.head->value;
+                for (int j = 0; j < th->port.pending_list.count; j++) {
+                    printf("\t\tpending (%d) -> %s\n", thread_get_pid(pending), state_to_str(pending->info.state));
+                    pending = (thread_t *)pending->state_node.next->value;
+                }
+            }
+            if (th->port.reply_list.count > 0) {
+                printf("\t\treply_list\n");
+                thread_t *reply = (thread_t *)th->port.reply_list.head->value;
+                for (int j = 0; j<th->port.reply_list.count; j++) {
+                    printf("\t\treply (%d) <- %s\n", thread_get_pid(reply), state_to_str(reply->info.state));
+                    reply = (thread_t *)reply->state_node.next->value;
+                }
+            }
+        }
+    }
+}
 #endif
 
 #define UNDEF_REG   -1
@@ -381,6 +492,7 @@ static thread_t *noza_thread_alloc()
     noza_os_remove_thread(&noza_os.free, th);
     th->flags = 0; // reset the thread flags (says, detached)
     th->callid = -1;
+    th->trap.state = SYSCALL_DONE;
 
     return th;
 }
@@ -592,11 +704,18 @@ static void syscall_thread_join(thread_t *running)
     uint32_t pid = running->trap.r1;
     // sanity check
     if (pid >= NOZA_OS_TASK_LIMIT) {
+        printf("error 1 pid: %d, state=%s\n", pid, syscall_state_to_str(running->info.state));
+        #if defined(DEBUG)
+        dump_threads();
+        #endif
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
     thread_t *th = &noza_os.thread[pid];
     if (th->info.state == THREAD_FREE) {
+        #if defined(DEBUG)
+        dump_threads();
+        #endif
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
@@ -608,13 +727,14 @@ static void syscall_thread_join(thread_t *running)
 
     // if the thread is in zombie state, then return the exit code, and free the thread
     if (th->info.state == THREAD_ZOMBIE) {
+        // printf("(1) kernel join %d, %d\n", 0, running->exit_code);
         noza_os_set_return_value2(running, 0, th->exit_code);
         noza_os_change_state(th, &noza_os.zombie, &noza_os.free); // free the thread
         return;
     }
 
     // TODO: reorg the comparision
-    if (th->info.state == THREAD_READY || th->info.state == THREAD_SLEEP || th->info.state == THREAD_WAITING_MSG || th->info.state == THREAD_WAITING_READ || th->info.state == THREAD_WAITING_REPLY) {
+    if (th->info.state == THREAD_READY || th->info.state == THREAD_SLEEP || th->info.state == THREAD_WAITING_MSG || th->info.state == THREAD_WAITING_READ || th->info.state == THREAD_WAITING_REPLY || th->info.state == THREAD_RUNNING) {
         if (th->join_th == NULL) {
             th->join_th = running;
             running->info.state = THREAD_PENDING_JOIN;
@@ -768,30 +888,6 @@ static syscall_func_t syscall_func[] = {
     [NSC_NB_CALL] = syscall_nbcall,
 };
 
-const char *syscall_str[] = {
-    [NSC_THREAD_SLEEP] = "NSC_THREAD_SLEEP",
-    [NSC_THREAD_KILL] = "NSC_THREAD_KILL",
-    [NSC_THREAD_CREATE] = "NSC_THREAD_CREATE",
-    [NSC_THREAD_CHANGE_PRIORITY] = "NSC_THREAD_CHANGE_PRIORITY",
-    [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
-    [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
-    [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
-    [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
-    [NSC_RECV] = "NSC_RECV",
-    [NSC_REPLY] = "NSC_REPLY",
-    [NSC_CALL] = "NSC_CALL",
-    [NSC_NB_RECV] = "NSC_NB_RECV",
-    [NSC_NB_CALL] = "NSC_NB_CALL",
-};
-
-const char *syscall_to_str(uint32_t callid)
-{
-    if (callid >= NSC_NUM_SYSCALLS) {
-        return "UNKNOWN";
-    }
-    return syscall_str[callid];
-}
-
 static void serv_syscall(uint32_t core)
 {
     thread_t *source = noza_os.running[core];
@@ -867,84 +963,6 @@ uint32_t *noza_os_resume_thread_syscall(uint32_t *stack);
     stack_ptr = noza_os_resume_thread(stack_ptr); \
     noza_os_lock(core); 
 
-#if defined(DEBUG)
-static inline void dump_threads()
-{
-    uint32_t core = platform_get_running_core(); // get working core
-    thread_t *running_thread = noza_os.running[core];
-    uint32_t total_threads = 0;
-    uint32_t ready_count = 0, join_pending_count = 0, waiting_read = 0, waiting_reply = 0;
-    if (running_thread) {
-        total_threads++;
-    }
-
-    for (int i=0; i < NOZA_OS_PRIORITY_LIMIT; i++) {
-        if (noza_os.ready[i].count > 0) {
-            ready_count += noza_os.ready[i].count;
-        }
-    }
-
-    for (int i=0; i < NOZA_OS_TASK_LIMIT; i++) {
-        if (noza_os.thread[i].join_th) {
-            join_pending_count++;
-        }
-    }
-
-    for (int i=0; i< NOZA_OS_TASK_LIMIT; i++) {
-        if (noza_os.thread[i].port.pending_list.count > 0) {
-            waiting_read++;
-        }
-        if (noza_os.thread[i].port.reply_list.count > 0) {
-            waiting_reply++;
-        }
-    }
-
-    total_threads += ready_count + join_pending_count + noza_os.wait.count + noza_os.sleep.count + noza_os.zombie.count + noza_os.free.count + waiting_read + waiting_reply;
-    if (total_threads != NOZA_OS_TASK_LIMIT) {
-        printf("running: %d, pending_join: %d, ready: %d, wait: %d, sleep: %d, zombie: %d, free:% d, wait_read=%d, wait_reply=%d\n", running_thread ? 1 : 0, 
-            join_pending_count, ready_count,
-            noza_os.wait.count, noza_os.sleep.count, noza_os.zombie.count, noza_os.free.count, waiting_read, waiting_reply);
-        printf("total_threads=%d, NOZA_OS_TASK_LIMIT=%d\n", total_threads, NOZA_OS_TASK_LIMIT);
-        for (int i=0; i< NOZA_OS_TASK_LIMIT; i++) {
-            thread_t *th = &noza_os.thread[i];
-            if (th->info.state != THREAD_FREE) {
-                if (th->join_th) {
-                    printf("pid: %d, %s, pending_join: %d\n", thread_get_pid(th),
-                        state_to_str(th->info.state), thread_get_pid(th->join_th));
-                } else {
-                    printf("pid: %d, %s\n", thread_get_pid(th), state_to_str(th->info.state));
-                }
-                if (th->info.state == THREAD_WAITING_REPLY) {
-                    printf("\tport status: %s\n", port_to_str(th->info.port_state));
-                }
-                if (th->port.pending_list.count > 0 || th->port.reply_list.count > 0) {
-                    printf("\t* pending_count=%d, reply_count=%d\n", 
-                        th->port.pending_list.count,
-                        th->port.reply_list.count);
-                }
-                if (th->port.pending_list.count > 0) {
-                    printf("\t\tpedding_list\n");
-                    thread_t *pending = (thread_t *)th->port.pending_list.head->value;
-                    for (int j = 0; j < th->port.pending_list.count; j++) {
-                        printf("\t\tpending (%d) -> %s\n", thread_get_pid(pending), state_to_str(pending->info.state));
-                        pending = (thread_t *)pending->state_node.next->value;
-                    }
-                }
-                if (th->port.reply_list.count > 0) {
-                    printf("\t\treply_list\n");
-                    thread_t *reply = (thread_t *)th->port.reply_list.head->value;
-                    for (int j = 0; j<th->port.reply_list.count; j++) {
-                        printf("\t\treply (%d) <- %s\n", thread_get_pid(reply), state_to_str(reply->info.state));
-                        reply = (thread_t *)reply->state_node.next->value;
-                    }
-                }
-            }
-        }
-        HALT();
-    }
-}
-#endif
-
 static void noza_os_scheduler()
 {
     uint32_t core = platform_get_running_core(); // get working core
@@ -995,12 +1013,6 @@ pick_thread:
                 // TODO: end, calculate the remaining time for slice
                 if (running->trap.state == SYSCALL_PENDING) {
                     running->callid = running->trap.r0; // save the callid
-                    #if defined(DEBUG)
-                    if (running->callid >= NSC_NUM_SYSCALLS && running->callid != 255) {
-                        printf("unexpected error: resume fail ! svc: %d (pid:%d)\n",
-                            running->callid, thread_get_pid(running));
-                    }
-                    #endif
                     serv_syscall(core);
                     if (noza_os.running[core] == NULL) {
                         goto pick_thread;
@@ -1056,10 +1068,7 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->r2 = r2;
         trap->r3 = r3;
         trap->state = SYSCALL_PENDING;
-        // TODO: refine the log
-        // printf("trap info: r0: 0x%08x, r1: 0x%08x, r2: 0x%08x, r3: 0x%08x\n", r0, r1, r2, r3);
     } else {
-        // TODO: unlikely case, no running thread, what to do ? add panic call
         printf("unexpected error, running thread == NULL when trap happen !\n");
     }
 
