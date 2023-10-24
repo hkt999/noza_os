@@ -6,7 +6,7 @@ typedef struct {
     uint32_t r1;
     uint32_t r2;
     uint32_t r3;
-    uint32_t r12; // r12 is not saved by hardware, but by software (isr_svcall)
+    uint32_t r12;
     uint32_t lr;
     uint32_t pc;
     uint32_t xpsr; // psr thumb bit
@@ -28,7 +28,7 @@ uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t siz
 {
     #define NOZA_OS_THREAD_PSP       0xFFFFFFFD  // exception return behavior (thread mode)
     // TODO: move this to platform specific code
-    uint32_t *new_ptr = stack + size - 17; // end of task_stack
+    uint32_t *new_ptr = stack + size - 17; // end of task_stack (user_stack_t + interrupted_stack_t)
     user_stack_t *u = (user_stack_t *) new_ptr;
     u->lr = (uint32_t) NOZA_OS_THREAD_PSP; // return to thread mode, use PSP
 
@@ -102,4 +102,14 @@ void platform_core_dump(void *_stack_ptr, uint32_t pid)
     printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
     printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
     printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
+}
+
+void show_registers(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
+{
+    printf("registers: r0=%08x, r1=%08x, r2=%08x, r3=%08x\n", r0, r1, r2, r3);
+}
+
+void show_svc(uint32_t svc)
+{
+    printf("svc number: %d (%s)\n", svc, syscall_id_to_name(svc));
 }
