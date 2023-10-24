@@ -6,7 +6,7 @@
 #include "platform.h"
 #include "errno.h"
 
-#define DEBUG
+//#define DEBUG
 
 //////////////////////////////////////////////////////////////
 //
@@ -619,7 +619,6 @@ static void syscall_thread_join(thread_t *running)
             th->join_th = running;
             running->info.state = THREAD_PENDING_JOIN;
             noza_os_clear_running_thread();
-            printf("J6\n");
         } else {
             noza_os_set_return_value1(running, EINVAL); // already join, return error
         }
@@ -798,9 +797,11 @@ static void serv_syscall(uint32_t core)
     thread_t *source = noza_os.running[core];
     // sanity check
     if (source->callid >= 0 && source->callid < NSC_NUM_SYSCALLS) {
+        /*
         printf("**** syscall: %s, source pid: %d, r0: 0x%08x, r1: 0x%08x, r2: 0x%08x, r3: 0x%08x\n",
             syscall_to_str(source->callid), thread_get_pid(source),
             source->trap.r0, source->trap.r1, source->trap.r2, source->trap.r3);
+        */
         source->trap.state = SYSCALL_SERVING;
         syscall_func[source->callid](source); 
     } else {
@@ -899,7 +900,7 @@ static inline void dump_threads()
     }
 
     total_threads += ready_count + join_pending_count + noza_os.wait.count + noza_os.sleep.count + noza_os.zombie.count + noza_os.free.count + waiting_read + waiting_reply;
-    //if (total_threads != NOZA_OS_TASK_LIMIT) {
+    if (total_threads != NOZA_OS_TASK_LIMIT) {
         printf("running: %d, pending_join: %d, ready: %d, wait: %d, sleep: %d, zombie: %d, free:% d, wait_read=%d, wait_reply=%d\n", running_thread ? 1 : 0, 
             join_pending_count, ready_count,
             noza_os.wait.count, noza_os.sleep.count, noza_os.zombie.count, noza_os.free.count, waiting_read, waiting_reply);
@@ -939,8 +940,8 @@ static inline void dump_threads()
                 }
             }
         }
-        //HALT();
-    //}
+        HALT();
+    }
 }
 #endif
 
@@ -996,7 +997,7 @@ pick_thread:
                     running->callid = running->trap.r0; // save the callid
                     #if defined(DEBUG)
                     if (running->callid >= NSC_NUM_SYSCALLS && running->callid != 255) {
-                        printf("----------------------------------> resume fatal error ! %d (pid:%d)\n",
+                        printf("unexpected error: resume fail ! svc: %d (pid:%d)\n",
                             running->callid, thread_get_pid(running));
                     }
                     #endif
@@ -1055,8 +1056,10 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->r2 = r2;
         trap->r3 = r3;
         trap->state = SYSCALL_PENDING;
+        // TODO: refine the log
+        // printf("trap info: r0: 0x%08x, r1: 0x%08x, r2: 0x%08x, r3: 0x%08x\n", r0, r1, r2, r3);
     } else {
-        // TODO: unlikely case, no running thread, what to do ?
+        // TODO: unlikely case, no running thread, what to do ? add panic call
         printf("unexpected error, running thread == NULL when trap happen !\n");
     }
 
