@@ -37,7 +37,7 @@ static int test_task(void *param, uint32_t pid)
 
 static int yield_test_func(void *param, uint32_t pid)
 {
-    #define YIELD_ITER  10000
+    #define YIELD_ITER  100
     uint32_t value = 0;
     for (int i=0; i<YIELD_ITER; i++) {
         value = value + i;
@@ -68,17 +68,17 @@ static int heavy_test_func(void *param, uint32_t pid)
 static void do_test_thread()
 {
     #define NUM_THREADS 8
-    #define NUM_LOOP    8
+    #define NUM_LOOP    16
     uint32_t th[NUM_THREADS];
     uint32_t pid;
     noza_thread_self(&pid);
 
-    //for (int loop = 0; loop < NUM_LOOP; loop++) {
-    for (;;) {
+    for (int loop = 0; loop < NUM_LOOP; loop++) {
+        TEST_PRINTF("test loop: %d", loop);
         srand(time(0));
 
 
-#if 1
+        // TEST
         TEST_MESSAGE("---- test thread creation with random priority and sleep time ----");
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
@@ -86,15 +86,14 @@ static void do_test_thread()
             TEST_ASSERT_NOT_EQUAL(0, th[i]);
         }
 
+
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            TEST_PRINTF("***** join thread me: %d, pid: %d", pid, th[i]);
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
             TEST_ASSERT_EQUAL(th[i], exit_code);
         }
-#endif
 
-#if 0
+        // TEST
         TEST_MESSAGE("---- test thread creation with random priority and signal in 100ms ----");
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
@@ -102,7 +101,6 @@ static void do_test_thread()
             TEST_ASSERT_NOT_EQUAL(0, th[i]);
         }
         noza_thread_sleep_ms(50, NULL);
-        TEST_MESSAGE("send signal (kill) to all threads");
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t sig = 0;
             TEST_ASSERT_EQUAL(0, noza_thread_kill(th[i], SIGALRM));
@@ -110,12 +108,10 @@ static void do_test_thread()
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
-            TEST_PRINTF("thread %d exit code: %ld", i, exit_code);
             TEST_ASSERT_EQUAL(th[i], exit_code);
         }
-#endif
 
-#if 1
+        // TEST
         TEST_MESSAGE("---- test heavy loading ----");
         uint32_t value_heavy = heavy_test_func(NULL, pid);
         for (int i = 0; i < NUM_THREADS; i++) {
@@ -127,9 +123,8 @@ static void do_test_thread()
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
             TEST_ASSERT_EQUAL_UINT(value_heavy, exit_code);
         }
-#endif
 
-#if 0
+        // TEST
         TEST_MESSAGE("---- test yield ----");
         uint32_t value_yield = yield_test_func(&pid, pid);
         for (int i = 0; i < NUM_THREADS; i++) {
@@ -141,9 +136,8 @@ static void do_test_thread()
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
             TEST_ASSERT_EQUAL(value_yield, exit_code);
         }
-#endif
 
-#if 0
+        // TEST
         TEST_MESSAGE("---- test detach ----");
         int value[NUM_THREADS];
         memset(value, 0, sizeof(value));
@@ -152,12 +146,11 @@ static void do_test_thread()
             TEST_ASSERT_EQUAL(0, noza_thread_detach(th[i]));
         }
         for (int i=0; i < NUM_THREADS; i++) {
+            TEST_ASSERT_NOT_EQUAL(0, noza_thread_join(th[i], NULL));
             if (value[i] == 0) {
                 TEST_ASSERT_EQUAL(0, noza_thread_sleep_ms(10, NULL));
             }
         }
-#endif
-
     }
 }
 

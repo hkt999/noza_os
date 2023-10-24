@@ -1,5 +1,23 @@
 #include <stdint.h>
+#include <stdio.h>
 #include "../platform.h"
+#include "../syscall.h"
+
+const char *syscall_name[] = {
+    [NSC_THREAD_SLEEP] = "NSC_THREAD_SLEEP",
+    [NSC_THREAD_KILL] = "NSC_THREAD_KILL",
+    [NSC_THREAD_CREATE] = "NSC_THREAD_CREATE",
+    [NSC_THREAD_CHANGE_PRIORITY] = "NSC_THREAD_CHANGE_PRIORITY",
+    [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
+    [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
+    [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
+    [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
+    [NSC_RECV] = "NSC_RECV",
+    [NSC_REPLY] = "NSC_REPLY",
+    [NSC_CALL] = "NSC_CALL",
+    [NSC_NB_RECV] = "NSC_NB_RECV",
+    [NSC_NB_CALL] = "NSC_NB_CALL"
+};
 
 typedef struct {
     uint32_t r0;
@@ -52,23 +70,6 @@ void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
     is->r3 = info->r3;
 }
 
-#include "../syscall.h"
-const char *syscall_name[] = {
-    [NSC_THREAD_SLEEP] = "NSC_THREAD_SLEEP",
-    [NSC_THREAD_KILL] = "NSC_THREAD_KILL",
-    [NSC_THREAD_CREATE] = "NSC_THREAD_CREATE",
-    [NSC_THREAD_CHANGE_PRIORITY] = "NSC_THREAD_CHANGE_PRIORITY",
-    [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
-    [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
-    [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
-    [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
-    [NSC_RECV] = "NSC_RECV",
-    [NSC_REPLY] = "NSC_REPLY",
-    [NSC_CALL] = "NSC_CALL",
-    [NSC_NB_RECV] = "NSC_NB_RECV",
-    [NSC_NB_CALL] = "NSC_NB_CALL"
-};
-
 static const char *syscall_id_to_name(uint32_t id) 
 {
     if (id >= NSC_NUM_SYSCALLS) {
@@ -77,14 +78,15 @@ static const char *syscall_id_to_name(uint32_t id)
     return syscall_name[id];
 }
 
-#include <stdio.h>
 void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid)
 {
     if (callid != NSC_THREAD_SLEEP) {
         interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
+        #if 0
         printf("core:%d, stack (pid:%d) r0: %08x r1: %08x r2: %08x r3: %08x (%s:%d)\n",
             platform_get_running_core(), pid, is->r0, is->r1, is->r2, is->r3, syscall_id_to_name(callid), callid);
         printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n", is->r12, is->lr, is->pc, is->xpsr);
+        #endif
     }
 }
 
@@ -102,14 +104,4 @@ void platform_core_dump(void *_stack_ptr, uint32_t pid)
     printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
     printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
     printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
-}
-
-void show_registers(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
-{
-    printf("registers: r0=%08x, r1=%08x, r2=%08x, r3=%08x\n", r0, r1, r2, r3);
-}
-
-void show_svc(uint32_t svc)
-{
-    printf("svc number: %d (%s)\n", svc, syscall_id_to_name(svc));
 }

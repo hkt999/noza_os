@@ -93,8 +93,16 @@ void free_stack(uint32_t pid)
 	THREAD_INFO[pid] = NULL; // clear
 }
 
+typedef struct {
+	uint32_t r0;
+	uint32_t r1;
+	uint32_t r2;
+	uint32_t r3;
+} create_thread_t;
+
 int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, void *user_stack, uint32_t size, uint32_t auto_free_stack)
 {
+	create_thread_t info;
 	thread_info_t *thread_info = (thread_info_t *)user_stack; // stack tail for temporary use
 	thread_info->user_entry = entry;
 	thread_info->user_param = param;
@@ -104,22 +112,17 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	thread_info->need_free_stack = auto_free_stack;
 	thread_info->pid = -1;
 	thread_info->errno = 0;
-	int ret, th;
-	extern void noza_thread_create_primitive(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
-    noza_thread_create_primitive(NSC_THREAD_CREATE, (uint32_t) app_run, (uint32_t)thread_info, priority);
+	info.r0 = NSC_THREAD_CREATE;
+	info.r1 = (uint32_t)app_run;
+	info.r2 = (uint32_t)thread_info;
+	info.r3 = priority;
+	extern void noza_thread_create_primitive(create_thread_t *info);
+	noza_thread_create_primitive(&info);
+	thread_info->pid = info.r1;
+	*pth = info.r1;
+	THREAD_INFO[info.r1] = thread_info;
 
-	asm volatile(
-		"mov %0, r0\n"
-		"mov %1, r1\n"
-		: "=r" (ret), "=r" (th)
-		:
-		: "memory"
-	);
-	thread_info->pid = th;
-	*pth = th;
-	THREAD_INFO[th] = thread_info;
-
-	return ret;
+	return info.r0;
 }
 
 //#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
@@ -147,7 +150,7 @@ int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
 
 	extern void noza_thread_sleep(uint32_t r0, uint32_t r1); // in assembly
 	noza_thread_sleep(r0, r1);
-	asm volatile(
+	__asm__ volatile(
 		"mov %0, r0\n"  // return code
 		"mov %1, r1\n"  // high 32bits
 		"mov %2, r2\n"  // low 32bits
