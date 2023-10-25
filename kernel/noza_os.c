@@ -483,7 +483,6 @@ static void noza_init()
     }
 }
 
-// TODO: move the service to user space library
 void noza_root_task(void *param)
 {
     extern void root_task(void *param);

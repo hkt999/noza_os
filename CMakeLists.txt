@@ -3,6 +3,68 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+# declare the project apps
+option(NOZAOS_UNITTEST "build unit test" ON)
+
+# posix system
+option(NOZAOS_POSIX	"build posix" ON)
+
+# lua interpreter
+option(NOZAOS_LUA "build lua interpreter" OFF)
+
+# tensorflow lite micro
+option(NOZAOS_TFLM "build tensorflow lite micro" OFF)
+option(NOZAOS_TFLM_HELLO "build tensorflow lite micro hello world" OFF)
+option(NOZAOS_TFLM_MAGIC_WAND "build tensorflow lite micro magic wand" OFF)
+option(NOZAOS_TFLM_PERSON_DETECTION "build tensorflow lite micro person detection" OFF)
+option(NOZAOS_TFLM_MICRO_SPEECH "build tensorflow lite micro micro speech" OFF)
+
+if (NOZAOS_TFLM_HELLO AND NOT NOZAOS_TFLM)
+	message(STATUS "NOZAOS_TFLM_HELLO need NOZAOS_TFLM")
+	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_HELLO" force )
+endif()
+
+if (NOZAOS_TFLM_MAGIC_WAND AND NOT NOZAOS_TFLM)
+	message(STATUS "NOZAOS_TFLM_MAGIC_WAND need NOZAOS_TFLM")
+	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_MAGIC_WAND" force )
+endif()
+
+if (NOZAOS_TFLM_PERSON_DETECTION AND NOT NOZAOS_TFLM)
+	message(STATUS "NOZAOS_TFLM_PERSON_DETECTION need NOZAOS_TFLM")
+	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_PERSON_DETECTION" force )
+endif()
+
+if (NOZAOS_TFLM_MICRO_SPEECH AND NOT NOZAOS_TFLM)
+	message(STATUS "NOZAOS_TFLM_MICRO_SPEECH need NOZAOS_TFLM")
+	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_MICRO_SPEECH" force )
+endif()
+
+# not showing option in UI
+mark_as_advanced(
+	CMAKE_BACKWARDS_COMPATIBILITY
+	CMAKE_INSTALL_PREFIX
+	CMAKE_TOOLCHAIN_FILE
+	EXECUTABLE_OUTPUT_PATH
+	LIBRARY_OUTPUT_PATH
+	PICO_BOARD
+	PICO_BOARD_HEADER_DIRS
+	PICO_BUILD_DOCS
+	PICO_COMPILER_CC
+	PICO_COMPILER_CXX
+	PICO_COPY_TO_RAM
+	PICO_DEFAULT_BOOT_STAGE2
+	PICO_DEOPTIMIZED_DEBUG
+	PICO_NO_FLASH
+	PICO_OBJCOPY
+	PICO_OBJDUMP
+	PICO_PLATFORM
+	PICO_SDK_FETCH_FROM_GIT
+	PICO_SDK_FETCH_FROM_GIT_PATH
+	PICO_SDK_PATH
+	PICO_STDIO_SEMIHOSTING
+	pico-sdk-tools_DIR
+)
+
 # initalize pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
@@ -13,21 +75,6 @@ project(noza_os C CXX ASM)
 
 # initialise the Pico SDK
 pico_sdk_init()
-
-# declare the project apps
-set(NOZAOS_UNITTEST					1)
-set(NOZAOS_MUTEX					1)
-set(NOZAOS_POSIX					1)
-
-# lua interpreter
-set(NOZAOS_LUA						0)
-
-# tensorflow lite micro
-set(NOZAOS_TFLM						0)
-set(NOZAOS_TFLM_HELLO 				0)
-set(NOZAOS_TFLM_MAGIC_WAND 			0)
-set(NOZAOS_TFLM_PERSON_DETECTION	0)
-set(NOZAOS_TFLM_MICRO_SPEECH		0)
 
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 # define sub module built and test
@@ -109,7 +156,7 @@ add_executable(
 	user/console/noza_term.c
 
 	# unit test
-	user/unit_test.c
+	user/noza_unit_test/unit_test.c
 )
 
 target_include_directories(
