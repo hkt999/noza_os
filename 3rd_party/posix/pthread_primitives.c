@@ -3,19 +3,19 @@
 
 static int noza_thread_stub(void *param, uint32_t pid)
 {
-    pthread_t *th = param;
+    nz_pthread_t *th = param;
     th->id = pid;
     return (int) th->start_routine(th->arg);
 }
 
 #include "noza_config.h"
 // pthread routines
-int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
+int nz_pthread_create(nz_pthread_t *thread, const nz_pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
 {
-    pthread_attr_t default_attr;
-    pthread_attr_t *wa = (pthread_attr_t *)attr;
+    nz_pthread_attr_t default_attr;
+    nz_pthread_attr_t *wa = (nz_pthread_attr_t *)attr;
     if (wa == NULL) {
-        pthread_attr_init(&default_attr);
+        nz_pthread_attr_init(&default_attr);
         wa = &default_attr;
     }
     thread->start_routine = start_routine;
@@ -32,16 +32,16 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     if (ret_code != 0) {
         return ret_code;
     }
-    if (wa->detachstate == PTHREAD_CREATE_DETACHED) {
+    if (wa->detachstate == NZ_PTHREAD_CREATE_DETACHED) {
         noza_thread_detach(pid);
     }
     if (attr == NULL)
-        pthread_attr_destroy(&default_attr);
+        nz_pthread_attr_destroy(&default_attr);
 
     return 0;
 }
 
-int pthread_join(pthread_t thread, void **retval)
+int nz_pthread_join(nz_pthread_t thread, void **retval)
 {
     uint32_t code;
     int ret;
@@ -53,31 +53,36 @@ int pthread_join(pthread_t thread, void **retval)
     return ret;
 }
 
-void pthread_exit(void *retval)
+void nz_pthread_exit(void *retval)
 {
     extern void noza_thread_exit(uint32_t exit_code);
     uint32_t exit_code = (uint32_t)retval;
     noza_thread_exit(exit_code);
 }
 
-int pthread_detach(pthread_t thread)
+int nz_pthread_detach(nz_pthread_t thread)
 {
     return noza_thread_detach(thread.id);
 }
 
-int pthread_yield(void)
+int nz_pthread_yield(void)
 {
     return noza_thread_sleep_us(0, NULL);
 }
 
-pthread_t pthread_self(void)
+nz_pthread_t nz_pthread_self(void)
 {
-    pthread_t th = {0};
+    nz_pthread_t th = {0};
     noza_thread_self(&th.id);
     return th;
 }
 
-int pthread_equal(pthread_t t1, pthread_t t2)
+int nz_pthread_equal(nz_pthread_t t1, nz_pthread_t t2)
 {
     return t1.id == t2.id;
+}
+
+int nz_pthread_kill(nz_pthread_t thread, int sig)
+{
+    return noza_thread_kill(thread.id, sig);
 }

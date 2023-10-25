@@ -201,7 +201,7 @@ static void do_test_msg()
     TEST_ASSERT_EQUAL(SERVER_EXIT_CODE, code);
 }
 
-int test_msg(int argc, char **argv)
+static int test_msg(int argc, char **argv)
 {
     UNITY_BEGIN();
     RUN_TEST(do_test_msg);
@@ -216,7 +216,7 @@ int test_msg(int argc, char **argv)
 jmp_buf env;
 
 #define JUMP_VALUE  0x12345678
-void foo(void)
+static void foo(void)
 {
     longjmp(env, JUMP_VALUE);
 }
@@ -233,7 +233,7 @@ static void do_test_setjmp()
     TEST_MESSAGE("finish test\n");
 }
 
-int test_setjmp(int argc, char **argv)
+static int test_setjmp(int argc, char **argv)
 {
     UNITY_BEGIN();
     RUN_TEST(do_test_setjmp);
@@ -266,7 +266,7 @@ static int fault_task(void *param, uint32_t pid)
     TEST_ASSERT_EQUAL(0, 1); // never reash here
 }
 
-void do_test_hardfault()
+static void do_test_hardfault()
 {
     uint32_t th, fid;
     TEST_MESSAGE("test hardfault\n");
@@ -279,7 +279,7 @@ void do_test_hardfault()
     TEST_PRINTF("fault catch by main thread exit_code=%d", exit_code);
 }
 
-int test_hardfault(int argc, char **argv)
+static int test_hardfault(int argc, char **argv)
 {
     UNITY_BEGIN();
     RUN_TEST(do_test_hardfault);
@@ -312,7 +312,7 @@ static int dec_task(void *param, uint32_t pid)
 }
 
 #define NUM_PAIR    4
-void do_test_mutex()
+static void do_test_mutex()
 {
     mutex_t noza_mutex;
     TEST_MESSAGE("test mutex acquire/release function");
@@ -350,7 +350,7 @@ void do_test_mutex()
     mutex_release(&noza_mutex);
 }
 
-int test_mutex(int argc, char **argv)
+static int test_mutex(int argc, char **argv)
 {
     UNITY_BEGIN();
     RUN_TEST(do_test_mutex);
@@ -358,7 +358,7 @@ int test_mutex(int argc, char **argv)
     return 0;
 }
 
-int test_all(int argc, char **argv)
+static int test_all(int argc, char **argv)
 {
     UNITY_BEGIN();
     RUN_TEST(do_test_setjmp);

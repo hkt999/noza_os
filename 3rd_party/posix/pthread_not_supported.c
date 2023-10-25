@@ -1,6 +1,6 @@
 #include "pthread.h"
 
-int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void))
+int nz_pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void))
 {
     return -1;
 }
