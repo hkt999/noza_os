@@ -324,10 +324,10 @@ foreach(TARGET ${TARGET_LIST})
 	)
 endforeach()
 
-foreach(TARGET ${TARGET_LIST})
-	target_link_libraries(
-		${TARGET}
-		tflm_cmsis
-	)
-endforeach()
+#foreach(TARGET ${TARGET_LIST})
+#	target_link_libraries(
+#		${TARGET}
+#		tflm_cmsis
+#	)
+#endforeach()
 		

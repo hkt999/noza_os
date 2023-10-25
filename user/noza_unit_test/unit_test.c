@@ -1,4 +1,3 @@
-//#ifdef NOZAOS_UNITTEST
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
