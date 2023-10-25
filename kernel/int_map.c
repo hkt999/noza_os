@@ -129,6 +129,22 @@ int get_value(value_node* root, int key) {
     return -1; // Key not found
 }
 
+int min_key(value_node* root) {
+    value_node* current = root;
+    while (current->left != NULL) {
+        current = current->left;
+    }
+    return current->key;
+}
+
+int max_key(value_node* root) {
+    value_node* current = root;
+    while (current->right != NULL) {
+        current = current->right;
+    }
+    return current->key;
+}
+
 #if 0
 int main() {
     value_node* root = NULL;

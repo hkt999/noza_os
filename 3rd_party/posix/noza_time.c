@@ -1,7 +1,7 @@
 #include "noza_time.h"
 #include "nozaos.h"
 
-int noza_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
+int nz_nanosleep(const struct nz_timespec *rqtp, struct nz_timespec *rmtp)
 {
     int64_t duration = rqtp->tv_sec * 1000000 + rqtp->tv_nsec / 1000;
     int64_t remain = 0;
@@ -17,7 +17,7 @@ int noza_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
     return -1;
 }
 
-void noza_clock_gettime(uint32_t mode, struct timespec *ts)
+void nz_clock_gettime(uint32_t mode, struct nz_timespec *ts)
 {
     ts->tv_nsec = 0;
     ts->tv_nsec = 0;
