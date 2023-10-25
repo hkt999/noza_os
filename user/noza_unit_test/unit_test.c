@@ -436,7 +436,7 @@ int test_all(int argc, char **argv)
     RUN_TEST(do_test_thread);
     RUN_TEST(do_test_msg);
     RUN_TEST(do_test_mutex);
-    //RUN_TEST(do_test_hardfault);
+    RUN_TEST(do_test_hardfault);
     UNITY_END();
     return 0;
 }

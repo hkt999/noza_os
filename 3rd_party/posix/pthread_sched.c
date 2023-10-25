@@ -15,5 +15,5 @@ int sched_get_priority_min(int policy)
 
 int sched_yield(void)
 {
-    return noza_thread_yield();
+    return noza_thread_sleep_us(0, 0);
 }

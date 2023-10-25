@@ -20,7 +20,6 @@ int     noza_thread_create(uint32_t *pth, int (*entry)(void *param, uint32_t pid
 int     noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *param, uint32_t pid), void *param, uint32_t priority, void *stack_addr, uint32_t stack_size, uint32_t auto_free);
 int     noza_thread_kill(uint32_t thread_id, int sig);
 int     noza_thread_change_priority(uint32_t thread_id, uint32_t priority);
-int     noza_thread_yield();
 int     noza_thread_detach(uint32_t thread_id);
 int     noza_thread_join(uint32_t thread_id, uint32_t *code);
 void    noza_thread_terminate(int exit_code);
