@@ -315,7 +315,7 @@ int test_setjmp(int argc, char **argv)
 // test hard fault
 static int normal_task(void *param, uint32_t pid)
 {
-    int counter = 10;
+    int counter = 5;
     while (counter-->0) {
         TEST_PRINTF("normal task: %lu, count down: %ld", pid, counter);
         noza_thread_sleep_ms(500, NULL);
@@ -326,7 +326,7 @@ static int normal_task(void *param, uint32_t pid)
 
 static int fault_task(void *param, uint32_t pid)
 {
-    int counter = 10;
+    int counter = 3;
     while (counter-->0) {
         TEST_PRINTF("fault task: %lu, fault count down: %ld", pid, counter);
         noza_thread_sleep_ms(500, NULL);
