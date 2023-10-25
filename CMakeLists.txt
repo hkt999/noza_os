@@ -14,14 +14,14 @@ option(NOZAOS_LUA "build lua interpreter" OFF)
 
 # tensorflow lite micro
 option(NOZAOS_TFLM "build tensorflow lite micro" OFF)
-option(NOZAOS_TFLM_HELLO "build tensorflow lite micro hello world" OFF)
+option(NOZAOS_TFLM_HELLO_WORLD "build tensorflow lite micro hello world" OFF)
 option(NOZAOS_TFLM_MAGIC_WAND "build tensorflow lite micro magic wand" OFF)
 option(NOZAOS_TFLM_PERSON_DETECTION "build tensorflow lite micro person detection" OFF)
 option(NOZAOS_TFLM_MICRO_SPEECH "build tensorflow lite micro micro speech" OFF)
 
-if (NOZAOS_TFLM_HELLO AND NOT NOZAOS_TFLM)
-	message(STATUS "NOZAOS_TFLM_HELLO need NOZAOS_TFLM")
-	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_HELLO" force )
+if (NOZAOS_TFLM_HELLO_WORLD AND NOT NOZAOS_TFLM)
+	message(STATUS "NOZAOS_TFLM_HELLO_WORLD need NOZAOS_TFLM")
+	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_HELLO_WORLD" force )
 endif()
 
 if (NOZAOS_TFLM_MAGIC_WAND AND NOT NOZAOS_TFLM)
@@ -38,6 +38,25 @@ if (NOZAOS_TFLM_MICRO_SPEECH AND NOT NOZAOS_TFLM)
 	message(STATUS "NOZAOS_TFLM_MICRO_SPEECH need NOZAOS_TFLM")
 	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_MICRO_SPEECH" force )
 endif()
+
+set(TFLM_OPTIONS 
+    ${NOZAOS_TFLM_HELLO_WORLD}
+    ${NOZAOS_TFLM_MAGIC_WAND}
+    ${NOZAOS_TFLM_PERSON_DETECTION}
+    ${NOZAOS_TFLM_MICRO_SPEECH}
+)
+
+set(TFLM_DEMO_COUNT 0)
+foreach(OPT IN LISTS TFLM_OPTIONS)
+    if(OPT)
+        math(EXPR TFLM_DEMO_COUNT "${TFLM_DEMO_COUNT} + 1")
+    endif()
+endforeach()
+
+if(TFLM_DEMO_COUNT GREATER 1)
+    message(FATAL_ERROR "*** Only one tensorflow lite micro demo can be built ***")
+endif()
+
 
 # not showing option in UI
 mark_as_advanced(
@@ -81,7 +100,6 @@ add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 
 if (NOZAOS_UNITTEST)
 	set(NOZAOS_UNITY_LIB "unity")
-	add_definitions(-DNOZAOS_UNITTEST)
 	add_subdirectory(3rd_party/unity_port)
 endif()
 
@@ -92,33 +110,28 @@ endif()
 
 if (NOZAOS_LUA)
 	set(NOZAOS_LUA_LIB "lua")
-	add_definitions(-DNOZAOS_LUA)
 	add_subdirectory(3rd_party/lua_port)
 endif()
 
 if (NOZAOS_TFLM)
-	add_definitions(-DNOZAOS_TFLM)
+	set(NOZAOS_TFLM_LIB "tflm_cmsis")
 	add_subdirectory(3rd_party/tflm-cmsis)
 endif()
 
-if (NOZAOS_TFLM_HELLO)
+if (NOZAOS_TFLM_HELLO_WORLD)
 	set(NOZAOS_TFLM_HELLO_LIB "hello_world")
-	add_definitions(-DNOZAOS_TFLM_HELLO)
 endif()
 
 if (NOZAOS_TFLM_MAGIC_WAND)
 	set(NOZAOS_TFLM_MAGIC_WAND_LIB "magic_wand")
-	add_definitions(-DNOZAOS_TFLM_MAGIC_WAND)
 endif()
 
 if (NOZAOS_TFLM_MICRO_SPEECH)
 	set(NOZAOS_TFLM_MICRO_SPEECH_LIB "micro_speech")
-	add_definitions(-DNOZAOS_TFLM_MICRO_SPEECH)
 endif()
 
 if (NOZAOS_TFLM_PERSON_DETECTION)
 	set(NOZAOS_TFLM_MAGIC_WAND_LIB "person_detection")
-	add_definitions(-DNOZAOS_TFLM_PERSON_DETECTION)
 endif()
 
 # add sub module built
@@ -154,13 +167,34 @@ set(
 	user/console/cmd_line.c
 	user/console/noza_console.c
 	user/console/noza_term.c
-
-	# unit test
-	user/noza_unit_test/unit_test.c
 )
+
+if (NOZAOS_UNITTEST) 
+	list(APPEND NOZA_SOURCES user/noza_unit_test/unit_test.c)
+endif()
 
 if (NOZAOS_LUA)
 	list(APPEND NOZA_SOURCES 3rd_party/lua_port/lua_noza.c)
+endif()
+
+if (NOZAOS_TFLM)
+	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/tflm_port.c)
+endif()
+
+if (NOZAOS_TFLM_HELLO_WORLD)
+	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_hello_world.c)
+endif()
+
+if (NOZAOS_TFLM_MAGIC_WAND)
+	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_magic_wand.c)
+endif()
+
+if (NOZAOS_TFLM_MICRO_SPEECH)
+	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_micro_speech.c)
+endif()
+
+if (NOZAOS_TFLM_PERSON_DETECTION)
+	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_person_detection.c)
 endif()
 
 add_executable(
@@ -168,32 +202,69 @@ add_executable(
 	${NOZA_SOURCES}
 )
 
-target_include_directories(
-	noza
-	PRIVATE
+set(
+	NOZA_INCLUDES
 	${CMAKE_CURRENT_LIST_DIR}
-	${CMAKE_CURRENT_LIST_DIR}/service/vfs
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
-	${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port
+)
 
-	${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua
+if (NOZAOS_LUA)
+	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua)
+endif()
+
+if (NOZAOS_UNITTEST)
+	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port)
+endif()
+
+target_include_directories(
+	noza
+	PRIVATE
+	${NOZA_INCLUDES}
 	${CMAKE_CURRENT_LIST_DIR}/user/console
 )
 
 # Add the standard library to the build
-target_link_libraries(
-	noza
+
+set(
+	NOZA_LIBS
 	pico_stdlib
 	pico_multicore
 	${NOZAOS_POSIX_LIB}
 	${NOZAOS_UNITY_LIB}
-	${NOZAOS_LUA_LIB}
-	${NOZAOS_TFLM_HELLO_LIB}
-	${NOZAOS_TFLM_MAGIC_WAND_LIB}
-	${NOZAOS_TFLM_MICRO_SPEECH_LIB}
-	${NOZAOS_TFLM_PERSON_DETECTION_LIB}
+)
+
+# Libraries
+if (NOZAOS_LUA)
+	list(APPEND NOZA_LIBS ${NOZAOS_LUA_LIB})
+endif()
+
+if (NOZAOS_TFLM)
+	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_LIB})
+endif()
+
+if (NOZAOS_TFLM_HELLO)
+	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_HELLO_LIB})
+endif()
+
+if (NOZAOS_TFLM_MAGIC_WAND)
+	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_MAGIC_WAND_LIB})
+endif()
+
+if (NOZAOS_TFLM_MICRO_SPEECH)
+	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_MICRO_SPEECH_LIB})
+endif()
+
+if (NOZAOS_TFLM_PERSON_DETECTION)
+	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_PERSON_DETECTION_LIB})
+endif()
+
+target_link_libraries(
+	noza
+	pico_stdlib
+	pico_multicore
+	${NOZA_LIBS}
 )
 
 pico_add_extra_outputs(noza)

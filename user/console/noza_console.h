@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 
 typedef int (*main_func_t)(int argc, char **argv);
 typedef struct {
