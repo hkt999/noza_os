@@ -663,7 +663,7 @@ static void syscall_thread_kill(thread_t *running)
 
     // sanity check
     if (picked >= NOZA_OS_TASK_LIMIT) {
-        noza_os_set_return_value1(running, ESRCH); // error
+        noza_os_set_return_value1(running, ESRCH);
         return;
     }
     if (picked == thread_get_pid(running)) {
@@ -686,7 +686,7 @@ static void syscall_thread_kill(thread_t *running)
         }
         th->expired_time = 0;
     } else if (th->info.state == THREAD_WAITING_MSG) {
-        kernel_log("kernel: kill (%s)\n", state_to_str(th->info.state));
+        // TODO: handle waiting message list
     } else if (th->info.state == THREAD_READY) {
         // TODO: handle ready list (user interrupt)
     } else {

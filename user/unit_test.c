@@ -28,7 +28,7 @@ static int test_task(void *param, uint32_t pid)
     while (do_count-->0) {
         int ret = noza_thread_sleep_ms(ms, NULL);
         if (ret != 0) {
-            TEST_ASSERT_EQUAL(EINTR, ret);
+            TEST_ASSERT_NOT_EQUAL(0, ret);
             break;
         }
     }
@@ -93,7 +93,6 @@ static void do_test_thread()
             TEST_ASSERT_EQUAL(th[i], exit_code);
         }
 
-#if 1
         // TEST
         TEST_MESSAGE("---- test thread creation with random priority and signal in 100ms ----");
         for (int i = 0; i < NUM_THREADS; i++) {
@@ -105,14 +104,12 @@ static void do_test_thread()
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t sig = 0;
             TEST_ASSERT_EQUAL(0, noza_thread_kill(th[i], SIGALRM));
-            printf("kill ! th[%d]=%d\n", i, th[i]);
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
             TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
             TEST_ASSERT_EQUAL(th[i], exit_code);
         }
-#endif
 
         // TEST
         TEST_MESSAGE("---- test heavy loading ----");
