@@ -124,8 +124,8 @@ endif()
 # add sub module built
 
 # the noza kernel and user space application
-add_executable(
-	noza
+set(
+	NOZA_SOURCES
 	kernel/platform/rp2040_context_switch.S
 	kernel/platform/rp2040_platform.c
 	kernel/platform/rp2040_build_stack.c
@@ -159,6 +159,15 @@ add_executable(
 	user/noza_unit_test/unit_test.c
 )
 
+if (NOZAOS_LUA)
+	list(APPEND NOZA_SOURCES 3rd_party/lua_port/lua_noza.c)
+endif()
+
+add_executable(
+	noza
+	${NOZA_SOURCES}
+)
+
 target_include_directories(
 	noza
 	PRIVATE
@@ -168,6 +177,9 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port
+
+	${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua
+	${CMAKE_CURRENT_LIST_DIR}/user/console
 )
 
 # Add the standard library to the build

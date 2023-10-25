@@ -154,13 +154,6 @@ static void do_test_thread()
     }
 }
 
-int test_thread(int argc, char **argv)
-{
-    UNITY_BEGIN();
-    do_test_thread();
-    UNITY_END();
-}
-
 // test message passing
 #define SERVER_EXIT_CODE    0x0123beef
 #define CLIENT_EXIT_CODE    0xdeadbeef
@@ -169,7 +162,6 @@ static int string_server_thread(void *param, uint32_t pid)
     for (;;) {
         noza_msg_t msg;
         TEST_ASSERT_EQUAL(0, noza_recv(&msg));
-        TEST_PRINTF("server recv msg: [%s]", (char *)msg.ptr);
         noza_reply(&msg);
         if (strcmp((char *)msg.ptr, "kill") == 0)
             break;
@@ -192,7 +184,7 @@ static int string_client_thread(void *param, uint32_t mypid)
         TEST_ASSERT_EQUAL(0, noza_call(&msg));
         TEST_ASSERT_EQUAL(0, noza_thread_sleep_ms(20, NULL));
     }
-    strncpy(s, "kill", sizeof(s));
+    strncpy(s, "kill", sizeof(s)); // terminate server
     msg.to_pid = pid;
     msg.ptr = s;
     msg.size = strlen(s)+1;
@@ -208,68 +200,15 @@ typedef struct echo_msg_s {
     uint32_t value;
 } echo_msg_t;
 
-static int echo_server_thread(void *param, uint32_t mypid)
-{
-    noza_msg_t msg;
-
-    for (;;) {
-        noza_msg_t msg;
-        int ret = noza_recv(&msg);
-        echo_msg_t *echo_msg = (echo_msg_t *)msg.ptr;
-        switch (echo_msg->cmd) {
-            case ECHO_INC:
-                echo_msg->value++;
-                break;
-        }
-        noza_reply(&msg);
-        if (echo_msg->cmd == ECHO_END)
-            break;
-    }
-    return SERVER_EXIT_CODE;
-}
-
-static int echo_client_thread(void *param, uint32_t mypid)
-{
-    noza_msg_t msg;
-    echo_msg_t echo_msg;
-    uint32_t pid = (uint32_t) param;
-    uint32_t counter = 200;
-    msg.to_pid = pid;
-    msg.ptr = &echo_msg;
-    msg.size = sizeof(echo_msg);
-
-    while (counter-->0) {
-        int test_value = rand();
-        echo_msg.cmd = ECHO_INC;
-        echo_msg.value = test_value;
-        printf("noza call\n");
-        TEST_ASSERT_EQUAL(0, noza_call(&msg));
-        printf("after noza call\n");
-        TEST_ASSERT_EQUAL(test_value+1, echo_msg.value);
-    }
-    echo_msg.cmd = ECHO_END;
-    TEST_ASSERT_EQUAL(0, noza_call(&msg));
-    return CLIENT_EXIT_CODE;
-}
-
 static void do_test_msg()
 {
     uint32_t code, server_pid, client_pid;
-    TEST_ASSERT_EQUAL(0, noza_thread_create(&server_pid, string_server_thread, NULL, 0, 2048));
-    TEST_ASSERT_EQUAL(0, noza_thread_create(&client_pid, string_client_thread, (void *)server_pid, 0, 2048));
+    TEST_ASSERT_EQUAL(0, noza_thread_create(&server_pid, string_server_thread, NULL, 0, 1024));
+    TEST_ASSERT_EQUAL(0, noza_thread_create(&client_pid, string_client_thread, (void *)server_pid, 0, 1024));
     noza_thread_join(client_pid, &code);
     TEST_ASSERT_EQUAL(CLIENT_EXIT_CODE, code);
     noza_thread_join(server_pid, &code);
     TEST_ASSERT_EQUAL(SERVER_EXIT_CODE, code);
-
-#if 0
-    TEST_ASSERT_EQUAL(0, noza_thread_create(&server_pid, echo_server_thread, NULL, 0, 1024));
-    TEST_ASSERT_EQUAL(0, noza_thread_create(&client_pid, echo_client_thread, (void *)server_pid, 0, 1024));
-    noza_thread_join(client_pid, &code);
-    TEST_ASSERT_EQUAL(CLIENT_EXIT_CODE, code);
-    noza_thread_join(server_pid, &code);
-    TEST_ASSERT_EQUAL(SERVER_EXIT_CODE, code);
-#endif
 }
 
 int test_msg(int argc, char **argv)
@@ -331,7 +270,7 @@ static int fault_task(void *param, uint32_t pid)
         TEST_PRINTF("fault task: %lu, fault count down: %ld", pid, counter);
         noza_thread_sleep_ms(500, NULL);
     }
-    TEST_PRINTF("raise fault (write memory address #00000000)!!");
+    TEST_PRINTF("RAISE fault (write memory address #00000000)!! pid=%d", pid);
     int *p = 0;
     *p = 0;
     TEST_ASSERT_EQUAL(0, 1); // never reash here
@@ -440,4 +379,9 @@ int test_all(int argc, char **argv)
     UNITY_END();
     return 0;
 }
-//#endif // end of unittest
+
+#include "user/console/noza_console.h"
+void __attribute__((constructor(1000))) register_unittest()
+{
+    console_add_command("noza_unittest", test_all, "nozaos and lib, unit-test suite");
+}

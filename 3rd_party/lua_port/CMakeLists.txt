@@ -62,13 +62,11 @@ add_library(
     ${LUA_PATH}/lutf8lib.c
     ${LUA_PATH}/lvm.c
     ${LUA_PATH}/lzio.c
-    lua_noza.c # main program
 )
 
 target_include_directories(
     lua
     PRIVATE
-    ${NOZAOS_PATH}/user/console
 	${CMAKE_CURRENT_LIST_DIR}
     ${LUA_PATH}
 )
