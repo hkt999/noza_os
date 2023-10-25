@@ -14,13 +14,11 @@ int mutex_acquire(mutex_t *mutex)
 		mutex->mid = msg.mid;
 		mutex->token = msg.token;
 	}
-	printf("acquire mutex->mid=%d, mutex->token=%d, code=%d\n", mutex->mid, mutex->token, msg.code);
 	return msg.code;
 }
 
 int mutex_release(mutex_t *mutex)
 {
-	printf("release mutex->mid=%d, mutex->token=%d\n", mutex->mid, mutex->token);
 	mutex_msg_t msg = {.cmd = MUTEX_RELEASE, .mid = mutex->mid, .token = mutex->token, .code = 0};
 	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
 	noza_call(&noza_msg);
@@ -31,9 +29,7 @@ int mutex_lock(mutex_t *mutex)
 {
 	mutex_msg_t msg = {.cmd = MUTEX_LOCK, .mid = mutex->mid, .token = mutex->token, .code = 0};
 	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
-	printf("enter mutex_lock\n");
 	noza_call(&noza_msg);
-	printf("leave mutex_lock\n");
 	return msg.code;
 }
 

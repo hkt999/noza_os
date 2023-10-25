@@ -154,7 +154,7 @@ int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
 		"mov %0, r0\n"  // return code
 		"mov %1, r1\n"  // high 32bits
 		"mov %2, r2\n"  // low 32bits
-		: "=r" (r0), "=r" (r1), "=r" (r2)  // 輸出操作數
+		: "=r" (r0), "=r" (r1), "=r" (r2)
 		: 
 		: "memory"
 	);
