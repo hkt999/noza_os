@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "noza_config.h"
 #include "syscall.h"
@@ -32,14 +33,36 @@
 
 #define FLAG_DETACH             0x01
 
-#define kernel_panic(fmt, ...)  printf(fmt, ##__VA_ARGS__); HALT()
-#define kernel_log(fmt, ...)    printf(fmt, ##__VA_ARGS__)
-
 inline static void HALT()
 {
     printf("HALT\n");
     for (;;) { }
 }
+
+static char buffer[128];
+void kernel_log(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    printf("log: %s\n", buffer);
+}
+
+void kernel_panic(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    printf("kernel panic: %s\n", buffer);
+    HALT();
+}
+
 
 const char *state_to_str(uint32_t id) 
 {
@@ -1045,10 +1068,10 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
         trap->r3 = r3;
         trap->state = SYSCALL_PENDING;
     } else {
-        kernel_panic("unexpected: running thread == NULL when trap happen !\n");
+        kernel_log("unexpected: running thread == NULL when trap happen !\n");
     }
 
-    #if 0 // TODO: raise the PendSV interrupt to reschedule
+    #if 0 // TODO: raise the PendSV interrupt
     if (r0==255) {
         scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
     }
