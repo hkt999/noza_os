@@ -8,6 +8,7 @@ option(NOZAOS_UNITTEST "build unit test" ON)
 
 # posix system
 option(NOZAOS_POSIX	"build posix" ON)
+option(NOZAOS_POSIX_UNITTEST "build posix unit test" ON)
 
 # lua interpreter
 option(NOZAOS_LUA "build lua interpreter" OFF)
@@ -98,7 +99,7 @@ pico_sdk_init()
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 # define sub module built and test
 
-if (NOZAOS_UNITTEST)
+if (NOZAOS_UNITTEST OR NOZAOS_POSIX_UNITTEST)
 	set(NOZAOS_UNITY_LIB "unity")
 	add_subdirectory(3rd_party/unity_port)
 endif()
@@ -143,6 +144,7 @@ set(
 	kernel/platform/rp2040_platform.c
 	kernel/platform/rp2040_build_stack.c
 	kernel/noza_os.c
+	# kernel/int_map.c
 
 	# lib and system call for user space application
 	user/libc/src/app_run.S
@@ -170,7 +172,11 @@ set(
 )
 
 if (NOZAOS_UNITTEST) 
-	list(APPEND NOZA_SOURCES user/noza_unit_test/unit_test.c)
+	list(APPEND NOZA_SOURCES user/noza_unit_test/noza_unit_test.c)
+endif()
+
+if (NOZAOS_POSIX_UNITTEST)
+	list(APPEND NOZA_SOURCES user/posix_unit_test/posix_unit_test.c)
 endif()
 
 if (NOZAOS_LUA)
@@ -214,7 +220,7 @@ if (NOZAOS_LUA)
 	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua)
 endif()
 
-if (NOZAOS_UNITTEST)
+if (NOZAOS_UNITTEST OR NOZAOS_POSIX_UNITTEST)
 	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port)
 endif()
 

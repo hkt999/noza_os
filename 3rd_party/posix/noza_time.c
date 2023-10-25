@@ -12,6 +12,7 @@ int noza_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
     }
     if (ret == 0)
         return 0;
+
     // TODO: setup error here  (EINTR, EINVAL)
     return -1;
 }

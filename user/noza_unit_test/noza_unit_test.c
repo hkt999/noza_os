@@ -11,15 +11,6 @@
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
 
-
-void setUp()
-{
-}
-
-void tearDown()
-{
-}
-
 static int test_task(void *param, uint32_t pid)
 {
     int do_count = rand() % 5 + 2;
