@@ -5,8 +5,6 @@
 #include "cmd_line.h"
 #include "noza_term.h"
 
-#include "pico/stdlib.h"
-
 extern void noza_thread_sleep(int ms);
 extern void noza_char_init(char_driver_t *driver);
 extern void noza_char_clear(char_driver_t *driver);
@@ -28,13 +26,13 @@ static void noza_term_push_line(char *cmd_str, void *user_data)
 	cmd_line_t *cmd = &term->cmd;
 	strncpy(term->line, cmd_str, term->max_len); // copy buffer to team->line
 	term->line[term->max_len-1] = 0;
-	term->line_end = true;
+	term->line_end = 1;
 }
 
 char *term_readline(noza_term_t *term, char *line, int max_len)
 {
 	printf("%s", term->prompt);
-	term->line_end = false;
+	term->line_end = 0;
 	term->line = line;
 	term->max_len = max_len;
 	while (!term->line_end) {

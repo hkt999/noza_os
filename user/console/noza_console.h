@@ -9,3 +9,4 @@ typedef struct {
 
 int console_start(void *param, uint32_t pid);
 int console_stop();
+void console_add_command(const char *name, int (*main)(int argc, char **argv), const char *desc);

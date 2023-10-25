@@ -1,3 +1,4 @@
+// TODO: use inhouse malloc/free instead of the system one
 #if 0
 #include <sys/types.h>
 #include <errno.h>
@@ -71,7 +72,7 @@ static int do_memory_server(void *param, uint32_t pid)
 }
 
 static uint8_t memory_server_stack[1024];
-void __attribute__((constructor(110))) memory_servier_init(void *param, uint32_t pid)
+void __attribute__((constructor(110))) memory_server_init(void *param, uint32_t pid)
 {
     // TODO: move the external declaraction into a header file
     extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);

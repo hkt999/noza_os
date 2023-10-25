@@ -5,7 +5,31 @@
 #include "cmd_line.h"
 #include "noza_console.h"
 #include "nozaos.h"
-#include "pico/stdlib.h"
+
+#define MAX_BUILTIN_CMDS  16
+typedef struct {
+    int count;
+    builtin_cmd_t builtin_cmds[MAX_BUILTIN_CMDS];
+} builtin_table_t;
+
+static builtin_table_t cmd_table;
+void console_add_command(const char *name, int (*main)(int argc, char **argv), const char *desc)
+{
+	builtin_table_t *table = &cmd_table;
+	static int inited = 0;
+	if (!inited) {
+		memset(table, 0, sizeof(cmd_table));
+		inited = 1;
+	}
+
+    if (table->count >= MAX_BUILTIN_CMDS) {
+        return; // fail
+    }
+    table->builtin_cmds[table->count].name = name;
+    table->builtin_cmds[table->count].main_func = main;
+    table->builtin_cmds[table->count].help_msg = desc;
+    table->count++;
+}
 
 extern int getchar_timeout_us(uint32_t timeout_us);
 extern int putchar_raw(int c);
@@ -132,8 +156,8 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 
 static noza_console_t noza_console;
 int console_start(void *param, uint32_t pid)
-{
-	noza_console_init(&noza_console, "noza> ", param);
+{ 
+	noza_console_init(&noza_console, "noza> ", &cmd_table.builtin_cmds[0]);
 	for (;;) {
 		int ch = noza_console.cmd.driver.getc();
 		if (ch < 0)
