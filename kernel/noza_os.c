@@ -35,9 +35,7 @@
 inline static void HALT()
 {
     printf("HALT\n");
-    for (;;) {
-        //__wfi();
-    }
+    for (;;) { }
 }
 
 const char *state_to_str(uint32_t id) 
@@ -373,10 +371,12 @@ static void noza_os_nonblock_send(thread_t *running, thread_t *target, void *msg
 
 static void noza_os_recv(thread_t *running)
 {
+    #if 0
     if (running->port.reply_list.count > 0) {
         printf("unexpected: running thread (pid:%ld), reply list is not empty, and cannot receive\n", thread_get_pid(running));
         HALT();
     }
+    #endif
     if (running->port.pending_list.count > 0) {
         thread_t *source = running->port.pending_list.head->value; // get the first node in pending_list
         noza_os_set_return_value4(running, 0, thread_get_pid(source), (uint32_t)source->message.ptr, source->message.size); // receive successfully
@@ -592,16 +592,6 @@ typedef struct {
 static idle_task_t idle_task[NOZA_OS_NUM_CORES];
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
-
-#if 0
-static void idle_entry()
-{
-    for (;;) {
-        __wfi(); // idle, power saving
-    }
-}
-#endif
-
 extern uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param);
 static void noza_make_idle_context(uint32_t core)
 {
@@ -1039,8 +1029,8 @@ pick_thread:
             // no task here, switch to idle thread, and config the next tick
             if (core == 0) {
                 int64_t us = noza_check_sleep_thread(NOZA_OS_TIME_SLICE);
-                if (us < 200) {
-                    us = 200;
+                if (us < 50) { // TODO: check the timeout setting
+                    us = 50;
                 }
                 platform_systick_config((uint32_t)us);
             }

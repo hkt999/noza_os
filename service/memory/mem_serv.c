@@ -45,7 +45,6 @@ static int do_memory_server(void *param, uint32_t pid)
 			switch (mem_msg->cmd) {
 				case MEMORY_MALLOC:
                     mem_msg->ptr = malloc(mem_msg->size);
-                    // printf("MEMORY_MALLOC size=%d, ptr=%p\n", mem_msg->size, mem_msg->ptr);
                     if (mem_msg->ptr == NULL) {
                         mem_msg->code = MEMORY_INVALID_OP;
                     } else {
@@ -54,14 +53,12 @@ static int do_memory_server(void *param, uint32_t pid)
 					break;
 
 				case MEMORY_FREE:
-                    // printf("MEMORY_FREE ptr=%p\n", mem_msg->ptr);
                     free(mem_msg->ptr);
                     mem_msg->ptr = NULL;
                     mem_msg->code = MEMORY_SUCCESS;
                     break;
 
 				default:
-                    printf("MEMORY_INVALID_OP %d\n", mem_msg->cmd);
                     mem_msg->ptr = NULL;
                     mem_msg->size = 0;
 					mem_msg->code = MEMORY_INVALID_OP;

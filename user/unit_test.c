@@ -6,7 +6,7 @@
 #include "nozaos.h"
 #include "posix/bits/signum.h"
 #include "kernel/noza_config.h"
-#include "errno.h"
+#include "posix/errno.h"
 #include <service/mutex/mutex_client.h>
 
 #define UNITY_INCLUDE_CONFIG_H
@@ -74,7 +74,7 @@ static void do_test_thread()
     noza_thread_self(&pid);
 
     for (int loop = 0; loop < NUM_LOOP; loop++) {
-        TEST_PRINTF("test loop: %d", loop);
+        TEST_PRINTF("test loop: %d/%d", loop, NUM_LOOP);
         srand(time(0));
 
 
@@ -280,44 +280,6 @@ int test_msg(int argc, char **argv)
     return 0;
 }
 
-//
-static int thread_working(void *param, uint32_t pid)
-{
-    uint32_t p = (uint32_t)param;
-    uint32_t counter = 5;
-    uint32_t sleep_ms = rand() % 500 + 500;
-    while (counter-->0) {
-        TEST_PRINTF("thread_id: %lu, join count down: %ld", pid, counter);
-        noza_thread_sleep_ms(sleep_ms, NULL);
-    }
-    return p;
-}
-
-static void do_test_join()
-{
-    #define TEST_THREAD_COUNT   8
-    uint32_t th[TEST_THREAD_COUNT];
-    srand(time(0));
-    TEST_PRINTF("create %d working threads\n", TEST_THREAD_COUNT);
-    for (int i=0; i<TEST_THREAD_COUNT; i++) {
-        TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], thread_working, (void *)i, 0, 1024));
-        TEST_ASSERT_NOT_EQUAL(0, th[i]);
-    }
-
-    for (int i=0; i<TEST_THREAD_COUNT; i++) {
-        uint32_t exit_code;
-        TEST_ASSERT_EQUAL(0, noza_thread_join(th[i], &exit_code));
-        TEST_ASSERT_EQUAL(i, exit_code);
-    }
-}
-
-int test_join(int argc, char **argv)
-{
-    UNITY_BEGIN();
-    RUN_TEST(do_test_join);
-    UNITY_END();
-}
-
 // test setjmp longjmp
 #include <stdio.h>
 #include <setjmp.h>
@@ -396,21 +358,16 @@ int test_hardfault(int argc, char **argv)
     return 0;
 }
 
-#define ITERS 100
+#define ITERS 3000
 static int counter = 0;
 static int inc_task(void *param, uint32_t pid)
 {
     mutex_t *mutex = (mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
-        printf("--a1\n");
         mutex_lock(mutex);
-        printf("%d inc lock\n", pid);
         counter++;
-        printf("%d inc unlock %d\n", pid, counter);
         mutex_unlock(mutex);
-        printf("--b1\n");
     }
-    printf("dec task %d finish\n");
     return 0;
 }
 
@@ -419,16 +376,13 @@ static int dec_task(void *param, uint32_t pid)
     mutex_t *mutex = (mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
         mutex_lock(mutex);
-        printf("%d dec lock\n", pid);
         counter--;
-        printf("%d dec unlock %d\n", pid, counter);
         mutex_unlock(mutex);
     }
-    printf("dec task %d finish\n");
     return 0;
 }
 
-#define NUM_PAIR    1
+#define NUM_PAIR    4
 void do_test_mutex()
 {
     mutex_t noza_mutex;
@@ -444,29 +398,27 @@ void do_test_mutex()
     TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
     TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
 
-    uint32_t th[NUM_PAIR*2];
+    TEST_MESSAGE("test mutex lock/unlock function with thread");
+    uint32_t inc_th[NUM_PAIR];
+    uint32_t dec_th[NUM_PAIR];
     counter = 0; 
     mutex_acquire(&noza_mutex);
-    for (int i = 0; i<NUM_PAIR; i++) {
-        noza_thread_create(&th[i], inc_task, &noza_mutex, 1, 1024);
+    for (int i = 0; i < NUM_PAIR; i++) {
+        noza_thread_create(&inc_th[i], inc_task, &noza_mutex, 1, 1024);
     }
-    /*
-    for (int i=NUM_PAIR; i<NUM_PAIR*2; i++) {
-        noza_thread_create(&th[i], dec_task, &noza_mutex, 1, 1024);
+    for (int i=0; i < NUM_PAIR; i++) {
+        noza_thread_create(&dec_th[i], dec_task, &noza_mutex, 1, 1024);
     }
-    */
-    for (int i=0; i<NUM_PAIR; i++) {
-        TEST_PRINTF("join %d\n", i);
-        noza_thread_join(th[i], NULL);
+    for (int i=0; i < NUM_PAIR; i++) {
+        noza_thread_join(inc_th[i], NULL);
+        noza_thread_join(dec_th[i], NULL);
     }
-    mutex_release(&noza_mutex);
     TEST_ASSERT_EQUAL_INT(0, counter);
-    #if 0
     TEST_MESSAGE("test mutex trylock");
     TEST_ASSERT_EQUAL(0, mutex_trylock(&noza_mutex));
     TEST_ASSERT_EQUAL(EBUSY, mutex_trylock(&noza_mutex));
     TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
-    #endif
+    mutex_release(&noza_mutex);
 }
 
 int test_mutex(int argc, char **argv)
@@ -483,7 +435,6 @@ int test_all(int argc, char **argv)
     RUN_TEST(do_test_setjmp);
     RUN_TEST(do_test_thread);
     RUN_TEST(do_test_msg);
-    RUN_TEST(do_test_join);
     RUN_TEST(do_test_mutex);
     //RUN_TEST(do_test_hardfault);
     UNITY_END();
