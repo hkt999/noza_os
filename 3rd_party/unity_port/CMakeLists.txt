@@ -29,6 +29,7 @@ set(NOZAOS_PATH ${CMAKE_CURRENT_LIST_DIR}/../..)
 add_library(
     unity
     unity.c
+	unity_startup.c
 )
 
 add_definitions(-DUNITY_INCLUDE_CONFIG_H)
