@@ -20,6 +20,11 @@ option(NOZAOS_TFLM_MAGIC_WAND "build tensorflow lite micro magic wand" OFF)
 option(NOZAOS_TFLM_PERSON_DETECTION "build tensorflow lite micro person detection" OFF)
 option(NOZAOS_TFLM_MICRO_SPEECH "build tensorflow lite micro micro speech" OFF)
 
+if (NOZAOS_POSIX_UNITTEST)
+	message(STATUS "NOZAOS_POSIX_UNITTEST need NOZAOS_POSIX")
+	set(NOZAOS_POSIX ON cache bool "Automatically set because of NOZAOS_POSIX_UNITTEST" force )
+endif()
+
 if (NOZAOS_TFLM_HELLO_WORLD AND NOT NOZAOS_TFLM)
 	message(STATUS "NOZAOS_TFLM_HELLO_WORLD need NOZAOS_TFLM")
 	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_HELLO_WORLD" force )

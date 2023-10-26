@@ -6,7 +6,7 @@ int nz_pthread_attr_init(nz_pthread_attr_t *attr)
 {
     memset(attr, 0, sizeof(nz_pthread_attr_t));
     attr->detachstate = NZ_PTHREAD_CREATE_JOINABLE;
-    attr->stacksize = 0;
+    attr->stacksize = 2000; // TODO: reconsider this
     attr->guardsize = 0;
     attr->schedparam.sched_priority = 0;
     attr->policy = NZ_SCHED_RR;

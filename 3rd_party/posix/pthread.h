@@ -19,12 +19,6 @@
 #define NZ_PTHREAD_SCOPE_SYSTEM    0
 #define NZ_PTHREAD_SCOPE_PROCESS   1
 
-typedef mutex_t nz_pthread_mutex_t;
-
-struct nz_sched_param {
-    int sched_priority;
-};
-
 #define NZ_PTHREAD_PROCESS_PRIVATE 	0
 #define NZ_PTHREAD_PROCESS_SHARED	1
 
@@ -33,6 +27,12 @@ struct nz_sched_param {
 #define NZ_PTHREAD_MUTEX_ERRORCHECK    2
 #define NZ_PTHREAD_MUTEX_RECURSIVE     3
 #define NZ_NUM_MUTEX_TYPE              4
+
+typedef mutex_t nz_pthread_mutex_t;
+
+struct nz_sched_param {
+    int sched_priority;
+};
 
 typedef struct {
     uint8_t shared;

@@ -733,7 +733,10 @@ static void syscall_thread_join(thread_t *running)
     }
 
     // TODO: reorg the comparision
-    if (th->info.state == THREAD_READY || th->info.state == THREAD_SLEEP || th->info.state == THREAD_WAITING_MSG || th->info.state == THREAD_WAITING_READ || th->info.state == THREAD_WAITING_REPLY || th->info.state == THREAD_RUNNING) {
+    if (th->info.state == 
+            THREAD_READY || th->info.state == THREAD_SLEEP || th->info.state == THREAD_WAITING_MSG ||
+            th->info.state == THREAD_WAITING_READ || th->info.state == THREAD_WAITING_REPLY || th->info.state == THREAD_RUNNING ||
+            th->info.state == THREAD_PENDING_JOIN) {
         if (th->join_th == NULL) {
             th->join_th = running;
             running->info.state = THREAD_PENDING_JOIN;

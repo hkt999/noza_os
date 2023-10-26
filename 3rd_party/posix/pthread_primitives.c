@@ -21,19 +21,19 @@ int nz_pthread_create(nz_pthread_t *thread, const nz_pthread_attr_t *attr, void 
     thread->start_routine = start_routine;
     thread->arg = arg;
 
-    uint32_t pid, priority = NOZA_OS_PRIORITY_LIMIT - 1 - wa->schedparam.sched_priority;
+    uint32_t priority = NOZA_OS_PRIORITY_LIMIT - 1 - wa->schedparam.sched_priority;
     uint32_t ret_code;
 
     if (wa->stackaddr != NULL) {
-        ret_code = noza_thread_create_with_stack(&pid, noza_thread_stub, thread, priority, wa->stackaddr, wa->stacksize, NO_AUTO_FREE_STACK);
+        ret_code = noza_thread_create_with_stack(&thread->id, noza_thread_stub, thread, priority, wa->stackaddr, wa->stacksize, NO_AUTO_FREE_STACK);
     } else {
-        ret_code = noza_thread_create(&pid, noza_thread_stub, thread, priority, wa->stacksize);
+        ret_code = noza_thread_create(&thread->id, noza_thread_stub, thread, priority, wa->stacksize);
     }
     if (ret_code != 0) {
         return ret_code;
     }
     if (wa->detachstate == NZ_PTHREAD_CREATE_DETACHED) {
-        noza_thread_detach(pid);
+        noza_thread_detach(thread->id);
     }
     if (attr == NULL)
         nz_pthread_attr_destroy(&default_attr);
@@ -46,7 +46,7 @@ int nz_pthread_join(nz_pthread_t thread, void **retval)
     uint32_t code;
     int ret;
 
-    ret = noza_thread_join(thread.id, &code); // TODO: handle the return code
+    ret = noza_thread_join(thread.id, &code);
     if (retval != 0) {
         *retval = (void *)code;
     }
