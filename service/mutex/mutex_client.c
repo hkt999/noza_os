@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "mutex_serv.h"
 #include "mutex_client.h"
 #include "nozaos.h"
