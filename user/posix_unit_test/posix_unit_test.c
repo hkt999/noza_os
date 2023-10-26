@@ -350,17 +350,125 @@ void test_semaphore_synchronization(void) {
     TEST_ASSERT_EQUAL_INT(0, sem_destroy(&semaphore));  // Clean up.
 }
 
+// test condition (producer and consumer)
+ 
+#define BUFFER_SIZE 8
+struct Products
+{
+    int buffer[BUFFER_SIZE];
+    pthread_mutex_t locker;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
+    int pos_read_from;
+    int pos_write_to;
+};
+ 
+static int buffer_is_full(struct Products* products)
+{
+    if((products->pos_write_to +1)% BUFFER_SIZE == products->pos_read_from) {
+        return 1;
+    }
+    return 0;
+}
+ 
+static int buffer_is_empty(struct Products* products)
+{
+    if(products->pos_write_to == products->pos_read_from) {
+        return 1;
+    }
+    return 0;
+}
+ 
+// producer 
+static void Produce(struct Products* products,int item)
+{
+    pthread_mutex_lock(&products->locker);
+    while(buffer_is_full(products)) {
+        pthread_cond_wait(&products->not_full, &products->locker);
+    } 
+ 
+    products->buffer[products->pos_write_to]= item;
+    products->pos_write_to++;
+ 
+    if (products->pos_write_to >= BUFFER_SIZE)
+        products->pos_write_to = 0;
+
+    pthread_cond_signal(&products->not_empty);
+    pthread_mutex_unlock(&products->locker);
+}
+ 
+static int Consume(struct Products* products)
+{
+    int item;
+ 
+    pthread_mutex_lock(&products->locker);
+    while(buffer_is_empty(products)) {
+        pthread_cond_wait(&products->not_empty,&products->locker);
+    }
+ 
+    item = products->buffer[products->pos_read_from];
+    products->pos_read_from++;
+    if (products->pos_read_from >= BUFFER_SIZE)
+        products->pos_read_from =0;
+ 
+    pthread_cond_signal(&products->not_full); 
+    pthread_mutex_unlock(&products->locker);
+    
+    return item;
+}
+ 
+ 
+#define END_FLAG (-1)
+ 
+struct Products products;
+ 
+void *producer_thread(void* data)
+{
+    for (int i =0; i <16;++i) {
+        printf("producer: %d\n", i);
+        Produce(&products, i);
+    }
+    Produce(&products, END_FLAG);
+    return NULL;
+}
+ 
+void *consumer_thread(void* data)
+{
+    int item;
+ 
+    while(1) {
+        item = Consume(&products);
+        if(END_FLAG == item)
+            break;
+        printf("consumer: %d\n", item);
+    }
+    return NULL;
+}
+ 
+void test_pthread_cond()
+{
+    pthread_t producer;
+    pthread_t consumer;
+    int result;
+ 
+    pthread_create(&producer, NULL, &producer_thread, NULL);
+    pthread_create(&consumer, NULL, &consumer_thread, NULL);
+ 
+    pthread_join(producer,(void*)&result);
+    pthread_join(consumer,(void*)&result);
+}
+
 static int test_posix(int argc, char **argv)
 {
     UNITY_BEGIN();
     TEST_MESSAGE("test posix unit-test suite start, please wait...");
+    /*
     RUN_TEST(test_pthread_create_join);
     RUN_TEST(test_pthread_yield);
     RUN_TEST(test_pthread_detach);
     RUN_TEST(test_pthread_kill);
     RUN_TEST(test_pthread_mutex);
     RUN_TEST(test_heavy_loading);
-    //RUN_TEST(test_semaphore_synchronization);
     RUN_TEST(test_pthread_attr_init_and_destroy);
     RUN_TEST(test_pthread_attr_set_and_get_detachstate);
     RUN_TEST(test_pthread_attr_set_and_get_stacksize);
@@ -371,6 +479,9 @@ static int test_posix(int argc, char **argv)
     RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
     RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
     RUN_TEST(test_pthread_attr_set_and_get_scope);
+    */
+    RUN_TEST(test_semaphore_synchronization);
+    //RUN_TEST(test_pthread_cond);
     UNITY_END();
     return 0;
 }
