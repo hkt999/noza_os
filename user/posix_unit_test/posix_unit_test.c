@@ -159,9 +159,9 @@ static void *inc_task(void *param)
 {
     pthread_mutex_t *mutex = (pthread_mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
-        pthread_mutex_lock(mutex);
+        TEST_ASSERT_EQUAL_INT(0, pthread_mutex_lock(mutex));
         counter++;
-        pthread_mutex_unlock(mutex);
+        TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(mutex));
     }
 }
 
@@ -169,9 +169,9 @@ static void *dec_task(void *param)
 {
     mutex_t *mutex = (mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
-        pthread_mutex_lock(mutex);
+        TEST_ASSERT_EQUAL_INT(0, pthread_mutex_lock(mutex));
         counter--;
-        pthread_mutex_unlock(mutex);
+        TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(mutex));
     }
 }
 
@@ -179,17 +179,6 @@ static void *dec_task(void *param)
 static void test_pthread_mutex()
 {
     pthread_mutex_t posix_mutex;
-    // test posix mutex acquire/release function
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_init(&posix_mutex, NULL));
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_destroy(&posix_mutex));
-
-    // test mutex lock/unlock function
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_init(&posix_mutex, NULL));
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_lock(&posix_mutex));
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&posix_mutex));
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(&posix_mutex));
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&posix_mutex));
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_destroy(&posix_mutex));
 
     // test posix mutex lock/unlock function with thread
     pthread_t inc_th[NUM_PAIR];

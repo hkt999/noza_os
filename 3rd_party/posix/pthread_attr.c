@@ -1,4 +1,5 @@
 #include "pthread.h"
+#include "noza_config.h"
 #include <string.h>
 
 // initialize and destroy thread attributes object
@@ -6,8 +7,8 @@ int nz_pthread_attr_init(nz_pthread_attr_t *attr)
 {
     memset(attr, 0, sizeof(nz_pthread_attr_t));
     attr->detachstate = NZ_PTHREAD_CREATE_JOINABLE;
-    attr->stacksize = 2000; // TODO: reconsider this
-    attr->guardsize = 0;
+    attr->stacksize = NOZA_THREAD_DEFAULT_STACK_SIZE;
+    attr->guardsize = 0; // not supported, yet
     attr->schedparam.sched_priority = 0;
     attr->policy = NZ_SCHED_RR;
     attr->inheritsched = NZ_PTHREAD_EXPLICIT_SCHED;
