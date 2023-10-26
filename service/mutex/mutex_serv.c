@@ -14,8 +14,7 @@ typedef struct _dblink_item_t {
 
 typedef struct _mutex_pending_t {
 	dblink_item_t link;
-	noza_msg_t pending_msg;
-	mutex_msg_t mutex_msg;
+	noza_msg_t noza_msg; // pending noza message
 } mutex_pending_t;
 
 typedef struct _mutex_item_t {
@@ -65,7 +64,8 @@ static dblink_item_t *dblist_remove_head(dblink_item_t *head)
 	return next;
 }
 
-uint32_t mutex_pid;
+uint32_t mutex_pid; // TODO: move this to name lookup
+//static int checker = 0;
 static int do_mutex_server(void *param, uint32_t pid)
 {
 	mutex_pid = pid;
@@ -97,9 +97,10 @@ static int do_mutex_server(void *param, uint32_t pid)
 					noza_reply(&msg);
 					continue;
 				}
+
 				working_mutex = &mutex_store[mutex_msg->mid];
 				if (working_mutex->token != mutex_msg->token) {
-					printf("token mismatch %d != %d\n", mutex_store[mutex_msg->mid].token, mutex_msg->token);
+					printf("token mismatch service:%d != client:%d\n", working_mutex->token, mutex_msg->token);
 					mutex_msg->code = MUTEX_INVALID_TOKEN;
 					noza_reply(&msg);
 					continue;
@@ -134,8 +135,9 @@ static int do_mutex_server(void *param, uint32_t pid)
 				case MUTEX_RELEASE:
 					while (working_mutex->pending) {
 						mutex_pending_t *pending = working_mutex->pending;
-						pending->mutex_msg.code = MUTEX_INVALID_ID; // invalid id
-						noza_reply(&pending->pending_msg);
+						mutex_msg_t *mutex_msg = (mutex_msg_t *)pending->noza_msg.ptr;
+						mutex_msg->code = MUTEX_INVALID_ID; // invalid id
+						noza_reply(&pending->noza_msg);
 						working_mutex->pending = (mutex_pending_t *)dblist_remove_head(&pending->link);
 					}
 					working_mutex->token = 0; // clear access token
@@ -146,61 +148,56 @@ static int do_mutex_server(void *param, uint32_t pid)
 					break;
 
 				case MUTEX_LOCK:
+					//checker++;
+					//printf("lock checker: %d\n", checker);
 					if (working_mutex->lock == 0) {
-						working_mutex->lock = 1;
+						working_mutex->lock = 1; // lock
 						mutex_msg->code = MUTEX_SUCCESS;
-						noza_reply(&msg);
+						noza_reply(&msg); // the lock is free, lock it and return immediately
 					} else {
-						mutex_pending_t *w = free_pending_head; // get a pending item from slots
-						if (w == NULL) {
+						mutex_pending_t *pm = free_pending_head; // get a pending item from slots
+						if (pm == NULL) {
 							mutex_msg->code = MUTEX_NOT_ENOUGH_RESOURCE;
+							printf("no more free pending slot\n");
 							noza_reply(&msg);
 							continue;
 						}
 						free_pending_head = (mutex_pending_t *)dblist_remove_head(&free_pending_head->link); // update the pending head
-
-						// setup the pending message
-						w->pending_msg = msg;
-						w->pending_msg.ptr = &w->mutex_msg;
-						w->mutex_msg = *mutex_msg;
+						pm->noza_msg = msg; // copy message
 
 						// insert into pending list
-						mutex_store[mutex_msg->mid].pending = (mutex_pending_t *)dblist_insert_tail(
-							(dblink_item_t *)working_mutex->pending, (dblink_item_t *) w);
+						working_mutex->pending = (mutex_pending_t *)dblist_insert_tail(&working_mutex->pending->link, &pm->link);
 					}
 					break;
 
 				case MUTEX_TRYLOCK:
 					if (working_mutex->lock == 0) {
-						working_mutex->lock = 1;
+						working_mutex->lock = 1; // lock
 						mutex_msg->code = MUTEX_SUCCESS;
-						noza_reply(&msg);
 					} else {
 						mutex_msg->code = MUTEX_LOCK_FAIL;
-						noza_reply(&msg);
 					}
+					noza_reply(&msg);
 					break;
 
 				case MUTEX_UNLOCK:
-					if (working_mutex->lock == 0) {
-						mutex_msg->code = MUTEX_LOCK_FAIL;
+					if (working_mutex->pending) { // there is pending request on the queue, release one
+						mutex_pending_t *pending = working_mutex->pending; // get pending list
+						working_mutex->pending = (mutex_pending_t *)dblist_remove_head(&pending->link); // remove the first item
+						mutex_msg_t *m = (mutex_msg_t *)pending->noza_msg.ptr;
+						m->code = MUTEX_SUCCESS;
+						noza_reply(&pending->noza_msg); // reply the first item form pending request
+						free_pending_head = (mutex_pending_t *)dblist_insert_tail(&free_pending_head->link, &pending->link); // remove from pending head
+
+						mutex_msg->code = MUTEX_SUCCESS; // reply success
 						noza_reply(&msg);
 					} else {
-						if (working_mutex->pending) { // there is pending request on the queue
-							mutex_pending_t *pending = working_mutex->pending; // get pending list
-							working_mutex->pending = (mutex_pending_t *)dblist_remove_head((dblink_item_t *)pending); // remove the first item
-							working_mutex->lock--; 
-							pending->mutex_msg.code = MUTEX_SUCCESS;
-							noza_reply(&pending->pending_msg); // reply the first item form pending request
-							// put the pending item back to pending list
-							free_pending_head = (mutex_pending_t *)dblist_insert_tail((dblink_item_t *)free_pending_head, (dblink_item_t *)pending);
-						} else {
-							// there is no pending request, clear the lock
-							working_mutex->lock = 0; // clear lock
-						}
+						// there is no pending request, unlock the request
+						working_mutex->lock = 0;
 						mutex_msg->code = MUTEX_SUCCESS;
 						noza_reply(&msg);
 					}
+
 					break;
 
 				default:

@@ -17,7 +17,7 @@ void root_task(void *param)
 {
     #if 1
     uint32_t th;
-    noza_thread_create(&th, console_start, NULL, 0, 2048);
+    noza_thread_create(&th, console_start, NULL, 0, 4096);
     noza_thread_join(th, NULL);
     #else
     console_start(&table.builtin_cmds[0], 0);
