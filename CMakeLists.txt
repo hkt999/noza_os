@@ -8,7 +8,7 @@ option(NOZAOS_UNITTEST "build unit test" ON)
 
 # posix system
 option(NOZAOS_POSIX	"build posix" ON)
-option(NOZAOS_POSIX_UNITTEST "build posix unit test" ON)
+option(NOZAOS_UNITTEST_POSIX "build posix unit test" ON)
 
 # lua interpreter
 option(NOZAOS_LUA "build lua interpreter" OFF)
@@ -20,9 +20,11 @@ option(NOZAOS_TFLM_MAGIC_WAND "build tensorflow lite micro magic wand" OFF)
 option(NOZAOS_TFLM_PERSON_DETECTION "build tensorflow lite micro person detection" OFF)
 option(NOZAOS_TFLM_MICRO_SPEECH "build tensorflow lite micro micro speech" OFF)
 
-if (NOZAOS_POSIX_UNITTEST)
-	message(STATUS "NOZAOS_POSIX_UNITTEST need NOZAOS_POSIX")
-	set(NOZAOS_POSIX ON cache bool "Automatically set because of NOZAOS_POSIX_UNITTEST" force )
+option(NOZAOS_DRIVER_WS2812 "build ws2812 LED controll driver" OFF)
+
+if (NOZAOS_UNITTEST_POSIX)
+	message(STATUS "NOZAOS_UNITTEST_POSIX need NOZAOS_POSIX")
+	set(NOZAOS_POSIX ON cache bool "Automatically set because of NOZAOS_UNITTEST_POSIX" force )
 endif()
 
 if (NOZAOS_TFLM_HELLO_WORLD AND NOT NOZAOS_TFLM)
@@ -104,7 +106,7 @@ pico_sdk_init()
 add_definitions(-DPICO_USE_MALLOC_MUTEX=1)
 # define sub module built and test
 
-if (NOZAOS_UNITTEST OR NOZAOS_POSIX_UNITTEST)
+if (NOZAOS_UNITTEST OR NOZAOS_UNITTEST_POSIX)
 	set(NOZAOS_UNITY_LIB "unity")
 	add_subdirectory(3rd_party/unity_port)
 endif()
@@ -180,7 +182,7 @@ if (NOZAOS_UNITTEST)
 	list(APPEND NOZA_SOURCES user/noza_unit_test/noza_unit_test.c)
 endif()
 
-if (NOZAOS_POSIX_UNITTEST)
+if (NOZAOS_UNITTEST_POSIX)
 	list(APPEND NOZA_SOURCES user/posix_unit_test/posix_unit_test.c)
 endif()
 
@@ -208,10 +210,21 @@ if (NOZAOS_TFLM_PERSON_DETECTION)
 	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_person_detection.c)
 endif()
 
+if (NOZAOS_DRIVER_WS2812)
+	list(APPEND NOZA_SOURCES drivers/ws2812/ws2812.c)
+	list(APPEND NOZA_SOURCES drivers/ws2812/example.c)
+endif()
+
 add_executable(
 	noza
 	${NOZA_SOURCES}
 )
+if (NOZAOS_DRIVER_WS2812)
+	pico_generate_pio_header( # generate pico header for ws2812.pio module
+		noza
+		${CMAKE_CURRENT_LIST_DIR}/drivers/ws2812/ws2812.pio
+	)
+endif()
 
 set(
 	NOZA_INCLUDES
@@ -225,7 +238,7 @@ if (NOZAOS_LUA)
 	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/lua)
 endif()
 
-if (NOZAOS_UNITTEST OR NOZAOS_POSIX_UNITTEST)
+if (NOZAOS_UNITTEST OR NOZAOS_UNITTEST_POSIX)
 	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port)
 endif()
 
@@ -269,6 +282,10 @@ endif()
 
 if (NOZAOS_TFLM_PERSON_DETECTION)
 	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_PERSON_DETECTION_LIB})
+endif()
+
+if (NOZAOS_DRIVER_WS2812)
+	list(APPEND NOZA_LIBS hardware_pio)
 endif()
 
 target_link_libraries(
