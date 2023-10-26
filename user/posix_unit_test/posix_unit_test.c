@@ -9,17 +9,20 @@
 #include "posix/pthread.h"
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
+#include "posix/noza_posix_wrapper.h"
 
 static void *test_task(void *param)
 {
     int do_count = rand() % 5 + 2;
     int ms = rand() % 50 + 50;
     while (do_count-->0) {
-        struct nz_timespec req, rem;
+        struct timespec req, rem;
         req.tv_sec = ms / 1000;
         req.tv_nsec = (ms % 1000) * 1000000;
-        TEST_ASSERT_EQUAL(0, nz_nanosleep(&req, &rem));
+        nanosleep(&req, &rem);
     }
+
+    return (void *)0x123;
 }
 
 static void *yield_test_func(void *param)
@@ -29,7 +32,7 @@ static void *yield_test_func(void *param)
     for (int i=0; i<YIELD_ITER; i++) {
         value = value + i;
         if (param == NULL) {
-            TEST_ASSERT_EQUAL(0, nz_pthread_yield());
+            TEST_ASSERT_EQUAL_INT(0, pthread_yield());
         }
     }
 
@@ -38,11 +41,15 @@ static void *yield_test_func(void *param)
 
 static void *heavy_test_func(void *param)
 {
+    uint32_t a0 = 1, a1 = 1;
     int *flag = (int *)param;
-    #define HEAVY_ITER  1000000
+
+    #define HEAVY_ITER  2000000
     uint32_t value = 0;
     for (int i=0; i<HEAVY_ITER; i++) {
-        value = value + i;
+        value = a0 + a1;
+        a0 = a1;
+        a1 = value;
     }
 
     if (flag) {
@@ -52,79 +59,92 @@ static void *heavy_test_func(void *param)
     return (void *)value;
 }
 
-static void do_test_thread()
+#define NUM_THREADS 8
+#define NUM_LOOP    4
+static void test_pthread_create_join()
 {
-    #define NUM_THREADS 8
-    #define NUM_LOOP    16
-    nz_pthread_t th[NUM_THREADS];
-    nz_pthread_t pid = nz_pthread_self();
-
+    pthread_t th[NUM_THREADS];
+    srand(time(0));
     for (int loop = 0; loop < NUM_LOOP; loop++) {
-        TEST_PRINTF("test loop: %d/%d", loop, NUM_LOOP);
-        srand(time(0));
-
         // TEST
-        TEST_MESSAGE("---- test thread creation with random priority and sleep time ----");
         for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, nz_pthread_create(&th[i], NULL, test_task, NULL));
+            TEST_ASSERT_EQUAL_INT(0, pthread_create(&th[i], NULL, test_task, NULL));
         }
-
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL(0, nz_pthread_join(th[i], (void **)&exit_code));
+            TEST_ASSERT_EQUAL_INT(0, pthread_join(th[i], (void *)&exit_code));
+            TEST_ASSERT_EQUAL_INT(0x123, exit_code);
         }
+    }
+}
 
-        // TEST
-        TEST_MESSAGE("---- test thread creation with random priority and signal in 100ms ----");
+static void test_pthread_kill()
+{
+    pthread_t th[NUM_THREADS];
+    srand(time(0));
+    for (int loop = 0; loop < NUM_LOOP; loop++) {
         for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, nz_pthread_create(&th[i], NULL, test_task, NULL));
+            TEST_ASSERT_EQUAL_INT(0, pthread_create(&th[i], NULL, test_task, NULL));
         }
-        nz_nanosleep(&(struct nz_timespec){.tv_sec=0, .tv_nsec=50000000}, NULL);
+        TEST_ASSERT_EQUAL_INT(0, nanosleep((&(struct timespec){.tv_sec=0, .tv_nsec=50000000}), NULL));
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t sig = 0;
-            TEST_ASSERT_EQUAL(0, nz_pthread_kill(th[i], SIGALRM));
+            TEST_ASSERT_EQUAL_INT(0, pthread_kill(th[i], SIGALRM));
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL(0, nz_pthread_join(th[i], (void **)&exit_code));
+            TEST_ASSERT_EQUAL_INT(0, pthread_join(th[i], (void **)&exit_code));
         }
+    }
+}
 
-        // TEST
-        TEST_MESSAGE("---- test heavy loading ----");
-        uint32_t value_heavy = (uint32_t)heavy_test_func(NULL);
+static void test_heavy_loading()
+{
+    pthread_t th[NUM_THREADS];
+    uint32_t value_heavy = (uint32_t)heavy_test_func(NULL);
+    for (int loop = 0; loop < NUM_LOOP; loop++) {
         for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, nz_pthread_create(&th[i], NULL, heavy_test_func, NULL));
+            TEST_ASSERT_EQUAL_INT(0, pthread_create(&th[i], NULL, heavy_test_func, NULL));
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL(0, nz_pthread_join(th[i], (void **)&exit_code));
+            TEST_ASSERT_EQUAL_INT(0, pthread_join(th[i], (void **)&exit_code));
             TEST_ASSERT_EQUAL_UINT(value_heavy, exit_code);
         }
+    }
+}
 
-        // TEST
-        TEST_MESSAGE("---- test yield ----");
+static void test_pthread_yield()
+{
+    pthread_t th[NUM_THREADS];
+    for (int loop = 0; loop < NUM_LOOP; loop++) {
         uint32_t value_yield = (uint32_t)yield_test_func(NULL);
         for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, nz_pthread_create(&th[i], NULL, yield_test_func, NULL));
+            TEST_ASSERT_EQUAL_INT(0, pthread_create(&th[i], NULL, yield_test_func, NULL));
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL(0, nz_pthread_join(th[i], (void **)&exit_code));
-            TEST_ASSERT_EQUAL(value_yield, exit_code);
+            TEST_ASSERT_EQUAL_INT(0, pthread_join(th[i], (void **)&exit_code));
+            TEST_ASSERT_EQUAL_INT(value_yield, exit_code);
         }
+    }
+}
 
-        // TEST
-        TEST_MESSAGE("---- test detach ----");
-        int value[NUM_THREADS];
+static void test_pthread_detach()
+{
+    pthread_t th[NUM_THREADS];
+    int value[NUM_THREADS];
+
+    for (int loop=0; loop < NUM_LOOP; loop++) {
         memset(value, 0, sizeof(value));
         for (int i=0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL(0, nz_pthread_create(&th[i], NULL, heavy_test_func, &value[i]));
-            TEST_ASSERT_EQUAL(0, nz_pthread_detach(th[i]));
+            TEST_ASSERT_EQUAL_INT(0, pthread_create(&th[i], NULL, heavy_test_func, &value[i]));
+            TEST_ASSERT_EQUAL_INT(0, pthread_detach(th[i]));
         }
         for (int i=0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_NOT_EQUAL(0, nz_pthread_join(th[i], NULL));
+            TEST_ASSERT_NOT_EQUAL(0, pthread_join(th[i], NULL));
             if (value[i] == 0) {
-                TEST_ASSERT_EQUAL(0, nz_nanosleep(&(struct nz_timespec){.tv_sec=0, .tv_nsec=50000000}, NULL));
+                TEST_ASSERT_EQUAL_INT(0, nz_nanosleep(&(struct timespec){.tv_sec=0, .tv_nsec=50000000}, NULL));
             }
         }
     }
@@ -134,11 +154,11 @@ static void do_test_thread()
 static int counter = 0;
 static void *inc_task(void *param)
 {
-    nz_pthread_mutex_t *mutex = (nz_pthread_mutex_t *)param;
+    pthread_mutex_t *mutex = (pthread_mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
-        nz_pthread_mutex_lock(mutex);
+        pthread_mutex_lock(mutex);
         counter++;
-        nz_pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(mutex);
     }
 }
 
@@ -146,64 +166,182 @@ static void *dec_task(void *param)
 {
     mutex_t *mutex = (mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
-        nz_pthread_mutex_lock(mutex);
+        pthread_mutex_lock(mutex);
         counter--;
-        nz_pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(mutex);
     }
 }
 
 #define NUM_PAIR    4
-static void do_test_mutex()
+static void test_pthread_mutex()
 {
-    mutex_t noza_mutex;
-    TEST_MESSAGE("test mutex acquire/release function");
-    TEST_ASSERT_EQUAL(0, mutex_acquire(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
+    pthread_mutex_t posix_mutex;
+    // test posix mutex acquire/release function
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_init(&posix_mutex, NULL));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_destroy(&posix_mutex));
 
-    TEST_MESSAGE("test mutex lock/unlock function");
-    TEST_ASSERT_EQUAL(0, mutex_acquire(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_lock(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_trylock(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_release(&noza_mutex));
+    // test mutex lock/unlock function
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_init(&posix_mutex, NULL));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_lock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_destroy(&posix_mutex));
 
-    TEST_MESSAGE("test mutex lock/unlock function with thread");
-    nz_pthread_t inc_th[NUM_PAIR];
-    nz_pthread_t dec_th[NUM_PAIR];
+    // test posix mutex lock/unlock function with thread
+    pthread_t inc_th[NUM_PAIR];
+    pthread_t dec_th[NUM_PAIR];
     counter = 0; 
-    mutex_acquire(&noza_mutex);
+    pthread_mutex_init(&posix_mutex, NULL);
     for (int i = 0; i < NUM_PAIR; i++) {
-        TEST_ASSERT_EQUAL(0, nz_pthread_create(&inc_th[i], NULL, inc_task, &noza_mutex));
+        TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_th[i], NULL, inc_task, &posix_mutex));
     }
     for (int i=0; i < NUM_PAIR; i++) {
-        nz_pthread_create(&dec_th[i], NULL, dec_task, &noza_mutex);
+        pthread_create(&dec_th[i], NULL, dec_task, &posix_mutex);
     }
     for (int i=0; i < NUM_PAIR; i++) {
-        nz_pthread_join(inc_th[i], NULL);
-        nz_pthread_join(dec_th[i], NULL);
+        pthread_join(inc_th[i], NULL);
+        pthread_join(dec_th[i], NULL);
     }
     TEST_ASSERT_EQUAL_INT(0, counter);
-    TEST_MESSAGE("test mutex trylock");
-    TEST_ASSERT_EQUAL(0, mutex_trylock(&noza_mutex));
-    TEST_ASSERT_EQUAL(EBUSY, mutex_trylock(&noza_mutex));
-    TEST_ASSERT_EQUAL(0, mutex_unlock(&noza_mutex));
-    mutex_release(&noza_mutex);
+
+    // test posix mutex trylock
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(EBUSY, pthread_mutex_trylock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&posix_mutex));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_destroy(&posix_mutex));
 }
 
-static int test_mutex(int argc, char **argv)
-{
-    UNITY_BEGIN();
-    RUN_TEST(do_test_mutex);
-    UNITY_END();
-    return 0;
+void test_pthread_attr_init_and_destroy(void) {
+    pthread_attr_t attr;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
 }
 
-static int test_all(int argc, char **argv)
+void test_pthread_attr_set_and_get_detachstate(void) {
+    nz_pthread_attr_t attr;
+    int detachstate = 1;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setdetachstate(&attr, detachstate));
+    detachstate = 0; 
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getdetachstate(&attr, &detachstate));
+    TEST_ASSERT_EQUAL_INT(1, detachstate);
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+}
+
+void test_pthread_attr_set_and_get_stacksize(void) {
+    nz_pthread_attr_t attr;
+    size_t stacksize = 1024;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setstacksize(&attr, stacksize));
+    stacksize = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getstacksize(&attr, &stacksize));
+    TEST_ASSERT_EQUAL_INT(1024, stacksize);
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+}
+
+void test_pthread_attr_set_and_get_stackaddr(void) {
+    pthread_attr_t attr;
+    void* stackaddr = (void *)0x12345; 
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setstackaddr(&attr, stackaddr));
+    stackaddr = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getstackaddr(&attr, &stackaddr));
+    TEST_ASSERT_EQUAL_INT(0x12345, stackaddr);
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+}
+
+void test_pthread_attr_set_and_get_stack(void) {
+    pthread_attr_t attr;
+    void* stackaddr = (void *)0x12345; 
+    size_t stacksize = 1024;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setstack(&attr, stackaddr, stacksize));
+    stackaddr = 0;
+    stacksize = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getstack(&attr, &stackaddr, &stacksize));
+    TEST_ASSERT_EQUAL_INT(0x12345, stackaddr);
+    TEST_ASSERT_EQUAL_INT(1024, stacksize);
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+}
+
+void test_pthread_attr_set_and_get_guardsize(void) {
+    pthread_attr_t attr;
+    size_t guardsize = 1024;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setguardsize(&attr, guardsize));
+    guardsize = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getguardsize(&attr, &guardsize));
+    TEST_ASSERT_EQUAL_INT(1024, guardsize);
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+}
+
+void test_pthread_attr_set_and_get_schedparam(void) {
+    pthread_attr_t attr;
+    struct sched_param param;
+    param.sched_priority = 1;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setschedparam(&attr, &param));
+    param.sched_priority = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getschedparam(&attr, &param));
+    TEST_ASSERT_EQUAL_INT(1, param.sched_priority);
+}
+
+void test_pthread_attr_set_and_get_schedpolicy(void) {
+    pthread_attr_t attr;
+    int policy = SCHED_RR; // only support this
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setschedpolicy(&attr, policy));
+    policy = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getschedpolicy(&attr, &policy));
+    TEST_ASSERT_EQUAL_INT(SCHED_RR, policy);
+}
+
+void test_pthread_attr_set_and_get_inheristsched(void) {
+    pthread_attr_t attr;
+    int inheritsched = 1;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setinheritsched(&attr, inheritsched));
+    inheritsched = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getinheritsched(&attr, &inheritsched));
+    TEST_ASSERT_EQUAL_INT(1, inheritsched);
+}
+
+void test_pthread_attr_set_and_get_scope(void) {
+    pthread_attr_t attr;
+    int scope = PTHREAD_SCOPE_SYSTEM; // only support this
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setscope(&attr, scope));
+    scope = 0;
+    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getscope(&attr, &scope));
+    TEST_ASSERT_EQUAL_INT(PTHREAD_SCOPE_SYSTEM, scope);
+}
+
+static int test_posix(int argc, char **argv)
 {
     UNITY_BEGIN();
-    RUN_TEST(do_test_thread);
-    RUN_TEST(do_test_mutex);
+    TEST_MESSAGE("test posix unit-test suite start, please wait...");
+    RUN_TEST(test_pthread_create_join);
+    RUN_TEST(test_pthread_detach);
+    RUN_TEST(test_pthread_kill);
+    RUN_TEST(test_pthread_mutex);
+    RUN_TEST(test_heavy_loading);
+    RUN_TEST(test_pthread_attr_init_and_destroy);
+    RUN_TEST(test_pthread_attr_set_and_get_detachstate);
+    RUN_TEST(test_pthread_attr_set_and_get_stacksize);
+    RUN_TEST(test_pthread_attr_set_and_get_stackaddr);
+    RUN_TEST(test_pthread_attr_set_and_get_stack);
+    RUN_TEST(test_pthread_attr_set_and_get_guardsize);
+    RUN_TEST(test_pthread_attr_set_and_get_schedparam);
+    RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
+    RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
+    RUN_TEST(test_pthread_attr_set_and_get_scope);
     UNITY_END();
     return 0;
 }
@@ -211,6 +349,6 @@ static int test_all(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_posix_unittest()
 {
-    console_add_command("noza_unittest", test_all, "nozaos and lib, posix unit-test suite");
+    console_add_command("posix_unittest", test_posix, "nozaos and lib, posix unit-test suite");
 }
 

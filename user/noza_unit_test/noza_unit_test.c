@@ -69,7 +69,7 @@ static void do_test_thread()
 
 
         // TEST
-        TEST_MESSAGE("---- test thread creation with random priority and sleep time ----");
+        TEST_MESSAGE("---- test noza thread creation with random priority and sleep time ----");
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
             TEST_ASSERT_TRUE(th[i] < NOZA_OS_TASK_LIMIT);
@@ -84,7 +84,7 @@ static void do_test_thread()
         }
 
         // TEST
-        TEST_MESSAGE("---- test thread creation with random priority and signal in 100ms ----");
+        TEST_MESSAGE("---- test noza thread creation with random priority and signal in 100ms ----");
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
             TEST_ASSERT_TRUE(th[i] < NOZA_OS_TASK_LIMIT);
@@ -102,7 +102,7 @@ static void do_test_thread()
         }
 
         // TEST
-        TEST_MESSAGE("---- test heavy loading ----");
+        TEST_MESSAGE("---- test noza thread heavy loading ----");
         uint32_t value_heavy = heavy_test_func(NULL, pid);
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], heavy_test_func, NULL, 1, 1024));
@@ -115,7 +115,7 @@ static void do_test_thread()
         }
 
         // TEST
-        TEST_MESSAGE("---- test yield ----");
+        TEST_MESSAGE("---- test noza thread yield ----");
         uint32_t value_yield = yield_test_func(&pid, pid);
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL(0, noza_thread_create(&th[i], yield_test_func, NULL, 1, 1024));
@@ -128,7 +128,7 @@ static void do_test_thread()
         }
 
         // TEST
-        TEST_MESSAGE("---- test detach ----");
+        TEST_MESSAGE("---- test noza thread detach ----");
         int value[NUM_THREADS];
         memset(value, 0, sizeof(value));
         for (int i=0; i < NUM_THREADS; i++) {
@@ -193,6 +193,7 @@ typedef struct echo_msg_s {
 static void do_test_msg()
 {
     uint32_t code, server_pid, client_pid;
+    TEST_MESSAGE("---- test noza kernel messaging ----");
     TEST_ASSERT_EQUAL(0, noza_thread_create(&server_pid, string_server_thread, NULL, 0, 1024));
     TEST_ASSERT_EQUAL(0, noza_thread_create(&client_pid, string_client_thread, (void *)server_pid, 0, 1024));
     noza_thread_join(client_pid, &code);
@@ -371,7 +372,7 @@ static int test_all(int argc, char **argv)
 }
 
 #include "user/console/noza_console.h"
-void __attribute__((constructor(1000))) register_unittest()
+void __attribute__((constructor(1000))) register_noza_unittest()
 {
     console_add_command("noza_unittest", test_all, "nozaos and lib, unit-test suite");
 }
