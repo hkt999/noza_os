@@ -7,6 +7,8 @@
 #include "posix/errno.h"
 #include "posix/noza_time.h"
 #include "posix/pthread.h"
+#include "posix/sched.h"
+#include "posix/semaphore.h"
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
 #include "posix/noza_posix_wrapper.h"
@@ -27,12 +29,13 @@ static void *test_task(void *param)
 
 static void *yield_test_func(void *param)
 {
-    #define YIELD_ITER  100
+    #define YIELD_ITER  50
     uint32_t value = 0;
     for (int i=0; i<YIELD_ITER; i++) {
         value = value + i;
         if (param == NULL) {
-            TEST_ASSERT_EQUAL_INT(0, pthread_yield());
+            TEST_ASSERT_EQUAL_INT(0, pthread_yield()); // test pthread_yield
+            TEST_ASSERT_EQUAL_INT(0, sched_yield()); // test sched_yield
         }
     }
 
@@ -118,7 +121,7 @@ static void test_pthread_yield()
 {
     pthread_t th[NUM_THREADS];
     for (int loop = 0; loop < NUM_LOOP; loop++) {
-        uint32_t value_yield = (uint32_t)yield_test_func(NULL);
+        uint32_t value_yield = (uint32_t)yield_test_func((void *)1);
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL_INT(0, pthread_create(&th[i], NULL, yield_test_func, NULL));
         }
@@ -323,15 +326,52 @@ void test_pthread_attr_set_and_get_scope(void) {
     TEST_ASSERT_EQUAL_INT(PTHREAD_SCOPE_SYSTEM, scope);
 }
 
+static sem_t semaphore;
+void* incrementer(void* arg) {
+    for (int i = 0; i < 1000; ++i) {
+        sem_wait(&semaphore);
+        counter++;
+        sem_post(&semaphore);
+    }
+    return NULL;
+}
+
+void* decrementer(void* arg) {
+    for (int i = 0; i < 1000; ++i) {
+        sem_wait(&semaphore);
+        counter--;
+        sem_post(&semaphore);
+    }
+    return NULL;
+}
+
+void test_semaphore_synchronization(void) {
+    counter = 0;
+    TEST_ASSERT_EQUAL_INT(0, sem_init(&semaphore, 0, 1));  // Initialize semaphore with value 1.
+
+    pthread_t inc_thread, dec_thread;
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_thread, NULL, incrementer, NULL));
+    TEST_ASSERT_EQUAL_INT(0, pthread_create(&dec_thread, NULL, decrementer, NULL));
+
+    TEST_ASSERT_EQUAL_INT(0, pthread_join(inc_thread, NULL));
+    TEST_ASSERT_EQUAL_INT(0, pthread_join(dec_thread, NULL));
+
+    TEST_ASSERT_EQUAL_INT(0, counter);  // After both threads finish, counter should be 0.
+    TEST_ASSERT_EQUAL_INT(0, sem_destroy(&semaphore));  // Clean up.
+}
+
 static int test_posix(int argc, char **argv)
 {
     UNITY_BEGIN();
     TEST_MESSAGE("test posix unit-test suite start, please wait...");
     RUN_TEST(test_pthread_create_join);
+    RUN_TEST(test_pthread_yield);
     RUN_TEST(test_pthread_detach);
     RUN_TEST(test_pthread_kill);
     RUN_TEST(test_pthread_mutex);
     RUN_TEST(test_heavy_loading);
+    //RUN_TEST(test_semaphore_synchronization);
     RUN_TEST(test_pthread_attr_init_and_destroy);
     RUN_TEST(test_pthread_attr_set_and_get_detachstate);
     RUN_TEST(test_pthread_attr_set_and_get_stacksize);

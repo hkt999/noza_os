@@ -1,5 +1,5 @@
 #pragma once
 
-int sched_get_priority_max(int policy);
-int sched_get_priority_min(int policy);
-int sched_yield(void);
+int nz_sched_get_priority_max(int policy);
+int nz_sched_get_priority_min(int policy);
+int nz_sched_yield(void);
