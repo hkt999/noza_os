@@ -86,10 +86,6 @@
 #define PTHREAD_MUTEX_RECURSIVE                 NZ_PTHREAD_MUTEX_RECURSIVE
 #define NUM_MUTEX_TYPE                          NZ_NUM_MUTEX_TYPE
 
-
-
-
-
 #define PTHREAD_CREATE_JOINABLE                 NZ_PTHREAD_CREATE_JOINABLE
 #define PTHREAD_CREATE_DETACHED                 NZ_PTHREAD_CREATE_DETACHED
 
@@ -179,3 +175,16 @@
 #define pthread_condattr_getclock(p1, p2)       nz_pthread_condattr_getclock(p1, p2)
 #define pthread_atfork(p1, p2, p3)              nz_pthread_atfork(p1, p2, p3)
 
+#define sched_get_priority_max(p1)              nz_sched_get_priority_max(p1)
+#define sched_get_priority_min(p1)              nz_sched_get_priority_min(p1)
+#define sched_yield(void)                       nz_sched_yield(void)
+
+//#define sem_t                                   nz_sem_t;
+typedef nz_sem_t sem_t;
+
+#define sem_init(p1, p2, p3)                    nz_sem_init(p1, p2, p3)
+#define sem_destroy(p1)                         nz_sem_destroy(p1)
+#define sem_wait(p1)                            nz_sem_wait(p1)
+#define sem_trywait(p1)                         nz_sem_trywait(p1)
+#define sem_post(p1)                            nz_sem_post(p1)
+#define sem_getvalue(p1, p2)                    nz_sem_getvalue(p1, p2)
