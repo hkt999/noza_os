@@ -1,5 +1,5 @@
-#include "mutex_serv.h"
-#include "mutex_client.h"
+#include "sync_serv.h"
+#include "sync_client.h"
 #include "nozaos.h"
 
 // TODO: move mutex_pid form "ask"

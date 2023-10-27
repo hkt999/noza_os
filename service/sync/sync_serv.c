@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include "mutex_serv.h"
+#include "sync_serv.h"
 #include "nozaos.h"
 
 typedef struct _dblink_item_t {

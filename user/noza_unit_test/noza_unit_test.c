@@ -6,7 +6,7 @@
 #include "posix/bits/signum.h"
 #include "kernel/noza_config.h"
 #include "posix/errno.h"
-#include <service/mutex/mutex_client.h>
+#include <service/sync/sync_client.h>
 
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"

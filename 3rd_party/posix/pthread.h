@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include "errno.h"
 #include "noza_time.h"
-#include <service/mutex/mutex_client.h>
+#include <service/sync/sync_client.h>
 
 #define NZ_PTHREAD_CREATE_JOINABLE 0
 #define NZ_PTHREAD_CREATE_DETACHED 1
@@ -143,7 +143,6 @@ typedef struct {
     mutex_t internal_mutex;
     mutex_t *user_mutex;
     uint32_t signaled;
-    uint32_t waiters;
 } nz_pthread_cond_t;
 
 typedef struct {

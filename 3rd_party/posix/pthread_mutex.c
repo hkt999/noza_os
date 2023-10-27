@@ -15,6 +15,7 @@ int nz_pthread_mutex_destroy(nz_pthread_mutex_t *mutex)
 /* lock the mutex */
 int nz_pthread_mutex_lock(nz_pthread_mutex_t *mutex)
 {
+    // TODO: support recursive lock
     return mutex_lock(mutex);
 }
 
