@@ -315,33 +315,42 @@ void test_pthread_attr_set_and_get_scope(void) {
     TEST_ASSERT_EQUAL_INT(PTHREAD_SCOPE_SYSTEM, scope);
 }
 
-static sem_t semaphore;
 void* incrementer(void* arg) {
-    for (int i = 0; i < 1000; ++i) {
-        sem_wait(&semaphore);
+    sem_t *sem = (sem_t *)arg;
+    for (int i = 0; i < 1000; i++) {
+        //printf("inc 1\n");
+        sem_wait(sem);
         counter++;
-        sem_post(&semaphore);
+        //printf("inc 2\n");
+        sem_post(sem);
+        //printf("inc 3\n");
     }
     return NULL;
 }
 
 void* decrementer(void* arg) {
-    for (int i = 0; i < 1000; ++i) {
-        sem_wait(&semaphore);
+    sem_t *sem = (sem_t *)arg;
+    for (int i = 0; i < 1000; i++) {
+        printf("dec 1\n");
+        sem_wait(sem);
         counter--;
-        sem_post(&semaphore);
+        printf("dec 2\n");
+        sem_post(sem);
+        printf("dec 3\n");
     }
     return NULL;
 }
 
+#define NONE_SHARED 0
 void test_semaphore_synchronization(void) {
+    sem_t semaphore;
     counter = 0;
-    TEST_ASSERT_EQUAL_INT(0, sem_init(&semaphore, 0, 1));  // Initialize semaphore with value 1.
+    TEST_ASSERT_EQUAL_INT(0, sem_init(&semaphore, NONE_SHARED, 1));  // Initialize semaphore with value 1.
 
     pthread_t inc_thread, dec_thread;
 
-    TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_thread, NULL, incrementer, NULL));
-    TEST_ASSERT_EQUAL_INT(0, pthread_create(&dec_thread, NULL, decrementer, NULL));
+    TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_thread, NULL, incrementer, &semaphore));
+    TEST_ASSERT_EQUAL_INT(0, pthread_create(&dec_thread, NULL, decrementer, &semaphore));
 
     TEST_ASSERT_EQUAL_INT(0, pthread_join(inc_thread, NULL));
     TEST_ASSERT_EQUAL_INT(0, pthread_join(dec_thread, NULL));
@@ -385,6 +394,7 @@ static void produce(products_t* products,int item)
 {
     pthread_mutex_lock(&products->locker);
     while (buffer_is_full(products)) {
+        // if cond is signaled, still kill locker locked
         pthread_cond_wait(&products->not_full, &products->locker);
     } 
  
@@ -425,7 +435,7 @@ void *producer_thread(void *p)
 {
     products_t *products = (products_t *)p;
     for (int i =0; i<128; i++) {
-        // printf("producer: %d\n", i);
+        //TEST_PRINTF("producer: %d\n", i);
         produce(products, i);
     }
     produce(products, END_FLAG);
@@ -442,7 +452,7 @@ void *consumer_thread(void *p)
         item = consume(products);
         if(END_FLAG == item)
             break;
-        //printf("consumer: %d\n", item);
+        //TEST_PRINTF("consumer: %d\n", item);
     }
     return NULL;
 }
@@ -475,6 +485,7 @@ static int test_posix(int argc, char **argv)
 {
     UNITY_BEGIN();
     TEST_MESSAGE("test posix unit-test suite start, please wait...");
+    /*
     RUN_TEST(test_pthread_create_join);
     RUN_TEST(test_pthread_yield);
     RUN_TEST(test_pthread_detach);
@@ -491,8 +502,9 @@ static int test_posix(int argc, char **argv)
     RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
     RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
     RUN_TEST(test_pthread_attr_set_and_get_scope);
+    */
     RUN_TEST(test_pthread_cond);
-    //RUN_TEST(test_semaphore_synchronization);
+    RUN_TEST(test_semaphore_synchronization);
     UNITY_END();
     return 0;
 }

@@ -4,6 +4,7 @@
 #include "errno.h"
 #include "noza_time.h"
 #include <string.h>
+#include <stdio.h>
 
 int nz_pthread_cond_init(nz_pthread_cond_t *restrict cond, const nz_pthread_condattr_t *restrict attr)
 {
@@ -44,27 +45,23 @@ int nz_pthread_cond_timedwait(nz_pthread_cond_t *restrict cond, nz_pthread_mutex
         remaining = abstime->tv_sec * 1000000 + abstime->tv_nsec / 1000;
     }
 
-    while (!cond->signaled) {
-        cond->waiters++;
+    while (cond->signaled == 0) {
         nz_pthread_mutex_unlock(mutex); // release mutex
         nz_pthread_mutex_unlock(&cond->internal_mutex); // releae internal mutex for other threads to signal or wait
 
-        struct nz_timespec d, r;
-        if (remaining == -1) { // forever
-            d.tv_sec = 10;
-            d.tv_nsec = 0;
-            nz_nanosleep(&d, &r); // sleep for 10 seconds: TODO: fix this !!
+        if (remaining == -1) { // forever until signaled or killed
+            noza_thread_sleep_ms(1, NULL);
             nz_pthread_mutex_lock(&cond->internal_mutex);
-            cond->waiters--;
             nz_pthread_mutex_lock(mutex);
         } else {
+            // TODO: redesign timeout !
+            struct nz_timespec d, r;
             d.tv_sec = remaining / 1000000;
             d.tv_nsec = (remaining % 1000000) * 1000;
             result = nz_nanosleep(&d, &r); // sleep for the remaining time TODO: fix this
             remaining = r.tv_sec * 1000000 + r.tv_nsec / 1000;
             if (result == 0) {
                 nz_pthread_mutex_lock(&cond->internal_mutex); // release internal mutex
-                cond->waiters--; // update waiters count
                 nz_pthread_mutex_lock(mutex); // lock user's mutex
                 error = ETIMEDOUT;
                 break;
@@ -77,9 +74,8 @@ int nz_pthread_cond_timedwait(nz_pthread_cond_t *restrict cond, nz_pthread_mutex
         cond->signaled = 0; // clear the signal for future waiters
     }
 
-    cond->waiters--;
-    cond->user_mutex = NULL; // clear user mutex
     nz_pthread_mutex_unlock(&cond->internal_mutex);
+
     return error;
 }
 
@@ -91,10 +87,11 @@ int nz_pthread_cond_signal(nz_pthread_cond_t *cond)
     nz_pthread_mutex_lock(&cond->internal_mutex);
     cond->signaled = 1;
 
-    if (cond->user_mutex) { // if there is some one waiting
+    if (cond->user_mutex)
         nz_pthread_mutex_unlock(cond->user_mutex);   // wake up the waiting thread by unlocking user's mutex
-    }
+
     nz_pthread_mutex_unlock(&cond->internal_mutex);
+
     return 0;
 }
 

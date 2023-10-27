@@ -17,6 +17,10 @@ enum {
 #define MUTEX_LOCK		3
 #define MUTEX_TRYLOCK	4
 #define MUTEX_UNLOCK	5
+#define MUTEX_TAIL		6
+
+#define COND_ACQUIRE	7
+#define COND_TAIL		8
 
 #define MAX_LOCKS		16
 #define MAX_PENDING		16

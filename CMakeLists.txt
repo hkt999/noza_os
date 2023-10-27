@@ -163,8 +163,8 @@ set(
 	#service/name_lookup/name_lookup.c
 	service/memory/mem_serv.c
 	service/memory/mem_client.c
-	service/mutex/mutex_serv.c
-	service/mutex/mutex_client.c
+	service/sync/sync_serv.c
+	service/sync/sync_client.c
 	#service/vfs/rootfs.c
 	#service/vfs/romfs.c
 
