@@ -9,7 +9,6 @@ The design of Noza is partly inspired by the limitations of some real-time opera
 * Inter-process communication (IPC): Noza facilitates communication between threads using message passing, ensuring seamless and synchronized execution of tasks.
 
 # System Calls
-* `noza_thread_yield()`: Yields the current thread's execution, allowing other threads to run. 
 * `noza_thread_join(uint32_t thread_id)`: Waits for the specified thread to terminate before continuing. 
 * `noza_thread_sleep(uint32_t ms)`: Puts the current thread to sleep for the specified number of milliseconds. 
 * `noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)`: Creates a new thread with the given entry function, parameter, and priority. 
