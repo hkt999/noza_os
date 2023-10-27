@@ -153,6 +153,7 @@ static void test_pthread_detach()
     }
 }
 
+#define NUM_PAIR    4
 #define ITERS 3000
 static int counter = 0;
 static void *inc_task(void *param)
@@ -175,7 +176,6 @@ static void *dec_task(void *param)
     }
 }
 
-#define NUM_PAIR    4
 static void test_pthread_mutex()
 {
     pthread_mutex_t posix_mutex;
@@ -318,12 +318,9 @@ void test_pthread_attr_set_and_get_scope(void) {
 void* incrementer(void* arg) {
     sem_t *sem = (sem_t *)arg;
     for (int i = 0; i < 1000; i++) {
-        //printf("inc 1\n");
         sem_wait(sem);
         counter++;
-        //printf("inc 2\n");
         sem_post(sem);
-        //printf("inc 3\n");
     }
     return NULL;
 }
@@ -331,12 +328,9 @@ void* incrementer(void* arg) {
 void* decrementer(void* arg) {
     sem_t *sem = (sem_t *)arg;
     for (int i = 0; i < 1000; i++) {
-        printf("dec 1\n");
         sem_wait(sem);
         counter--;
-        printf("dec 2\n");
         sem_post(sem);
-        printf("dec 3\n");
     }
     return NULL;
 }
@@ -362,6 +356,7 @@ void test_semaphore_synchronization(void) {
 // test condition (producer and consumer)
  
 #define BUFFER_SIZE 8
+#define PRODUCTS_COUNT 1000
 typedef struct
 {
     pthread_mutex_t locker;
@@ -434,8 +429,7 @@ static int consume(products_t* products)
 void *producer_thread(void *p)
 {
     products_t *products = (products_t *)p;
-    for (int i =0; i<128; i++) {
-        //TEST_PRINTF("producer: %d\n", i);
+    for (int i =0; i<PRODUCTS_COUNT; i++) {
         produce(products, i);
     }
     produce(products, END_FLAG);
@@ -447,12 +441,11 @@ void *consumer_thread(void *p)
 {
     products_t *products = (products_t *)p;
     int item;
- 
-    while(1) {
+
+    for (;;) {
         item = consume(products);
         if(END_FLAG == item)
             break;
-        //TEST_PRINTF("consumer: %d\n", item);
     }
     return NULL;
 }
@@ -485,13 +478,13 @@ static int test_posix(int argc, char **argv)
 {
     UNITY_BEGIN();
     TEST_MESSAGE("test posix unit-test suite start, please wait...");
-    /*
     RUN_TEST(test_pthread_create_join);
     RUN_TEST(test_pthread_yield);
     RUN_TEST(test_pthread_detach);
     RUN_TEST(test_pthread_kill);
-    RUN_TEST(test_pthread_mutex);
     RUN_TEST(test_heavy_loading);
+    RUN_TEST(test_pthread_mutex);
+    RUN_TEST(test_pthread_cond);
     RUN_TEST(test_pthread_attr_init_and_destroy);
     RUN_TEST(test_pthread_attr_set_and_get_detachstate);
     RUN_TEST(test_pthread_attr_set_and_get_stacksize);
@@ -502,9 +495,7 @@ static int test_posix(int argc, char **argv)
     RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
     RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
     RUN_TEST(test_pthread_attr_set_and_get_scope);
-    */
-    RUN_TEST(test_pthread_cond);
-    RUN_TEST(test_semaphore_synchronization);
+    //RUN_TEST(test_semaphore_synchronization);
     UNITY_END();
     return 0;
 }

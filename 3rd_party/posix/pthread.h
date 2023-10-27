@@ -139,11 +139,7 @@ int nz_pthread_mutexattr_gettype(const nz_pthread_mutexattr_t *attr, int *type);
 int nz_pthread_mutexattr_settype(nz_pthread_mutexattr_t *attr, int type);
 
 
-typedef struct {
-    mutex_t internal_mutex;
-    mutex_t *user_mutex;
-    uint32_t signaled;
-} nz_pthread_cond_t;
+typedef cond_t nz_pthread_cond_t;
 
 typedef struct {
     nz_clockid_t clock_id;

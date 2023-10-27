@@ -8,10 +8,16 @@ enum {
 	MUTEX_NOT_ENOUGH_RESOURCE = ENOMEM,
 	MUTEX_INVALID_ID = ESRCH,
 	MUTEX_INVALID_TOKEN = EINVAL,
-	MUTEX_INVALID_OP = EINVAL,
+
+	COND_SUCCESS = 0,
+	COND_NOT_ENOUGH_RESOURCE = ENOMEM,
+	COND_INVALID_ID = ESRCH,
+	COND_INVALID_TOKEN = EINVAL,
+
+	INVALID_OP = EINVAL
 };
 
-// syscall command
+// service call command
 #define MUTEX_ACQUIRE	1
 #define MUTEX_RELEASE	2
 #define MUTEX_LOCK		3
@@ -20,14 +26,40 @@ enum {
 #define MUTEX_TAIL		6
 
 #define COND_ACQUIRE	7
-#define COND_TAIL		8
+#define COND_RELEASE	8
+#define COND_WAIT		9
+#define COND_SIGNAL		10
+#define COND_BROADCAST	11
+#define COND_TAIL		12
 
+#define SEM_ACQUIRE		13
+#define SEM_RELEASE		14
+#define SEM_WAIT		15
+#define SEM_TRYWAIT		16
+#define SEM_POST		17
+#define SEM_GETVALUE	18
+#define SEM_TAIL		19
+
+// resource
 #define MAX_LOCKS		16
+#define MAX_CONDS		16
 #define MAX_PENDING		16
 
 typedef struct {
-	uint32_t cmd;
-	uint32_t mid;
-	uint32_t token;
-	uint32_t code;
+	uint32_t cmd;		// mutex command
+	uint32_t mid;		// mutex id
+	uint32_t token;		// mutex access token
+	uint32_t code;		// mutex return code
 } mutex_msg_t;
+
+typedef struct {
+	uint32_t cmd;		// cond command
+	uint32_t mid;		// cond user mutex id
+	uint32_t mtoken;
+	uint32_t code;		// cond return code
+	uint32_t cid;		// cond id
+	uint32_t ctoken;	// cond access token
+} cond_msg_t;
+
+typedef mutex_msg_t packet_t;
+
