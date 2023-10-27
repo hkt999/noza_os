@@ -20,7 +20,7 @@ option(NOZAOS_TFLM_MAGIC_WAND "build tensorflow lite micro magic wand" OFF)
 option(NOZAOS_TFLM_PERSON_DETECTION "build tensorflow lite micro person detection" OFF)
 option(NOZAOS_TFLM_MICRO_SPEECH "build tensorflow lite micro micro speech" OFF)
 
-option(NOZAOS_DRIVER_WS2812 "build ws2812 LED controll driver" OFF)
+option(NOZAOS_DRIVER_WS2812 "build ws2812 LED controll driver" ON)
 
 if (NOZAOS_UNITTEST_POSIX)
 	message(STATUS "NOZAOS_UNITTEST_POSIX need NOZAOS_POSIX")
