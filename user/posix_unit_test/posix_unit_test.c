@@ -154,7 +154,7 @@ static void test_pthread_detach()
 }
 
 #define NUM_PAIR    4
-#define ITERS 3000
+#define ITERS       3000
 static int counter = 0;
 static void *inc_task(void *param)
 {
@@ -318,9 +318,9 @@ void test_pthread_attr_set_and_get_scope(void) {
 void* incrementer(void* arg) {
     sem_t *sem = (sem_t *)arg;
     for (int i = 0; i < 1000; i++) {
-        sem_wait(sem);
+        TEST_ASSERT_EQUAL_INT(0, sem_wait(sem));
         counter++;
-        sem_post(sem);
+        TEST_ASSERT_EQUAL_INT(0, sem_post(sem));
     }
     return NULL;
 }
@@ -328,26 +328,34 @@ void* incrementer(void* arg) {
 void* decrementer(void* arg) {
     sem_t *sem = (sem_t *)arg;
     for (int i = 0; i < 1000; i++) {
-        sem_wait(sem);
+        TEST_ASSERT_EQUAL_INT(0, sem_wait(sem));
         counter--;
-        sem_post(sem);
+        TEST_ASSERT_EQUAL_INT(0, sem_post(sem));
     }
     return NULL;
 }
 
 #define NONE_SHARED 0
-void test_semaphore_synchronization(void) {
+void test_semaphore() {
     sem_t semaphore;
     counter = 0;
     TEST_ASSERT_EQUAL_INT(0, sem_init(&semaphore, NONE_SHARED, 1));  // Initialize semaphore with value 1.
 
-    pthread_t inc_thread, dec_thread;
+    pthread_t inc_thread[NUM_PAIR], dec_thread[NUM_PAIR];
 
-    TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_thread, NULL, incrementer, &semaphore));
-    TEST_ASSERT_EQUAL_INT(0, pthread_create(&dec_thread, NULL, decrementer, &semaphore));
+    for (int i=0; i<NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_thread[i], NULL, incrementer, &semaphore));
+    }
+    for (int i=0; i<NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_create(&dec_thread[i], NULL, decrementer, &semaphore));
+    }
 
-    TEST_ASSERT_EQUAL_INT(0, pthread_join(inc_thread, NULL));
-    TEST_ASSERT_EQUAL_INT(0, pthread_join(dec_thread, NULL));
+    for (int i=0; i<NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_join(inc_thread[i], NULL));
+    }
+    for (int i=0; i<NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_join(dec_thread[i], NULL));
+    }
 
     TEST_ASSERT_EQUAL_INT(0, counter);  // After both threads finish, counter should be 0.
     TEST_ASSERT_EQUAL_INT(0, sem_destroy(&semaphore));  // Clean up.
@@ -387,10 +395,10 @@ static int buffer_is_empty(products_t* products)
 // producer 
 static void produce(products_t* products,int item)
 {
-    pthread_mutex_lock(&products->locker);
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_lock(&products->locker));
     while (buffer_is_full(products)) {
         // if cond is signaled, still kill locker locked
-        pthread_cond_wait(&products->not_full, &products->locker);
+        TEST_ASSERT_EQUAL_INT(0, pthread_cond_wait(&products->not_full, &products->locker));
     } 
  
     products->buffer[products->pos_write_to]= item;
@@ -399,17 +407,17 @@ static void produce(products_t* products,int item)
     if (products->pos_write_to >= BUFFER_SIZE)
         products->pos_write_to = 0;
 
-    pthread_cond_signal(&products->not_empty);
-    pthread_mutex_unlock(&products->locker);
+    TEST_ASSERT_EQUAL_INT(0, pthread_cond_signal(&products->not_empty));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&products->locker));
 }
  
 static int consume(products_t* products)
 {
     int item;
 
-    pthread_mutex_lock(&products->locker);
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_lock(&products->locker));
     while (buffer_is_empty(products)) {
-        pthread_cond_wait(&products->not_empty, &products->locker);
+        TEST_ASSERT_EQUAL_INT(0, pthread_cond_wait(&products->not_empty, &products->locker));
     }
  
     item = products->buffer[products->pos_read_from];
@@ -417,8 +425,8 @@ static int consume(products_t* products)
     if (products->pos_read_from >= BUFFER_SIZE)
         products->pos_read_from =0;
  
-    pthread_cond_signal(&products->not_full); 
-    pthread_mutex_unlock(&products->locker);
+    TEST_ASSERT_EQUAL_INT(0, pthread_cond_signal(&products->not_full)); 
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&products->locker));
     
     return item;
 }
@@ -485,6 +493,7 @@ static int test_posix(int argc, char **argv)
     RUN_TEST(test_heavy_loading);
     RUN_TEST(test_pthread_mutex);
     RUN_TEST(test_pthread_cond);
+    RUN_TEST(test_semaphore);
     RUN_TEST(test_pthread_attr_init_and_destroy);
     RUN_TEST(test_pthread_attr_set_and_get_detachstate);
     RUN_TEST(test_pthread_attr_set_and_get_stacksize);
@@ -495,7 +504,6 @@ static int test_posix(int argc, char **argv)
     RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
     RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
     RUN_TEST(test_pthread_attr_set_and_get_scope);
-    //RUN_TEST(test_semaphore_synchronization);
     UNITY_END();
     return 0;
 }
