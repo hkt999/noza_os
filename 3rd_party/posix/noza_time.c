@@ -22,3 +22,13 @@ void nz_clock_gettime(uint32_t mode, struct nz_timespec *ts)
     ts->tv_nsec = 0;
     ts->tv_nsec = 0;
 }
+
+int nz_sleep(unsigned int seconds)
+ {
+    return noza_thread_sleep_us(seconds * 1000000, 0);
+ }
+ 
+ int nz_usleep(unsigned int usec)
+ {
+    return noza_thread_sleep_us(usec, 0);
+ }

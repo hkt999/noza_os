@@ -15,3 +15,5 @@ int nz_nanosleep(const struct nz_timespec *rqtp, struct nz_timespec *rmtp);
 
 #define SZ_CLOCK_REALTIME 0
 void nz_clock_gettime(uint32_t mode, struct nz_timespec *ts);
+int nz_sleep(unsigned int seconds);
+int nz_usleep(unsigned int usec);

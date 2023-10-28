@@ -115,6 +115,8 @@
 // time wrapper
 #define timespec                                nz_timespec
 #define nanosleep(p1, p2)                       nz_nanosleep(p1, p2)
+#define sleep(p1)                               nz_sleep(p1);
+#define usleep(p1)                              nz_usleep(p1);
 
 #define pthread_create(p1, p2, p3, p4)          nz_pthread_create(p1, p2, p3, p4)
 #define pthread_join(p1, p2)                    nz_pthread_join(p1, p2)
