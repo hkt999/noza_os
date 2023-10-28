@@ -86,7 +86,12 @@ int cond_wait(cond_t *cond, mutex_t *mutex)
 // TODO: implement this
 int cond_timedwait(cond_t *cond, mutex_t *mutex, uint32_t us)
 {
-	return -1;
+	cond->mid = mutex->mid;
+	cond->mtoken = mutex->token;
+	cond_msg_t msg = {.cmd = COND_TIMEDWAIT, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0, .mid = mutex->mid, .mtoken = mutex->token};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	noza_call(&noza_msg);
+	return msg.code;
 }
 
 int cond_signal(cond_t *cond)
@@ -102,5 +107,60 @@ int cond_broadcast(cond_t *cond)
 	cond_msg_t msg = {.cmd = COND_BROADCAST, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0, .mid = -1};
 	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
 	noza_call(&noza_msg);
+	return msg.code;
+}
+
+// semaphore
+int semaphore_init(semaphore_t *sem, int value)
+{
+	sem_msg_t msg = {.cmd = SEM_ACQUIRE, .value = value, .code = 0};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	noza_call(&noza_msg);
+	if (msg.code == SEM_SUCCESS) {
+		sem->sid = msg.sid;
+		sem->stoken = msg.stoken;
+	}
+	return msg.code;
+}
+
+int semaphore_destroy(semaphore_t *sem)
+{
+	sem_msg_t msg = {.cmd = SEM_RELEASE, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	noza_call(&noza_msg);
+	return msg.code;
+}
+
+int semaphore_wait(semaphore_t *sem)
+{
+	sem_msg_t msg = {.cmd = SEM_WAIT, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	noza_call(&noza_msg);
+	return msg.code;
+}
+
+int semaphore_trywait(semaphore_t *sem)
+{
+	sem_msg_t msg = {.cmd = SEM_TRYWAIT, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	noza_call(&noza_msg);
+	return msg.code;
+}
+
+int semaphore_post(semaphore_t *sem)
+{
+	sem_msg_t msg = {.cmd = SEM_POST, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	noza_call(&noza_msg);
+	return msg.code;
+}
+
+int semaphore_getvalue(semaphore_t *sem, int *sval)
+{
+	sem_msg_t msg = {.cmd = SEM_GETVALUE, .sid = sem->sid, .stoken = sem->stoken, .code = 0, .value = 0};
+	noza_msg_t noza_msg = {.to_pid = mutex_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
+	if (noza_call(&noza_msg) == 0) {
+		*sval = msg.value;
+	}
 	return msg.code;
 }
