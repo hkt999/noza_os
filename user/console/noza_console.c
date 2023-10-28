@@ -161,7 +161,7 @@ int console_start(void *param, uint32_t pid)
 	for (;;) {
 		int ch = noza_console.cmd.driver.getc();
 		if (ch < 0)
-			noza_thread_sleep_ms(20, NULL);
+			noza_thread_sleep_ms(100, NULL);
 		else
 			cmd_line_putc(&noza_console.cmd, ch);
 	}
