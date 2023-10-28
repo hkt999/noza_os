@@ -25,9 +25,9 @@ int     noza_thread_join(uint32_t thread_id, uint32_t *code);
 void    noza_thread_terminate(int exit_code);
 int     noza_thread_self(uint32_t *pid);
 
-// NOza message
-int noza_recv(noza_msg_t *msg);
-int noza_call(noza_msg_t *msg);
-int noza_reply(noza_msg_t *msg);
-int noza_nonblock_call(noza_msg_t *msg);
-int noza_nonblock_recv(noza_msg_t *msg);
+// Noza message API
+int     noza_recv(noza_msg_t *msg);
+int     noza_call(noza_msg_t *msg);
+int     noza_reply(noza_msg_t *msg);
+int     noza_nonblock_call(noza_msg_t *msg);
+int     noza_nonblock_recv(noza_msg_t *msg);
