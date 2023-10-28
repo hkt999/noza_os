@@ -5,6 +5,7 @@
 #include "nozaos.h"
 #include "user/console/noza_console.h"
 
+/*
 #ifdef NOZAOS_TFLM
 extern void RegisterDebugLogCallback(void (*cb)(const char* s));
 void tflm_debug(const char *s)
@@ -12,6 +13,7 @@ void tflm_debug(const char *s)
     printf("%s\n", s);
 }
 #endif
+*/
 
 void root_task(void *param)
 {
