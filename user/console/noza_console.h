@@ -6,8 +6,9 @@ typedef struct {
     const char *name;
     main_func_t main_func;
     const char *help_msg;
+    uint32_t stack_size;
 } builtin_cmd_t;
 
-int console_start(void *param, uint32_t pid);
+int console_start();
 int console_stop();
-void console_add_command(const char *name, int (*main)(int argc, char **argv), const char *desc);
+void console_add_command(const char *name, int (*main)(int argc, char **argv), const char *desc, uint32_t stack_size);

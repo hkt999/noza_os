@@ -38,7 +38,7 @@ char *term_readline(noza_term_t *term, char *line, int max_len)
 	while (!term->line_end) {
 		int ch = term->cmd.driver.getc();
 		if (ch < 0)
-			noza_thread_sleep(20);
+			noza_thread_sleep(100);
 		else
 			cmd_line_putc(&term->cmd, ch);
 	}

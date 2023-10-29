@@ -13,7 +13,7 @@ typedef struct {
 } builtin_table_t;
 
 static builtin_table_t cmd_table;
-void console_add_command(const char *name, int (*main)(int argc, char **argv), const char *desc)
+void console_add_command(const char *name, int (*main)(int argc, char **argv), const char *desc, uint32_t stack_size)
 {
 	builtin_table_t *table = &cmd_table;
 	static int inited = 0;
@@ -25,9 +25,11 @@ void console_add_command(const char *name, int (*main)(int argc, char **argv), c
     if (table->count >= MAX_BUILTIN_CMDS) {
         return; // fail
     }
-    table->builtin_cmds[table->count].name = name;
-    table->builtin_cmds[table->count].main_func = main;
-    table->builtin_cmds[table->count].help_msg = desc;
+	builtin_cmd_t *cmd = &table->builtin_cmds[table->count];
+    cmd->name = name;
+    cmd->main_func = main;
+    cmd->help_msg = desc;
+	cmd->stack_size = stack_size;
     table->count++;
 }
 
@@ -116,6 +118,18 @@ static void parse_input_command(char *cmdbuf, int *argc, char **argv, int max_ar
 	}
 }
 
+typedef struct {
+	int argc;
+	char **argv;
+	int (*main_func)(int argc, char **argv);
+} run_t;
+
+static int run_entry(void *param, uint32_t pid)
+{
+	run_t *run = (run_t *)param;
+	return run->main_func(run->argc, run->argv);
+}
+
 #define MAX_ARGV  12
 static void noza_console_process_command(char *cmd_str, void *user_data)
 {
@@ -138,7 +152,13 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 			} else  {
 				while (rc->name && rc->main_func) {
 					if (strncmp(rc->name, argv[0], 32) == 0) {
-						rc->main_func(argc, argv);
+						uint32_t th;
+						run_t run = {.argc  = argc, .argv = argv, .main_func = rc->main_func};
+						if (noza_thread_create(&th, run_entry, &run, 0, rc->stack_size) == 0) {
+							noza_thread_join(th, NULL);
+						} else {
+							printf("failed to create thread (%s)\n", rc->name);
+						}
 						break;
 					}
 					rc++;
@@ -155,7 +175,7 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 // global console
 
 static noza_console_t noza_console;
-int console_start(void *param, uint32_t pid)
+int console_start()
 { 
 	noza_console_init(&noza_console, "noza> ", &cmd_table.builtin_cmds[0]);
 	for (;;) {
