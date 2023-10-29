@@ -93,6 +93,8 @@ void platform_idle()
     }
 }
 
+uint32_t test_addr;
+
 #include <stdio.h>
 #include <stdarg.h>
 void platform_panic(const char *msg, ...)

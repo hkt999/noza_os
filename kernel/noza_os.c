@@ -172,6 +172,7 @@ typedef struct {
 } noza_os_message_t;
 
 // define a structure for thread management
+// thread control block (TCB)
 typedef struct thread_s {
     uint32_t            *stack_ptr;          // pointer to the thread's stack
     cdl_node_t          state_node;          // node for managing the thread state
@@ -184,7 +185,7 @@ typedef struct thread_s {
     thread_t            *join_th;             // thread waiting to join this thread
     uint32_t            stack_area[NOZA_OS_STACK_SIZE]; // stack memory area for the thread
     uint8_t             flags;               // reserved flags
-    uint8_t             callid;              // call id  
+    uint8_t             callid;              // system call id  
 } thread_t;
 
 // Define a structure for Noza OS management
@@ -197,6 +198,9 @@ typedef struct {
     thread_list_t   free;                                // list of free/available threads
     // context
     thread_t thread[NOZA_OS_TASK_LIMIT];                 // array of thread_t structures for task management
+
+    // this area should be user read only, set up the protection if we have MPU
+    // void *user_task_data[NOZA_OS_TASK_LIMIT];           // array of user task data, read by user, and write by kernel
 } noza_os_t;
 
 
@@ -483,19 +487,20 @@ static void noza_init()
     }
 }
 
-void noza_root_task(void *param)
+static void noza_root_task(void *param)
 {
     extern void root_task(void *param);
     extern void noza_run_services(); // application code
 
     noza_run_services();
-    root_task(param);
+    root_task(param); // root task is with very small stack
 }
 
 static void noza_run()
 {
     uint32_t th;
-    noza_os_thread_create(&th, noza_root_task, NULL, 0); // create the first task (pid:0)
+    noza_os_thread_create(&th, noza_root_task, NULL, 0); // create the first task (pid:0) 
+    // TODO: set th as detach, after creating the first user process, just exit
     noza_os_scheduler(); // start os scheduler and never return
 }
 
@@ -621,15 +626,21 @@ static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void
     th->stack_ptr = platform_build_stack(thread_get_pid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
-static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t pri)
+static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t priority)
 {
+    // sanity check
+    if (priority > NOZA_OS_PRIORITY_LIMIT) {
+        return EINVAL;
+    }
+
     thread_t *th = noza_thread_alloc();
     if (th == NULL) {
         return EAGAIN;
     }
-    th->info.priority = pri;
+    th->info.priority = priority;
     th->flags = 0x0;
-    noza_os_add_thread(&noza_os.ready[pri], th);
+    //noza_os.user_task_data[thread_get_pid(th)] = param; // save the user data
+    noza_os_add_thread(&noza_os.ready[priority], th);
     noza_make_app_context(th, entry, param);
 
     *pth = thread_get_pid(th);
@@ -959,10 +970,18 @@ uint32_t *noza_os_resume_thread(uint32_t *stack);
 uint32_t *noza_os_resume_thread_syscall(uint32_t *stack);
 
 // switch to user stack
-#define SCHEDULE(stack_ptr) \
-    noza_os_unlock(core); \
-    stack_ptr = noza_os_resume_thread(stack_ptr); \
+static inline void GO_RUN(int core, thread_t *running) {
+    noza_os_unlock(core);
+    running->stack_ptr = noza_os_resume_thread(running->stack_ptr);
     noza_os_lock(core); 
+}
+
+// switch to idle stack
+static inline void GO_IDLE(int core) {
+    noza_os_unlock(core);
+    idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
+    noza_os_lock(core);
+}
 
 static void noza_os_scheduler()
 {
@@ -1010,7 +1029,7 @@ pick_thread:
                 }
 
                 // TODO: start (for time slice)
-                SCHEDULE(running->stack_ptr)
+                GO_RUN(core, running);
                 // TODO: end, calculate the remaining time for slice
                 if (running->trap.state == SYSCALL_PENDING) {
                     running->callid = running->trap.r0; // save the callid
@@ -1045,7 +1064,7 @@ pick_thread:
                 }
                 platform_systick_config((uint32_t)us);
             }
-            SCHEDULE(idle_task[core].idle_stack_ptr);
+            GO_IDLE(core);
             // tick other cores
             if (core == 0) {
                 platform_tick_cores();

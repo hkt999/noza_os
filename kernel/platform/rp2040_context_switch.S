@@ -132,8 +132,8 @@ isr_systick:
     pop {pc} // jump to kernel wihout changing priviledge level
 
 .global noza_os_resume_thread
+.global test_addr
 noza_os_resume_thread:
-	// save kernel state
 	mrs ip, psr
     push {r4, r5, r6, r7, lr}
     mov r1, r8
@@ -141,7 +141,7 @@ noza_os_resume_thread:
     mov r3, r10
     mov r4, r11
     mov r5, r12
-    push {r1, r2, r3, r4, r5}    
+    push {r1-r5}
 
 	// load user state from stack
     // r0 is usertask_stack_start from noza_os_resume_thread
