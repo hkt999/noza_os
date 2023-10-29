@@ -673,14 +673,9 @@ int lua_main (int argc, char **argv) {
   return (result && status == LUA_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-void lua_touch()
-{
-  // do nothing 
-}
-
 #include "noza_console.h"
 // register unit test function
 void __attribute__((constructor(1000))) register_lua()
 {
-    console_add_command("lua", lua_main, "run Lua interpreter");
+    console_add_command("lua", lua_main, "run Lua interpreter", 0);
 }
