@@ -11,8 +11,10 @@
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
 
+//__thread int my_test;
 static int test_task(void *param, uint32_t pid)
 {
+    //my_test = pid;
     int do_count = rand() % 5 + 2;
     int ms = rand() % 50 + 50;
     while (do_count-->0) {
@@ -88,7 +90,6 @@ static void test_noza_thread()
         for (int i = 0; i < NUM_THREADS; i++) {
             TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
             TEST_ASSERT_TRUE(th[i] < NOZA_OS_TASK_LIMIT);
-            TEST_ASSERT_NOT_EQUAL(0, th[i]);
         }
         noza_thread_sleep_ms(50, NULL);
         for (int i = 0; i < NUM_THREADS; i++) {

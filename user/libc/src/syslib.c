@@ -23,7 +23,7 @@ typedef struct thread_info {
 	jmp_buf jmp_buf;
 	uint32_t errno;
 } thread_info_t;
-static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0};
+static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0}; // user thread information
 
 extern void app_run(thread_info_t *info);
 
@@ -112,6 +112,8 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	thread_info->need_free_stack = auto_free_stack;
 	thread_info->pid = -1;
 	thread_info->errno = 0;
+
+	// setup registers for system call
 	info.r0 = NSC_THREAD_CREATE;
 	info.r1 = (uint32_t)app_run;
 	info.r2 = (uint32_t)thread_info;
@@ -172,4 +174,25 @@ int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms)
 		*remain_ms /= 1000;
 	}
 	return ret;
+}
+
+int noza_set_errno(int errno)
+{
+	uint32_t pid;
+	if (noza_thread_self(&pid) == 0) {
+		THREAD_INFO[pid]->errno = errno;
+		return 0;
+	}
+
+	return -1;
+}
+
+int noza_get_errno()
+{
+	uint32_t pid;
+	if (noza_thread_self(&pid) == 0) {
+		return THREAD_INFO[pid]->errno;
+	}
+
+	return -1;
 }
