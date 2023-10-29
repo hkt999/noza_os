@@ -511,6 +511,6 @@ static int test_posix(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_posix_unittest()
 {
-    console_add_command("posix_unittest", test_posix, "nozaos and lib, posix unit-test suite");
+    console_add_command("posix_unittest", test_posix, "nozaos and lib, posix unit-test suite", 2048);
 }
 

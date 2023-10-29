@@ -331,5 +331,5 @@ static int test_all(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_noza_unittest()
 {
-    console_add_command("noza_unittest", test_all, "nozaos and lib, unit-test suite");
+    console_add_command("noza_unittest", test_all, "nozaos and lib, unit-test suite", 2048);
 }
