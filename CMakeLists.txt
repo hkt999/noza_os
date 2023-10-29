@@ -160,7 +160,8 @@ set(
 	user/libc/src/setjmp.S
 
 	# services
-	#service/name_lookup/name_lookup.c
+	service/name_lookup/name_lookup_server.c
+	service/name_lookup/name_lookup_client.c
 	service/memory/mem_serv.c
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
