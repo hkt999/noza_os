@@ -151,7 +151,6 @@ set(
 	kernel/platform/rp2040_platform.c
 	kernel/platform/rp2040_build_stack.c
 	kernel/noza_os.c
-	# kernel/int_map.c
 
 	# lib and system call for user space application
 	user/libc/src/app_run.S
@@ -162,6 +161,8 @@ set(
 	# services
 	service/name_lookup/name_lookup_server.c
 	service/name_lookup/name_lookup_client.c
+	service/name_lookup/string_map.c
+
 	service/memory/mem_serv.c
 	service/memory/mem_client.c
 	service/sync/sync_serv.c

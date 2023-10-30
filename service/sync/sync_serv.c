@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include "../name_lookup/name_lookup_client.h"
 #include "sync_serv.h"
 #include "nozaos.h"
 
@@ -77,8 +78,6 @@ static dblink_item_t *dblist_remove_head(dblink_item_t *head)
 	next->prev = head->prev;
 	return next;
 }
-
-uint32_t mutex_pid;
 
 typedef struct {
 	mutex_item_t	mutex_store[MAX_LOCKS];
@@ -651,8 +650,9 @@ static void sync_init(sync_info_t *si)
 
 static int do_synchorization_server(void *param, uint32_t pid)
 {
-	mutex_pid = pid;
 	static sync_info_t si;
+
+	name_lookup_register("noza_sync", pid); // register service
 
 	extern uint32_t platform_get_random(void);
 	srand(platform_get_random()); // for access token
@@ -679,7 +679,7 @@ static int do_synchorization_server(void *param, uint32_t pid)
 	return 0;
 }
 
-static uint8_t mutex_server_stack[1024];
+static uint8_t mutex_server_stack[1024]; // TODO: reconsider the stack size
 void __attribute__((constructor(110))) synchorization_server_init(void *param, uint32_t pid)
 {
     // TODO: move the external declaraction into a header file

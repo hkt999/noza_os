@@ -6,6 +6,7 @@
 #include "posix/bits/signum.h"
 #include "kernel/noza_config.h"
 #include "posix/errno.h"
+#include <service/name_lookup/name_lookup_client.h>
 #include <service/sync/sync_client.h>
 
 #define UNITY_INCLUDE_CONFIG_H
@@ -317,6 +318,46 @@ static void test_noza_mutex()
     TEST_ASSERT_EQUAL_INT(0, mutex_release(&noza_mutex));
 }
 
+static void test_noza_lookup()
+{
+    // test name_lookup_server_register() and name_lookup_server_lookup()
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_register("key1", 1));
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_register("key2", 2));
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_register("key3", 3));
+
+    uint32_t value;
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key1", &value));
+    TEST_ASSERT_EQUAL_INT(1, value);
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key2", &value));
+    TEST_ASSERT_EQUAL_INT(2, value);
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key3", &value));
+    TEST_ASSERT_EQUAL_INT(3, value);
+
+    // test name_lookup_server_unregister()
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister("key1"));
+    TEST_ASSERT_EQUAL_INT(ENOENT, name_lookup_search("key1", &value)); // not found
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key2", &value));
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key3", &value));
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister("key2"));
+    TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister("key3"));
+
+    // test name_lookup_server_register() with too many services
+    int i;
+    for (i = 0; i < 128; i++) {
+        char key[16];
+        sprintf(key, "key%d", i);
+        if (name_lookup_register(key, i) != 0)
+            break;
+    }
+    int count = i;
+    for (i = 0; i<count; i++) {
+        char key[16];
+        sprintf(key, "key%d", i);
+        TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister(key));
+    }
+    TEST_PRINTF("remaing service count: %d", count);
+}
+
 static int test_all(int argc, char **argv)
 {
     UNITY_BEGIN();
@@ -325,6 +366,7 @@ static int test_all(int argc, char **argv)
     RUN_TEST(test_noza_message);
     RUN_TEST(test_noza_mutex);
     RUN_TEST(test_noza_hardfault);
+    RUN_TEST(test_noza_lookup);
     UNITY_END();
     return 0;
 }

@@ -1,78 +1,82 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include "nozaos.h"
+#include "string_map.h"
 #include "name_lookup_server.h"
-
-#define NOZA_MAX_SERVICE    16
-#define MAX_NAME_LEN        16
+#include "name_lookup_client.h"
 
 typedef struct {
-    char name[MAX_NAME_LEN]; // name
-    uint32_t value;
-} name_lookup_msg_t;
+    value_node_t node_slot[NOZA_MAX_SERVICE];
+    value_node_t *free_head;
+} node_mgr_t;
 
-static name_lookup_msg_t name_lookup_table[NOZA_MAX_SERVICE];
-
-static int find_empty()
-{
-    for (int i = 0; i < NOZA_MAX_SERVICE; i++) {
-        if (name_lookup_table[i].value == 0) {
-            return i;
-        }
+static value_node_t *node_alloc(void *p) {
+    value_node_t *r;
+    node_mgr_t *m = (node_mgr_t *)p;
+    if (m->free_head) {
+        r = m->free_head;
+        m->free_head = m->free_head->mlink;
     }
-    return -1;
+    return r;
 }
 
-static int find_name(const char *name)
-{
-    for (int i = 0; i < NOZA_MAX_SERVICE; i++) {
-        if (strncmp(name_lookup_table[i].name, name, MAX_NAME_LEN) == 0) {
-            return i;
-        }
-    }
-    return -1;
+static void node_free(value_node_t *node, void *p) {
+    node_mgr_t *m = (node_mgr_t *)p;
+    node->mlink = m->free_head;
+    m->free_head = node;
 }
 
-static int do_name_lookup(void *param, uint32_t pid)
+static void node_mgr_init(node_mgr_t *m) {
+    memset(m, 0, sizeof(node_mgr_t));
+    for (int i=0; i<NOZA_MAX_SERVICE-1; i++) {
+        m->node_slot[i].mlink = &m->node_slot[i+1];
+    }
+    m->node_slot[NOZA_MAX_SERVICE-1].mlink = NULL; // last one
+    m->free_head = &m->node_slot[0];
+}
+
+static void map_init(simap_t *m, node_mgr_t *node_mgr) {
+    memset(m, 0, sizeof(simap_t));
+    m->root = NULL;
+    m->node_alloc = node_alloc;
+    m->node_free = node_free;
+    m->alloc_param = node_mgr;
+}
+
+static int do_name_server(void *param, uint32_t pid)
 {
-    int idx;
     noza_msg_t msg;
-    memset(name_lookup_table, 0, sizeof(name_lookup_table));
+    simap_t map;
+    static node_mgr_t node_mgr;
+
+    if (pid != NAME_SERVER_PID) {
+        printf("name server panic: invalid pid %d\n", pid);
+        return -1;
+    }
+
+    // setup node manager
+    node_mgr_init(&node_mgr);
+    map_init(&map, &node_mgr);
+    simap_init(&map, node_alloc, node_free, &node_mgr);
     for (;;) {
         if (noza_recv(&msg) == 0) {
             name_msg_t *name_msg = (name_msg_t *)msg.ptr;
             switch (name_msg->cmd) {
                 case NAME_LOOKUP_REGISTER:
-                    if ((idx = find_empty()) >= 0) {
-                        strncpy(name_lookup_table[idx].name, name_msg->name, MAX_NAME_LEN);
-                        name_lookup_table[idx].value = name_msg->value;
-                        name_msg->code = 0;
-                    } else {
-                        name_msg->code = -1;
-                    }
+                    name_msg->code = simap_set_value(&map, name_msg->name, name_msg->value);
                     break;
 
-                case NAME_LOOKUP_LOOKUP:
-                    if ((idx = find_name(name_msg->name)) >= 0) {
-                        name_msg->value = name_lookup_table[idx].value;
-                        name_msg->code = 0;
-                    } else {
-                        name_msg->code = -2;
-                    }
+                case NAME_LOOKUP_SEARCH:
+                    name_msg->code = simap_get_value(&map, name_msg->name, (int *)&name_msg->value);
                     break;
 
                 case NAME_LOOKUP_UNREGISTER:
-                    if ((idx = find_name(name_msg->name)) >= 0) {
-                        name_lookup_table[idx].value = 0;
-                        name_msg->code = 0;
-                    } else {
-                        name_msg->code = -3;
-                    }
+                    name_msg->code = simap_clear(&map, name_msg->name);
                     break;
 
                 default:
-                    name_msg->code = -4;
+                    name_msg->code = -1;
                     break;
             }
             noza_reply(&msg);
@@ -80,4 +84,12 @@ static int do_name_lookup(void *param, uint32_t pid)
     }
 
     return 0;
+}
+
+static uint8_t name_server_stack[256]; // TODO: reconsider the stack size
+void __attribute__((constructor(101))) name_server_init(void *param, uint32_t pid)
+{
+    // TODO: move the external declaraction into a header file
+    extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
+	noza_add_service(do_name_server, name_server_stack, sizeof(name_server_stack)); // TODO: add stack size
 }

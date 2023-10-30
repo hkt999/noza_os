@@ -176,4 +176,3 @@ noza_init_kernel_stack:
 	movs r0, #0
 	svc #0 // system call:0 --> reschedule, and then swith to kernel mode
 	bx lr
-
