@@ -206,7 +206,7 @@ int noza_set_errno(int errno)
 	return -1;
 }
 
-int noza_get_errno()
+int noza_errno()
 {
 	uint32_t pid;
 	if (noza_thread_self(&pid) == 0) {
@@ -227,7 +227,7 @@ int noza_thread_self(uint32_t *pid)
 		thread_record_t *th = THREAD_RECORD[noza_pid];
 		if (sp > (uint32_t )th->stack_ptr && sp < (uint32_t)th->stack_ptr + th->stack_size) {
 			*pid = noza_pid;
-			return 0;
+			return 0; // success
 		}
 	}
 
