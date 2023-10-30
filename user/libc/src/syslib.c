@@ -215,3 +215,21 @@ int noza_get_errno()
 
 	return -1;
 }
+
+int noza_thread_self(uint32_t *pid)
+{
+	extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
+
+	uint32_t sp;
+	asm volatile ("mov %0, sp\n" : "=r" (sp));
+	for (int core = 0; core < NOZA_OS_NUM_CORES; core++) {
+		uint32_t noza_pid = NOZAOS_PID[core];
+		thread_record_t *th = THREAD_RECORD[noza_pid];
+		if (sp > (uint32_t )th->stack_ptr && sp < (uint32_t)th->stack_ptr + th->stack_size) {
+			*pid = noza_pid;
+			return 0;
+		}
+	}
+
+	return -1;
+}

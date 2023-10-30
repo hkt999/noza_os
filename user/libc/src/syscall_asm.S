@@ -8,12 +8,11 @@
 .equ NSC_THREAD_JOIN,				4
 .equ NSC_THREAD_DETACH,				5
 .equ NSC_THREAD_TERMINATE,			6
-.equ NSC_THREAD_SELF,				7
-.equ NSC_RECV,						8
-.equ NSC_REPLY,						9
-.equ NSC_CALL,						10
-.equ NSC_NB_RECV,					11
-.equ NSC_NB_CALL,					12
+.equ NSC_RECV,						7
+.equ NSC_REPLY,						8
+.equ NSC_CALL,						9
+.equ NSC_NB_RECV,					10
+.equ NSC_NB_CALL,					11
 
 .type noza_thread_join, %function
 .global noza_thread_join
@@ -75,17 +74,6 @@ noza_thread_terminate:
 	mov r1, r0 						// move the terminate code to r1
 	movs r0, #NSC_THREAD_TERMINATE	// set r0 to the value of NSC_THREAD_TERMINATE
 	svc #0 							// system call, return value in r0
-	pop {r4-r7, pc}  
-
-.type noza_thread_self, %function
-.global noza_thread_self
-noza_thread_self:
-	push {r4-r7, lr}
-	mov r4, r0 // save parameter address (r0)
-	movs r0, #NSC_THREAD_SELF	// set r0 to the value of NSC_THREAD_SELF
-	svc #0					// system call, return value in r0
-	str r0, [r4]			// store the return value in the memory pointed by r2
-	movs r0, #0				// set r0 to 0, TODO: get value from kernel return value
 	pop {r4-r7, pc}  
 
 .type noza_recv, %function

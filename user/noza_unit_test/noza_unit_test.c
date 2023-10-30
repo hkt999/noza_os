@@ -19,6 +19,9 @@ static int test_task(void *param, uint32_t pid)
     int do_count = rand() % 5 + 2;
     int ms = rand() % 50 + 50;
     while (do_count-->0) {
+        uint32_t lpid;
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_self(&lpid));
+        TEST_ASSERT_EQUAL_INT(pid, lpid);
         int ret = noza_thread_sleep_ms(ms, NULL);
         if (ret != 0) {
             TEST_ASSERT_NOT_EQUAL(0, ret);
