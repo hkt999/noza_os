@@ -63,6 +63,10 @@ void kernel_panic(const char *fmt, ...)
     HALT();
 }
 
+// share area between kernel and user
+// kernel update the data, and user read only
+
+uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES] = {0, 0};
 
 const char *state_to_str(uint32_t id) 
 {
@@ -834,11 +838,6 @@ static void syscall_thread_terminate(thread_t *running)
     noza_os_clear_running_thread();
 }
 
-static void syscall_thread_self(thread_t *running)
-{
-    noza_os_set_return_value1(running, thread_get_pid(running));
-}
-
 static void syscall_recv(thread_t *running)
 {
     noza_os_recv(running);
@@ -890,7 +889,6 @@ static syscall_func_t syscall_func[] = {
     [NSC_THREAD_JOIN] = syscall_thread_join,
     [NSC_THREAD_DETACH] = syscall_thread_detach,
     [NSC_THREAD_TERMINATE] = syscall_thread_terminate,
-    [NSC_THREAD_SELF] = syscall_thread_self,
 
     // messages and ports
     [NSC_RECV] = syscall_recv,
@@ -971,6 +969,7 @@ uint32_t *noza_os_resume_thread_syscall(uint32_t *stack);
 
 // switch to user stack
 static inline void GO_RUN(int core, thread_t *running) {
+    NOZAOS_PID[core] = thread_get_pid(running);
     noza_os_unlock(core);
     running->stack_ptr = noza_os_resume_thread(running->stack_ptr);
     noza_os_lock(core); 
