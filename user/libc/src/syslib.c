@@ -23,7 +23,26 @@ typedef struct thread_info {
 	jmp_buf jmp_buf;
 	uint32_t errno;
 } thread_info_t;
+
 static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0}; // user thread information
+
+uint32_t *get_stack_ptr(uint32_t pid)
+{
+	return THREAD_INFO[pid]->stack_ptr;
+}
+
+uint32_t noza_get_stack_space() {
+    uint32_t pid;
+    if (noza_thread_self(&pid) == 0) {
+        uint32_t sp;
+        asm volatile ("mov %0, sp\n" : "=r" (sp));
+        uint32_t stack_bottom = (uint32_t)THREAD_INFO[pid]->stack_ptr;
+        uint32_t stack_size = THREAD_INFO[pid]->stack_size;
+		return (stack_bottom + stack_size) - sp;
+	} else {
+		return 0; // fail
+    }
+}
 
 extern void app_run(thread_info_t *info);
 
@@ -34,7 +53,6 @@ typedef struct service_entry {
 	uint32_t stack_size;
 } service_entry_t;
 
-//static void *service_entry[MAX_SERVICES];
 static service_entry_t service_entry[MAX_SERVICES];
 static int service_count = 0;
 void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size)

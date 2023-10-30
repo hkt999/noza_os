@@ -31,6 +31,7 @@ int     noza_call(noza_msg_t *msg);
 int     noza_reply(noza_msg_t *msg);
 int     noza_nonblock_call(noza_msg_t *msg);
 int     noza_nonblock_recv(noza_msg_t *msg);
+uint32_t noza_get_stack_space();
 
 // user level call
 int noza_set_errno(int errno);
