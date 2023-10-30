@@ -12,7 +12,7 @@
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
 
-typedef struct thread_info {
+typedef struct {
 	int (*user_entry)(void *param, uint32_t pid);
 	void *user_param;
 	uint32_t *stack_ptr;
@@ -20,15 +20,16 @@ typedef struct thread_info {
 	uint32_t priority;
 	uint32_t need_free_stack;
 	uint32_t pid;
+	void *thread_data;
 	jmp_buf jmp_buf;
 	uint32_t errno;
-} thread_info_t;
+} thread_record_t;
 
-static thread_info_t *THREAD_INFO[NOZA_OS_TASK_LIMIT] = {0}; // user thread information
+static thread_record_t *THREAD_RECORD[NOZA_OS_TASK_LIMIT] = {0}; // user thread information
 
 uint32_t *get_stack_ptr(uint32_t pid)
 {
-	return THREAD_INFO[pid]->stack_ptr;
+	return THREAD_RECORD[pid]->stack_ptr;
 }
 
 uint32_t noza_get_stack_space() {
@@ -36,15 +37,15 @@ uint32_t noza_get_stack_space() {
     if (noza_thread_self(&pid) == 0) {
         uint32_t sp;
         asm volatile ("mov %0, sp\n" : "=r" (sp));
-        uint32_t stack_bottom = (uint32_t)THREAD_INFO[pid]->stack_ptr;
-        uint32_t stack_size = THREAD_INFO[pid]->stack_size;
+        uint32_t stack_bottom = (uint32_t)THREAD_RECORD[pid]->stack_ptr;
+        uint32_t stack_size = THREAD_RECORD[pid]->stack_size;
 		return (stack_bottom + stack_size) - sp;
 	} else {
 		return 0; // fail
     }
 }
 
-extern void app_run(thread_info_t *info);
+extern void app_run(thread_record_t *info);
 
 #define MAX_SERVICES    8
 typedef struct service_entry {
@@ -78,15 +79,15 @@ void noza_run_services()
     }
 }
 
-uint32_t save_exit_context(thread_info_t *thread_info, uint32_t pid)
+uint32_t save_exit_context(thread_record_t *thread_record, uint32_t pid)
 {
-	if (thread_info->pid != pid) {
+	if (thread_record->pid != pid) {
 		// not setup yet, just setup
-		thread_info->pid = pid;
-		THREAD_INFO[pid] = thread_info;
+		thread_record->pid = pid;
+		THREAD_RECORD[pid] = thread_record;
 	}
 
-	return setjmp(thread_info->jmp_buf);
+	return setjmp(thread_record->jmp_buf);
 }
 
 void free_stack(uint32_t pid)
@@ -96,19 +97,19 @@ void free_stack(uint32_t pid)
 		printf("fatal: free_stack: invalid pid: %ld\n", pid);
 		return;
 	}
-	if (THREAD_INFO[pid] == NULL) {
+	if (THREAD_RECORD[pid] == NULL) {
 		printf("fatal: free_stack: pid %ld not found\n", pid);
 		return;
 	}
-	if (THREAD_INFO[pid]->stack_ptr == NULL) {
+	if (THREAD_RECORD[pid]->stack_ptr == NULL) {
 		printf("fatal: free_stack: pid %ld stack_ptr is NULL\n", pid);
 		return;
 	}
 	// free user level stack
-	if (THREAD_INFO[pid]->need_free_stack == AUTO_FREE_STACK) {
-		noza_free(THREAD_INFO[pid]->stack_ptr);
+	if (THREAD_RECORD[pid]->need_free_stack == AUTO_FREE_STACK) {
+		noza_free(THREAD_RECORD[pid]->stack_ptr);
 	}
-	THREAD_INFO[pid] = NULL; // clear
+	THREAD_RECORD[pid] = NULL; // clear
 }
 
 typedef struct {
@@ -121,26 +122,26 @@ typedef struct {
 int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t pid), void *param, uint32_t priority, void *user_stack, uint32_t size, uint32_t auto_free_stack)
 {
 	create_thread_t info;
-	thread_info_t *thread_info = (thread_info_t *)user_stack; // stack tail for temporary use
-	thread_info->user_entry = entry;
-	thread_info->user_param = param;
-	thread_info->stack_ptr = (uint32_t *)user_stack;
-	thread_info->stack_size = size;
-	thread_info->priority = priority;
-	thread_info->need_free_stack = auto_free_stack;
-	thread_info->pid = -1;
-	thread_info->errno = 0;
+	thread_record_t *thread_record = (thread_record_t *)user_stack; // stack tail for temporary use
+	thread_record->user_entry = entry;
+	thread_record->user_param = param;
+	thread_record->stack_ptr = (uint32_t *)user_stack;
+	thread_record->stack_size = size;
+	thread_record->priority = priority;
+	thread_record->need_free_stack = auto_free_stack;
+	thread_record->pid = -1;
+	thread_record->errno = 0;
 
-	// setup registers for system call
+	// setup register for system call
 	info.r0 = NSC_THREAD_CREATE;
 	info.r1 = (uint32_t)app_run;
-	info.r2 = (uint32_t)thread_info;
-	info.r3 = priority;
+	info.r2 = (uint32_t)thread_record;
+	info.r3 = (uint32_t)priority;
 	extern void noza_thread_create_primitive(create_thread_t *info);
 	noza_thread_create_primitive(&info);
-	thread_info->pid = info.r1;
+	thread_record->pid = info.r1;
 	*pth = info.r1;
-	THREAD_INFO[info.r1] = thread_info;
+	THREAD_RECORD[info.r1] = thread_record;
 
 	return info.r0;
 }
@@ -159,7 +160,7 @@ void noza_thread_exit(uint32_t exit_code)
 {
 	uint32_t pid;
 	noza_thread_self(&pid);
-	longjmp(THREAD_INFO[pid]->jmp_buf, exit_code);
+	longjmp(THREAD_RECORD[pid]->jmp_buf, exit_code);
 }
 
 int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
@@ -198,7 +199,7 @@ int noza_set_errno(int errno)
 {
 	uint32_t pid;
 	if (noza_thread_self(&pid) == 0) {
-		THREAD_INFO[pid]->errno = errno;
+		THREAD_RECORD[pid]->errno = errno;
 		return 0;
 	}
 
@@ -209,7 +210,7 @@ int noza_get_errno()
 {
 	uint32_t pid;
 	if (noza_thread_self(&pid) == 0) {
-		return THREAD_INFO[pid]->errno;
+		return THREAD_RECORD[pid]->errno;
 	}
 
 	return -1;

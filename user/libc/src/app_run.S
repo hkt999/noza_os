@@ -8,14 +8,12 @@ app_run:
     // r1: thread_id
 
     // r2 -> func_entry, r3 -> func_param, r4 -> stack_base, r5 -> stack_size
-    ldmia r0!, {r2, r3, r4, r5}
+    ldmia r0!, {r2, r3, r4, r5, r7}
     mov r6, r4      // r6 = stack_base
     add r4, r4, r5  // r3 = stack_base + stack_size --> new stack base
-    mov r0, sp      // r7 = old stack pointer
+    mov r0, sp      // r0 = old stack pointer
     mov sp, r4      // set the new stack pointer
-
     push {r0, r1}   // save the old stack pointer
-
     push {r1, r2, r3}   // push the function entry and parameter
     mov r0, r6
     bl save_exit_context
