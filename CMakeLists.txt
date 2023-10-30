@@ -113,7 +113,7 @@ endif()
 
 if (NOZAOS_POSIX)
 	set(NOZAOS_POSIX_LIB "pthread")
-	add_subdirectory(3rd_party/posix)
+	add_subdirectory(user/posix)
 endif()
 
 if (NOZAOS_LUA)
@@ -233,6 +233,7 @@ set(
 	${CMAKE_CURRENT_LIST_DIR}
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
+	${CMAKE_CURRENT_LIST_DIR}/user
 	${CMAKE_CURRENT_LIST_DIR}/3rd_party
 )
 
