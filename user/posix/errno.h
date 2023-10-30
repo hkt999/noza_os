@@ -82,3 +82,9 @@
 #define EWOULDBLOCK     80     /* Operation would block (may be the same value as EAGAIN) */
 #define EXDEV           81     /* Cross-device link */
 
+// noza errno wrapper
+#if defined(errno)
+#undef errno
+extern int noza_errno();
+#define errno noza_errno()
+#endif
