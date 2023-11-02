@@ -12,10 +12,8 @@
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
 
-//__thread int my_test;
 static int test_task(void *param, uint32_t pid)
 {
-    //my_test = pid;
     int do_count = rand() % 5 + 2;
     int ms = rand() % 50 + 50;
     while (do_count-->0) {
@@ -73,7 +71,6 @@ static void test_noza_thread()
         TEST_PRINTF("test loop: %d/%d", loop, NUM_LOOP);
         srand(time(0));
 
-
         // TEST
         TEST_MESSAGE("---- test noza thread creation with random priority and sleep time ----");
         for (int i = 0; i < NUM_THREADS; i++) {
@@ -95,7 +92,7 @@ static void test_noza_thread()
             TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
             TEST_ASSERT_TRUE(th[i] < NOZA_OS_TASK_LIMIT);
         }
-        noza_thread_sleep_ms(50, NULL);
+        noza_thread_sleep_ms(250, NULL);
         for (int i = 0; i < NUM_THREADS; i++) {
             uint32_t sig = 0;
             TEST_ASSERT_EQUAL_INT(0, noza_thread_kill(th[i], SIGALRM));
@@ -151,7 +148,7 @@ static void test_noza_thread()
 
 // test message passing
 #define SERVER_EXIT_CODE    0x0123beef
-#define CLIENT_EXIT_CODE    0xdeadbeef
+#define CLIENT_EXIT_CODE    0x0eadbeef
 static int string_server_thread(void *param, uint32_t pid)
 {
     for (;;) {
@@ -211,7 +208,7 @@ static void test_noza_message()
 #include <stdio.h>
 #include <setjmp.h>
 
-jmp_buf env;
+static jmp_buf env;
 
 #define JUMP_VALUE  0x12345678
 static void foo(void)
@@ -228,7 +225,7 @@ static void test_noza_setjmp_longjmp()
     } else {
         TEST_ASSERT_EQUAL_INT(JUMP_VALUE, ret);
     }
-    TEST_MESSAGE("finish test\n");
+    TEST_MESSAGE("finish test");
 }
 
 // test hard fault
