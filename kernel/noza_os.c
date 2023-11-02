@@ -678,6 +678,11 @@ static void noza_switch_handler(uint32_t core)
 static void syscall_thread_sleep(thread_t *running)
 {
     int64_t duration = ((int64_t)running->trap.r1) << 32 | running->trap.r2;
+    if (duration <= 0) {
+        noza_os_add_thread(&noza_os.ready[running->info.priority], running);
+        noza_os_clear_running_thread();
+        return;
+    } 
     running->expired_time = platform_get_absolute_time_us() + duration; // setup expired time
     noza_os_add_thread(&noza_os.sleep, running);
     noza_os_clear_running_thread();
@@ -1146,13 +1151,13 @@ static void noza_os_scheduler()
                 if (expired > now) {
                     platform_systick_config(expired - now);
                     GO_RUN(core, running);
+                    now = platform_get_absolute_time_us(); // update time
                     check_syscall_serve(core, running);
                     if (noza_os.running[core] == NULL)
                         break; 
                 } else
                     break;
 
-                now = platform_get_absolute_time_us();
             }
             running = noza_os.running[core];
             if (running != NULL) {
