@@ -18,13 +18,14 @@
 .global noza_thread_join
 noza_thread_join:
 	push {r4-r7, lr}
-	mov r5, r1 					// address of retval
+	push {r1}					// address of retval
 	mov r1, r0 					// pid
 	movs r0, #NSC_THREAD_JOIN
 	svc #0
-	cmp r5, #0
+	pop {r4}					// address of retval
+	cmp r4, #0
 	beq noza_thread_join_end
-	str r1, [r5]				// r0 is the return value, r1 is the pid, save to retval
+	str r1, [r4]				// r0 is the return value, r1 is the return code, save to retval
 noza_thread_join_end:
 	pop {r4-r7, pc}  
 
@@ -74,7 +75,7 @@ noza_thread_terminate:
 	mov r1, r0 						// move the terminate code to r1
 	movs r0, #NSC_THREAD_TERMINATE	// set r0 to the value of NSC_THREAD_TERMINATE
 	svc #0 							// system call, return value in r0
-	pop {r4-r7, pc}  
+	pop {r4-r7, pc}					// unlikely to be here
 
 .type noza_recv, %function
 .global noza_recv
