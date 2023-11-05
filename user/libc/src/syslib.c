@@ -163,27 +163,27 @@ void noza_thread_exit(uint32_t exit_code)
 	longjmp(THREAD_RECORD[pid]->jmp_buf, exit_code);
 }
 
+typedef struct time64_s {
+	uint32_t high;
+	uint32_t low;
+} time64_t;
+
 int noza_thread_sleep_us(int64_t us, int64_t *remain_us)
 {
-	uint32_t r0 = (uint32_t)(us >> 32);
-	uint32_t r1 = (uint32_t)(us & 0xFFFFFFFF);
-	uint32_t r2;
+	time64_t tm;
+	time64_t remain;
 
-	extern void noza_thread_sleep(uint32_t r0, uint32_t r1); // in assembly
-	noza_thread_sleep(r0, r1);
-	__asm__ volatile(
-		"mov %0, r0\n"  // return code
-		"mov %1, r1\n"  // high 32bits
-		"mov %2, r2\n"  // low 32bits
-		: "=r" (r0), "=r" (r1), "=r" (r2)
-		: 
-		: "memory"
-	);
+	tm.high = (uint32_t)(us >> 32);
+	tm.low = (uint32_t)(us & 0xFFFFFFFF);
+
+	extern uint32_t __noza_thread_sleep(time64_t *tm, time64_t *remain); // in assembly
+	uint32_t ret = __noza_thread_sleep(&tm, &remain);
 
 	if (remain_us) {
-		*remain_us = ((uint64_t)r1 << 32) | r2;
+		*remain_us = ((uint64_t)remain.high << 32) | remain.low;
 	}
-	return r0;
+
+	return ret;
 }
 
 int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms)

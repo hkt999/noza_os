@@ -38,15 +38,19 @@ noza_thread_detach:
 	svc #0
 	pop {r4-r7, pc}  
 
+
+//int __noza_thread_sleep(syscall_time_t *time, syscall_time_t *remain); // in assembly
 .type noza_thread_sleep, %function
-.global noza_thread_sleep
-noza_thread_sleep:
+.global __noza_thread_sleep
+__noza_thread_sleep:
 	push {r4-r7, lr}
-	mov r2, r1
-	mov r1, r0
+	push {r1}					// address of remain
+	ldmia r0!, {r1, r2} 		// r1 -> high 32bits, r2 -> low 32bits
 	movs r0, #NSC_THREAD_SLEEP	// set r0 to the value of NSC_SLEEP
-	svc #0						// system call, return value in r0
-	pop {r4-r7, pc}  
+	svc #0						// system call, return value in r0, r1 -> high 32bits, r2 -> low 32bits
+	pop {r3}					// address of remain
+	stmia r3!, {r1, r2}			// save r1 (high 32bits), r2(low 32bits) to memory
+	pop {r4-r7, pc}
 
 .type noza_thread_kill, %function
 .global noza_thread_kill
@@ -71,11 +75,9 @@ noza_thread_change_priority:
 .type noza_thread_terminate, %function
 .global noza_thread_terminate
 noza_thread_terminate:
-	push {r4-r7, lr}
-	mov r1, r0 						// move the terminate code to r1
+	mov r1, r0 						// move the function return code to r1
 	movs r0, #NSC_THREAD_TERMINATE	// set r0 to the value of NSC_THREAD_TERMINATE
-	svc #0 							// system call, return value in r0
-	pop {r4-r7, pc}					// unlikely to be here
+	svc #0 							// system call, return value in r0, and never return
 
 .type noza_recv, %function
 .global noza_recv

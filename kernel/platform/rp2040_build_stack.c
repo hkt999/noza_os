@@ -43,13 +43,13 @@ typedef struct {
 
 uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param)
 {
-    #define NOZA_OS_THREAD_PSP       0xFFFFFFFD  // exception return behavior (thread mode)
-    // TODO: move this to platform specific code
-    uint32_t *new_ptr = stack + size - 17; // end of task_stack (user_stack_t + interrupted_stack_t)
+    #define NOZA_OS_THREAD_PSP       0xFFFFFFFD     // exception return behavior (thread mode)
+    uint32_t *new_ptr = stack + size - 17;          // end of task_stack (user_stack_t + interrupted_stack_t)
     user_stack_t *u = (user_stack_t *) new_ptr;
-    u->lr = (uint32_t) NOZA_OS_THREAD_PSP; // return to thread mode, use PSP
+    u->lr = (uint32_t) NOZA_OS_THREAD_PSP;          // return to thread mode, use PSP
 
     interrupted_stack_t *is = (interrupted_stack_t *)(new_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
+    is->lr = (uint32_t) NOZA_OS_THREAD_PSP;
     is->pc = (uint32_t) entry;
     is->xpsr = (uint32_t) 0x01000000; // thumb bit
     is->r0 = (uint32_t) param;

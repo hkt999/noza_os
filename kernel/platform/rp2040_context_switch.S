@@ -59,6 +59,8 @@ isr_svcall: // for system calls
     // sanity check
     cmp r0, #12
     ble go_service
+    cmp r0, #254
+    beq go_service
     cmp r0, #255
     beq go_service
     bx lr
@@ -86,8 +88,7 @@ go_service:
     push {lr}
     push {r4}
     bl noza_os_trap_info
-    pop {r0}
-    pop {r4}
+    pop {r0, r4}
     mov lr, r4
     
 	// load kernel context (msp stack)
@@ -105,6 +106,11 @@ go_service:
 .type isr_systick, %function
 .global isr_systick
 isr_systick:
+    /*
+	movs r0, #254
+	svc #0 // system call:0 --> reschedule, and then swith to kernel mode
+	bx lr
+    */
     // save user context (psp stack)
 	mrs r0, psp
     subs r0, #4                     // 1 register * 4 bytes
