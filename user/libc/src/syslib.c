@@ -90,26 +90,28 @@ uint32_t save_exit_context(thread_record_t *thread_record, uint32_t pid)
 	return setjmp(thread_record->jmp_buf);
 }
 
-void free_stack(uint32_t pid)
+uint32_t free_stack(uint32_t pid, uint32_t code)
 {
 	// sanity check
 	if (pid >= NOZA_OS_TASK_LIMIT) {
 		printf("fatal: free_stack: invalid pid: %ld\n", pid);
-		return;
+		return code;
 	}
 	if (THREAD_RECORD[pid] == NULL) {
 		printf("fatal: free_stack: pid %ld not found\n", pid);
-		return;
+		return code;
 	}
 	if (THREAD_RECORD[pid]->stack_ptr == NULL) {
 		printf("fatal: free_stack: pid %ld stack_ptr is NULL\n", pid);
-		return;
+		return code;
 	}
 	// free user level stack
 	if (THREAD_RECORD[pid]->need_free_stack == AUTO_FREE_STACK) {
 		noza_free(THREAD_RECORD[pid]->stack_ptr);
 	}
 	THREAD_RECORD[pid] = NULL; // clear
+
+	return code;
 }
 
 typedef struct {
@@ -146,7 +148,6 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	return info.r0;
 }
 
-//#define DEFAULT_STACK_SIZE 4096 // TODO: move this flag to config.h
 int noza_thread_create(uint32_t *pth, int (*entry)(void *, uint32_t), void *param, uint32_t priority, uint32_t stack_size)
 {
 	uint8_t *stack_ptr = (uint8_t *)noza_malloc(stack_size);
