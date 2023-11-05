@@ -600,9 +600,56 @@ static cdl_node_t *cdl_remove(cdl_node_t *head, cdl_node_t *obj)
     }
 }
 
+static void noza_os_add_thread_by_expired_time(thread_list_t *list, thread_t *thread)
+{
+    // find a proper place to insert the thread
+    int64_t expired_time = thread->expired_time;
+    cdl_node_t *node = list->head;
+    if (node == NULL) {
+        // 0 element
+        list->head = &thread->state_node;
+        thread->state_node.next = &thread->state_node;
+        thread->state_node.prev = &thread->state_node;
+    } else if (node->next == node) {
+        // 1 element
+        node->next = &thread->state_node;
+        node->prev = &thread->state_node;
+        thread->state_node.next = node;
+        thread->state_node.prev = node;
+        if (((thread_t *)node->value)->expired_time > expired_time) {
+            list->head = &thread->state_node;
+        }
+    } else {
+        // more than 2 elements
+        cdl_node_t *tail = node->prev;
+        while (node != tail) {
+            if (((thread_t *)node->value)->expired_time > expired_time) {
+                // insert before node
+                thread->state_node.next = node;
+                thread->state_node.prev = node->prev;
+                node->prev->next = &thread->state_node;
+                node->prev = &thread->state_node;
+                if (node == list->head) {
+                    list->head = &thread->state_node;
+                }
+                break;
+            }
+            node = node->next;
+        }
+        if (node == tail) {
+            list->head = cdl_add(list->head, &thread->state_node);
+        }
+    }
+}
+
+
 static void noza_os_add_thread(thread_list_t *list, thread_t *thread)
 {
-    list->head = cdl_add(list->head, &thread->state_node);
+    if (list->state_id == THREAD_SLEEP) {
+        noza_os_add_thread_by_expired_time(list, thread);
+    } else {
+        list->head = cdl_add(list->head, &thread->state_node);
+    }
     list->count++;
     thread->info.state = list->state_id;
 }
@@ -610,7 +657,9 @@ static void noza_os_add_thread(thread_list_t *list, thread_t *thread)
 static void noza_os_remove_thread(thread_list_t *list, thread_t *thread)
 {
     if (thread->info.state != list->state_id) {
-        kernel_panic("unexpected: thread state is not %s\n", state_to_str(list->state_id));
+        printf("thread=%p, %s\n", thread, state_to_str(thread->info.state));
+        kernel_panic("unexpected: thread state is not list:%s, thread:%s\n",
+            state_to_str(list->state_id), state_to_str(thread->info.state));
     }
 
     list->head = cdl_remove(list->head, &thread->state_node);
@@ -988,7 +1037,7 @@ static syscall_func_t syscall_func[] = {
     [NSC_NB_CALL] = syscall_nbcall,
 };
 
-static void serv_syscall(uint32_t core)
+static inline void serv_syscall(uint32_t core)
 {
     thread_t *source = noza_os.running[core];
     // sanity check
@@ -1009,32 +1058,24 @@ static void serv_syscall(uint32_t core)
 }
 
 //////////////////////////////////////////////////////////////
-static void noza_wakeup(int64_t now)
+static inline uint32_t noza_wakeup(int64_t now)
 {
-    uint32_t counter = 0;
-    static thread_t *expired_thread[NOZA_OS_TASK_LIMIT];
-
     if (noza_os.sleep.count == 0)
-        return;
+        return 0;
 
     cdl_node_t *cursor = noza_os.sleep.head;
-    for (int i=0; i<noza_os.sleep.count; i++) {
+    while (cursor != NULL) {
         thread_t *th = (thread_t *)cursor->value;
         if (th->expired_time <= now) {
-            expired_thread[counter++] = th;
-        }
-        cursor = cursor->next;
-    }
-    for (int i=0; i<counter; i++) {
-        thread_t *th = expired_thread[i];
-        //printf("wakeup thread: %d, (%s)\n", thread_get_pid(th), state_to_str(th->info.state));
-        noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
-        noza_os_set_return_value3(th, 0, 0, 0); // return 0, high=0, low=0 successfully timeout
+            noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
+            noza_os_set_return_value3(th, 0, 0, 0); // return 0, high=0, low=0 successfully timeout
+            cursor = noza_os.sleep.head;
+        } else
+            break;
     }
 }
 
 extern uint32_t *noza_os_resume_thread(uint32_t *stack);
-
 // switch to user stack
 static inline void GO_RUN(int core, thread_t *running)
 {
@@ -1086,7 +1127,6 @@ static inline void check_syscall_serve(int core, thread_t *running)
 
 static void noza_os_scheduler()
 {
-    noza_os.next_tick = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
     uint32_t core = platform_get_running_core(); // get working core
 
 #if NOZA_OS_NUM_CORES > 1
@@ -1095,7 +1135,8 @@ static void noza_os_scheduler()
 #endif
 
     noza_switch_handler(core); // switch to kernel stack (priviliged mode)
-    platform_systick_config(10000); // start system tick 10ms
+    noza_os.next_tick = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
+    platform_systick_config(NOZA_OS_TIME_SLICE); // start system tick 10ms
 
     // TODO: for lock, consider the case PendSV interrupt goes here, 
     // some other high priority interrupt is triggered, could cause deadlock here
@@ -1126,12 +1167,14 @@ static void noza_os_scheduler()
                 noza_os.running[core] = NULL;
             }
         } else {
-            // no task here, switch to idle thread, and config the next tick
-            GO_IDLE(core);
-            noza_wakeup(platform_get_absolute_time_us());
-            // tick other cores
-            if (core == 0) {
-                platform_tick_cores();
+            int64_t now = platform_get_absolute_time_us();
+            uint32_t min = NOZA_OS_TIME_SLICE;
+            if (noza_wakeup(now) == 0) {
+                GO_IDLE(core);
+                // tick other cores
+                if (core == 0) {
+                    platform_tick_cores();
+                }
             }
         }
     }
