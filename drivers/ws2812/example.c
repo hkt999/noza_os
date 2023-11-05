@@ -104,5 +104,5 @@ static int test_ws2812(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_led_example()
 {
-    console_add_command("led", test_ws2812, "ws2812 led example program");
+    console_add_command("led", test_ws2812, "ws2812 led example program", 1024);
 }
