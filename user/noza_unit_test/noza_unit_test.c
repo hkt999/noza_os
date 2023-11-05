@@ -158,7 +158,6 @@ static int string_server_thread(void *param, uint32_t pid)
         if (strcmp((char *)msg.ptr, "kill") == 0)
             break;
     }
-    printf("es\n");
     return SERVER_EXIT_CODE;
 }
 
@@ -182,7 +181,6 @@ static int string_client_thread(void *param, uint32_t mypid)
     msg.ptr = s;
     msg.size = strlen(s)+1;
     TEST_ASSERT_EQUAL_INT(0, noza_call(&msg));
-    printf("ec\n");
 
     return CLIENT_EXIT_CODE;
 }
@@ -199,15 +197,10 @@ static void test_noza_message()
     uint32_t code, server_pid, client_pid;
     TEST_MESSAGE("---- test noza message passing ----");
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&server_pid, string_server_thread, NULL, 0, 2048));
-    printf("1\n");
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&client_pid, string_client_thread, (void *)server_pid, 0, 2048));
-    printf("2\n");
     noza_thread_join(client_pid, &code);
-    printf("3\n");
     TEST_ASSERT_EQUAL_INT(CLIENT_EXIT_CODE, code);
-    printf("4\n");
     noza_thread_join(server_pid, &code);
-    printf("5\n");
     TEST_ASSERT_EQUAL_INT(SERVER_EXIT_CODE, code);
 }
 

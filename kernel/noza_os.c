@@ -1125,7 +1125,6 @@ static void noza_os_scheduler()
                 noza_os_add_thread(&noza_os.ready[running->info.priority], running);
                 noza_os.running[core] = NULL;
             }
-            //noza_wakeup(platform_get_absolute_time_us());
         } else {
             // no task here, switch to idle thread, and config the next tick
             GO_IDLE(core);
