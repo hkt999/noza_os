@@ -92,7 +92,6 @@ const char *state_to_str(uint32_t id)
     }
 }
 
-#ifdef DEBUG
 const char *syscall_state_to_str(uint32_t id) 
 {
     static const char *syscall_state[] = {
@@ -108,6 +107,7 @@ const char *syscall_state_to_str(uint32_t id)
     }
 }
 
+#ifdef DEBUG
 const char *port_to_str(uint32_t id) 
 {
     static const char *port_state_str[] = {
@@ -205,11 +205,8 @@ typedef struct {
     thread_list_t   zombie;                              // list of threads in zombie state
     thread_list_t   free;                                // list of free/available threads
     // context
-    thread_t thread[NOZA_OS_TASK_LIMIT];                 // array of thread_t structures for task management
-    int64_t next_tick;
-
-    // this area should be user read only, set up the protection if we have MPU
-    // void *user_task_data[NOZA_OS_TASK_LIMIT];           // array of user task data, read by user, and write by kernel
+    thread_t        thread[NOZA_OS_TASK_LIMIT];          // array of thread_t structures for task management
+    int64_t         next_tick;
 } noza_os_t;
 
 
@@ -579,33 +576,28 @@ static cdl_node_t *cdl_add(cdl_node_t *head, cdl_node_t *obj)
 
 static cdl_node_t *cdl_remove(cdl_node_t *head, cdl_node_t *obj)
 {
+    if (head == NULL) {
+        // 0 element, just return NULL
+        kernel_panic("fatal error: cdl_remove: head is NULL\n");
+        return NULL;
+    }
     if (head == obj) {
-        if (head->next == head) {
+        if (head->next == head && head->prev == head) {
             // only 1 element, and removing head, just clear
             return NULL;
         } else {
-            cdl_node_t *new_head;
-            if (obj->next == head && obj->prev == head) {
-                // only 2 elements, and removing head
-                new_head = head->next;
-                new_head->prev = new_head->next = new_head;
-            } else {
-                new_head = head->next;
-                new_head->prev = head->prev;
-                head->prev->next = new_head;
-            }
+            // more than 1 element, and removing head
+            cdl_node_t *new_head = head->next;
+            new_head->prev = head->prev;
+            head->prev->next = new_head;
             return new_head;
         }
-    }
-    if (obj->next == head && obj->prev == head) {
-        // only 2 elements, just update head
-        head->next = head->prev = head;
+    } else {
+        // more than 2 elements, and removing object
+        obj->prev->next = obj->next;
+        obj->next->prev = obj->prev;
         return head;
     }
-    // > 2 element, and removing object
-    obj->prev->next = obj->next;
-    obj->next->prev = obj->prev;
-    return head;
 }
 
 static void noza_os_add_thread(thread_list_t *list, thread_t *thread)
@@ -620,6 +612,7 @@ static void noza_os_remove_thread(thread_list_t *list, thread_t *thread)
     if (thread->info.state != list->state_id) {
         kernel_panic("unexpected: thread state is not %s\n", state_to_str(list->state_id));
     }
+
     list->head = cdl_remove(list->head, &thread->state_node);
     list->count--;
 }
@@ -656,7 +649,6 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
     }
     th->info.priority = priority;
     th->flags = 0x0;
-    //noza_os.user_task_data[thread_get_pid(th)] = param; // save the user data
     noza_os_add_thread(&noza_os.ready[priority], th);
     noza_make_app_context(th, entry, param);
 
@@ -680,11 +672,10 @@ static void syscall_thread_sleep(thread_t *running)
     int64_t duration = ((int64_t)running->trap.r1) << 32 | running->trap.r2;
     if (duration <= 0) {
         noza_os_add_thread(&noza_os.ready[running->info.priority], running);
-        noza_os_clear_running_thread();
-        return;
-    } 
+    } else { 
     running->expired_time = platform_get_absolute_time_us() + duration; // setup expired time
-    noza_os_add_thread(&noza_os.sleep, running);
+        noza_os_add_thread(&noza_os.sleep, running);
+    }
     noza_os_clear_running_thread();
 }
 
@@ -693,7 +684,8 @@ static void do_nothing_signal_handler(thread_t *running, thread_t *target) {
 }
 
 static void terminate_signal_handler(thread_t *running, thread_t *target) {
-
+    // TODO
+    kernel_log("fatal error: unimplement feature (singal to terminate)\n");
 }
 
 static void alarm_signal_handler(thread_t *running, thread_t *target)
@@ -890,6 +882,7 @@ static void syscall_thread_terminate(thread_t *running)
     if (running->port.pending_list.count > 0) {
         thread_t *head = running->port.pending_list.head->value;
         while (head) {
+            printf("------a\n");
             noza_os_change_state(head, &running->port.pending_list, &noza_os.ready[head->info.priority]);
             noza_os_set_return_value1(head, EINTR);
             head = running->port.pending_list.head->value;
@@ -900,6 +893,7 @@ static void syscall_thread_terminate(thread_t *running)
     if (running->port.reply_list.count > 0) {
         thread_t *head = running->port.reply_list.head->value;
         while (head) {
+            printf("------b\n");
             noza_os_change_state(head, &running->port.reply_list, &noza_os.ready[head->info.priority]);
             noza_os_set_return_value1(head, EINTR);
             head = running->port.reply_list.head->value;
@@ -908,7 +902,6 @@ static void syscall_thread_terminate(thread_t *running)
 
     // what if the thread is in the some others wait list or reply list ?
     // unlikely to happen, because the thread is in the running state, so that it can call "terminate"
-
     if (running->join_th == NULL) {
         if (running->flags & FLAG_DETACH) {
             // if the thread is detached, then free the thread
@@ -917,6 +910,15 @@ static void syscall_thread_terminate(thread_t *running)
             noza_os_add_thread(&noza_os.zombie, running); // move the thread to zombie list
         }
     } else {
+        #if 0
+        printf("terminate --> join self=%d, join=%d\n", thread_get_pid(running), thread_get_pid(running->join_th));
+        printf("self state=%s, join state=%s\n", state_to_str(running->info.state), state_to_str(running->join_th->info.state));
+        printf("join core\n");
+        platform_core_dump(running->join_th->stack_ptr, thread_get_pid(running->join_th));
+        printf("self core\n");
+        platform_core_dump(running->stack_ptr, thread_get_pid(running));
+        #endif
+
         noza_os_add_thread(&noza_os.ready[running->join_th->info.priority], running->join_th); // insert the thread back to ready queue
         noza_os_set_return_value2(running->join_th, 0, running->exit_code);
         running->join_th = NULL; // clear the join thread
@@ -991,11 +993,6 @@ static void serv_syscall(uint32_t core)
     thread_t *source = noza_os.running[core];
     // sanity check
     if (source->callid >= 0 && source->callid < NSC_NUM_SYSCALLS) {
-        /*
-        kernel_log("**** syscall: %s, source pid: %d, r0: 0x%08x, r1: 0x%08x, r2: 0x%08x, r3: 0x%08x\n",
-            syscall_to_str(source->callid), thread_get_pid(source),
-            source->trap.r0, source->trap.r1, source->trap.r2, source->trap.r3);
-        */
         source->trap.state = SYSCALL_SERVING;
         syscall_func[source->callid](source); 
     } else {
@@ -1007,6 +1004,7 @@ static void serv_syscall(uint32_t core)
             // system call not found !
             noza_os_set_return_value1(source, ENOSYS);
         }
+        source->trap.state = SYSCALL_DONE;
     }
 }
 
@@ -1023,74 +1021,38 @@ static void noza_wakeup(int64_t now)
     for (int i=0; i<noza_os.sleep.count; i++) {
         thread_t *th = (thread_t *)cursor->value;
         if (th->expired_time <= now) {
-            // expired, move to expired_thread list
             expired_thread[counter++] = th;
         }
         cursor = cursor->next;
     }
     for (int i=0; i<counter; i++) {
         thread_t *th = expired_thread[i];
+        //printf("wakeup thread: %d, (%s)\n", thread_get_pid(th), state_to_str(th->info.state));
         noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
         noza_os_set_return_value3(th, 0, 0, 0); // return 0, high=0, low=0 successfully timeout
     }
 }
 
-static int64_t noza_check_sleep_thread(int64_t slice) // in us
-{
-    uint32_t counter = 0;
-    static thread_t *expired_thread[NOZA_OS_TASK_LIMIT];
-
-    if (noza_os.sleep.count == 0)
-        return slice;
-
-    int64_t now = platform_get_absolute_time_us();
-    int64_t min = slice;
-    cdl_node_t *cursor = noza_os.sleep.head;
-    for (int i=0; i<noza_os.sleep.count; i++) {
-        thread_t *th = (thread_t *)cursor->value;
-        if (th->expired_time <= now) {
-            // expired, move to expired_thread list
-            expired_thread[counter++] = th;
-            if (counter >= NOZA_OS_TASK_LIMIT) {
-                break;
-            }
-        } else {
-            // not expired, calculate the minimum time
-            int64_t diff = th->expired_time - now;
-            if (diff < (int64_t)min)
-                min = diff;
-        }
-        cursor = cursor->next;
-    }
-    if (counter>0) {
-        for (int i=0; i<counter; i++) {
-            thread_t *th = expired_thread[i];
-            noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
-            noza_os_set_return_value3(th, 0, 0, 0); // return 0, high=0, low=0 successfully timeout
-        }
-    }
-
-    return min;
-}
-
-uint32_t *noza_os_resume_thread(uint32_t *stack);
-uint32_t *noza_os_resume_thread_syscall(uint32_t *stack);
+extern uint32_t *noza_os_resume_thread(uint32_t *stack);
 
 // switch to user stack
-static inline void GO_RUN(int core, thread_t *running) {
-    NOZAOS_PID[core] = thread_get_pid(running);
+static inline void GO_RUN(int core, thread_t *running)
+{
+    NOZAOS_PID[core] = thread_get_pid(running); // setup the shared variable
     noza_os_unlock(core);
     running->stack_ptr = noza_os_resume_thread(running->stack_ptr);
     noza_os_lock(core); 
 }
 
 // switch to idle stack
-static inline void GO_IDLE(int core) {
+static inline void GO_IDLE(int core)
+{
     noza_os_unlock(core);
     idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
     noza_os_lock(core);
 }
 
+// pick a thread from ready queue base on priority
 static inline thread_t *pick_ready_thread()
 {
     thread_t *running = NULL;
@@ -1108,9 +1070,9 @@ static inline thread_t *pick_ready_thread()
 static inline void check_syscall_output(thread_t *running)
 {
     if (running->trap.state == SYSCALL_OUTPUT) {
-        platform_trap(running->stack_ptr, &running->trap);
-        running->trap.state = SYSCALL_DONE;
-        running->callid = -1;
+        platform_trap(running->stack_ptr, &running->trap); // copy register to trap structure
+        running->trap.state = SYSCALL_DONE; // clear the state
+        running->callid = -1; // clear the callid
     }
 }
 
@@ -1133,6 +1095,7 @@ static void noza_os_scheduler()
 #endif
 
     noza_switch_handler(core); // switch to kernel stack (priviliged mode)
+    platform_systick_config(10000); // start system tick 10ms
 
     // TODO: for lock, consider the case PendSV interrupt goes here, 
     // some other high priority interrupt is triggered, could cause deadlock here
@@ -1143,38 +1106,30 @@ static void noza_os_scheduler()
         if (running) {
             // a ready thread is picked
             int64_t now = platform_get_absolute_time_us();
-            int64_t expired = now + NOZA_OS_TIME_SLICE;
+            int64_t expired = now + NOZA_OS_TIME_SLICE; // pick up a new thread, and setup time slice
             running->info.state = THREAD_RUNNING;
             noza_os.running[core] = running;
             for (;;) {
                 check_syscall_output(running); // check if the call pending on output
                 if (expired > now) {
-                    platform_systick_config(expired - now);
                     GO_RUN(core, running);
-                    now = platform_get_absolute_time_us(); // update time
-                    check_syscall_serve(core, running);
+                    now = platform_get_absolute_time_us();  // update time
+                    check_syscall_serve(core, running);     // check if any syscall is pending, if pending, then serve it
                     if (noza_os.running[core] == NULL)
                         break; 
                 } else
                     break;
-
             }
             running = noza_os.running[core];
             if (running != NULL) {
                 noza_os_add_thread(&noza_os.ready[running->info.priority], running);
                 noza_os.running[core] = NULL;
             }
-            //noza_wakeup(now);
-            //noza_check_sleep_thread(NOZA_OS_TIME_SLICE);
+            //noza_wakeup(platform_get_absolute_time_us());
         } else {
             // no task here, switch to idle thread, and config the next tick
-            if (core == 0) {
-                int64_t us = noza_check_sleep_thread(NOZA_OS_TIME_SLICE);
-                if (us < 50)
-                    us = 50;
-                platform_systick_config((uint32_t)us);
-            }
             GO_IDLE(core);
+            noza_wakeup(platform_get_absolute_time_us());
             // tick other cores
             if (core == 0) {
                 platform_tick_cores();

@@ -4,8 +4,8 @@
 #include <ctype.h>
 #include "cmd_line.h"
 #include "noza_term.h"
+#include "nozaos.h"
 
-extern void noza_thread_sleep(int ms);
 extern void noza_char_init(char_driver_t *driver);
 extern void noza_char_clear(char_driver_t *driver);
 
@@ -38,7 +38,7 @@ char *term_readline(noza_term_t *term, char *line, int max_len)
 	while (!term->line_end) {
 		int ch = term->cmd.driver.getc();
 		if (ch < 0)
-			noza_thread_sleep(100);
+			noza_thread_sleep_ms(100, NULL);
 		else
 			cmd_line_putc(&term->cmd, ch);
 	}
