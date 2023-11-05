@@ -1075,6 +1075,19 @@ static inline uint32_t noza_wakeup(int64_t now)
     }
 }
 
+static inline void noza_reconfig_systick(int64_t now)
+{
+    cdl_node_t *cursor = noza_os.sleep.head;
+    if (now == 0 || cursor == NULL) {
+        // no thread is sleeping, then set the next tick to 10ms
+        platform_systick_config(NOZA_OS_TIME_SLICE);
+    } else {
+        // some thread is sleeping, then set the next tick to the first thread's expired time
+        thread_t *th = (thread_t *)cursor->value;
+        platform_systick_config(th->expired_time - now);
+    }
+}
+
 extern uint32_t *noza_os_resume_thread(uint32_t *stack);
 // switch to user stack
 static inline void GO_RUN(int core, thread_t *running)
@@ -1168,10 +1181,10 @@ static void noza_os_scheduler()
             }
         } else {
             int64_t now = platform_get_absolute_time_us();
-            uint32_t min = NOZA_OS_TIME_SLICE;
             if (noza_wakeup(now) == 0) {
+                noza_reconfig_systick(now);
                 GO_IDLE(core);
-                // tick other cores
+                noza_reconfig_systick(0);
                 if (core == 0) {
                     platform_tick_cores();
                 }
