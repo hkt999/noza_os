@@ -5,7 +5,7 @@
 
 // Noza IPC
 typedef struct {
-    uint32_t    to_pid;
+    uint32_t    to_vid;
     void        *ptr;
     uint32_t    size;
 } noza_msg_t;

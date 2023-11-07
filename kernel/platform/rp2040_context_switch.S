@@ -59,8 +59,6 @@ isr_svcall: // for system calls
     // sanity check
     cmp r0, #12
     ble go_service
-    cmp r0, #254
-    beq go_service
     cmp r0, #255
     beq go_service
     bx lr
