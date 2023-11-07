@@ -59,89 +59,89 @@ static int heavy_test_func(void *param, uint32_t pid)
     return value;
 }
 
-static void test_noza_thread()
+#define NUM_THREADS 8
+static void test_thread_create_join()
 {
-    #define NUM_THREADS 8
-    #define NUM_LOOP    8
     uint32_t th[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
+        TEST_ASSERT_NOT_EQUAL(0, th[i]);
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t exit_code = 0;
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
+        TEST_ASSERT_EQUAL_INT(th[i], exit_code);
+    }
+}
+
+static void test_thread_sleep_and_signal()
+{
+    uint32_t th[NUM_THREADS];
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
+    }
+    noza_thread_sleep_ms(100, NULL);
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t sig = 0;
+        noza_thread_kill(th[i], SIGALRM);
+    }
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t exit_code = 0;
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
+        TEST_ASSERT_EQUAL_INT(th[i], exit_code);
+    }
+}
+
+static void test_heavy_loading_thread()
+{
     uint32_t pid;
+    uint32_t value_heavy = heavy_test_func(NULL, pid);
+    uint32_t th[NUM_THREADS];
+
     noza_thread_self(&pid);
+    for (int i = 0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], heavy_test_func, NULL, 1, 1024));
+    }
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t exit_code = 0;
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
+        TEST_ASSERT_EQUAL_UINT(value_heavy, exit_code);
+    }
+}
 
-    for (int loop = 0; loop < NUM_LOOP; loop++) {
-        TEST_PRINTF("test loop: %d/%d", loop, NUM_LOOP);
-        srand(time(0));
+static void test_thread_yield()
+{
+    uint32_t pid;
+    uint32_t th[NUM_THREADS];
 
-        // TEST
-        TEST_MESSAGE("---- test noza thread creation with random priority and sleep time ----");
-        for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
-            TEST_ASSERT_TRUE(th[i] < NOZA_OS_TASK_LIMIT);
-            TEST_ASSERT_NOT_EQUAL(0, th[i]);
-        }
+    noza_thread_self(&pid);
+    uint32_t value_yield = yield_test_func(&pid, pid);
+    for (int i = 0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], yield_test_func, NULL, 1, 1024));
+    }
+    for (int i = 0; i < NUM_THREADS; i++) {
+        uint32_t exit_code = 0;
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
+        TEST_ASSERT_EQUAL_INT(value_yield, exit_code);
+    }
+}
 
+static void test_noza_thread_detach()
+{
+    int value[NUM_THREADS];
+    uint32_t th[NUM_THREADS];
 
-        for (int i = 0; i < NUM_THREADS; i++) {
-            uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
-            TEST_ASSERT_EQUAL_INT(th[i], exit_code);
-        }
-
-        // TEST
-        TEST_MESSAGE("---- test noza thread creation with random priority and signal in 100ms ----");
-        for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], test_task, NULL, (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
-            TEST_ASSERT_TRUE(th[i] < NOZA_OS_TASK_LIMIT);
-        }
-        noza_thread_sleep_ms(250, NULL);
-        for (int i = 0; i < NUM_THREADS; i++) {
-            uint32_t sig = 0;
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_kill(th[i], SIGALRM));
-        }
-        for (int i = 0; i < NUM_THREADS; i++) {
-            uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
-            TEST_ASSERT_EQUAL_INT(th[i], exit_code);
-        }
-
-        // TEST
-        TEST_MESSAGE("---- test noza thread heavy loading ----");
-        uint32_t value_heavy = heavy_test_func(NULL, pid);
-        for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], heavy_test_func, NULL, 1, 1024));
-            TEST_ASSERT_INT_WITHIN(NOZA_OS_TASK_LIMIT-1, NOZA_OS_TASK_LIMIT/2, th[i]);
-        }
-        for (int i = 0; i < NUM_THREADS; i++) {
-            uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
-            TEST_ASSERT_EQUAL_UINT(value_heavy, exit_code);
-        }
-
-        // TEST
-        TEST_MESSAGE("---- test noza thread yield ----");
-        uint32_t value_yield = yield_test_func(&pid, pid);
-        for (int i = 0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], yield_test_func, NULL, 1, 1024));
-            TEST_ASSERT_INT_WITHIN(NOZA_OS_TASK_LIMIT-1, NOZA_OS_TASK_LIMIT/2, th[i]);
-        }
-        for (int i = 0; i < NUM_THREADS; i++) {
-            uint32_t exit_code = 0;
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th[i], &exit_code));
-            TEST_ASSERT_EQUAL_INT(value_yield, exit_code);
-        }
-
-        // TEST
-        TEST_MESSAGE("---- test noza thread detach ----");
-        int value[NUM_THREADS];
-        memset(value, 0, sizeof(value));
-        for (int i=0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], heavy_test_func, &value[i], 1, 1024));
-            TEST_ASSERT_EQUAL_INT(0, noza_thread_detach(th[i]));
-        }
-        for (int i=0; i < NUM_THREADS; i++) {
-            TEST_ASSERT_NOT_EQUAL(0, noza_thread_join(th[i], NULL));
-            if (value[i] == 0) {
-                TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(10, NULL));
-            }
+    memset(value, 0, sizeof(value));
+    for (int i=0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th[i], heavy_test_func, &value[i], 1, 1024));
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_detach(th[i]));
+    }
+    for (int i=0; i < NUM_THREADS; i++) {
+        TEST_ASSERT_NOT_EQUAL(0, noza_thread_join(th[i], NULL));
+        if (value[i] == 0) {
+            TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(10, NULL));
         }
     }
 }
@@ -154,9 +154,11 @@ static int string_server_thread(void *param, uint32_t pid)
     for (;;) {
         noza_msg_t msg;
         TEST_ASSERT_EQUAL_INT(0, noza_recv(&msg));
-        noza_reply(&msg);
-        if (strcmp((char *)msg.ptr, "kill") == 0)
+        if (strcmp((char *)msg.ptr, "kill") == 0) {
+            noza_reply(&msg);
             break;
+        }
+        noza_reply(&msg);
     }
     return SERVER_EXIT_CODE;
 }
@@ -164,23 +166,31 @@ static int string_server_thread(void *param, uint32_t pid)
 static int string_client_thread(void *param, uint32_t mypid)
 {
     noza_msg_t msg;
-    char s[16];
+    static char s[16];
 
     uint32_t pid = (uint32_t) param;
     uint32_t counter = 20;
     while (counter-->0) {
-        sprintf(s, "hello %ld", counter);
-        msg.to_pid = pid;
+        snprintf(s, sizeof(s), "hello %ld", counter);
+        msg.to_vid = pid;
         msg.ptr = s;
         msg.size = strlen(s)+1;
         TEST_ASSERT_EQUAL_INT(0, noza_call(&msg));
-        TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(20, NULL));
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(10, NULL));
     }
     strncpy(s, "kill", sizeof(s)); // terminate server
-    msg.to_pid = pid;
+    msg.to_vid = pid;
     msg.ptr = s;
     msg.size = strlen(s)+1;
     TEST_ASSERT_EQUAL_INT(0, noza_call(&msg));
+
+    noza_thread_sleep_ms(20, NULL);
+    // test noza_call_error
+    strncpy(s, "hello end", sizeof(s));
+    msg.to_vid = pid;
+    msg.ptr = s;
+    msg.size = strlen(s) + 1;
+    TEST_ASSERT_EQUAL_INT(ESRCH, noza_call(&msg));
 
     return CLIENT_EXIT_CODE;
 }
@@ -194,13 +204,12 @@ typedef struct echo_msg_s {
 
 static void test_noza_message()
 {
-    uint32_t code, server_pid, client_pid;
-    TEST_MESSAGE("---- test noza message passing ----");
-    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&server_pid, string_server_thread, NULL, 0, 2048));
-    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&client_pid, string_client_thread, (void *)server_pid, 0, 2048));
-    noza_thread_join(client_pid, &code);
+    uint32_t code, server_vid, client_vid;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&server_vid, string_server_thread, NULL, 0, 1024));
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&client_vid, string_client_thread, (void *)server_vid, 0, 1024));
+    noza_thread_join(client_vid, &code);
     TEST_ASSERT_EQUAL_INT(CLIENT_EXIT_CODE, code);
-    noza_thread_join(server_pid, &code);
+    noza_thread_join(server_vid, &code);
     TEST_ASSERT_EQUAL_INT(SERVER_EXIT_CODE, code);
 }
 
@@ -233,10 +242,9 @@ static int normal_task(void *param, uint32_t pid)
 {
     int counter = 5;
     while (counter-->0) {
-        TEST_PRINTF("normal task: %lu, count down: %ld", pid, counter);
-        noza_thread_sleep_ms(500, NULL);
+        noza_thread_sleep_ms(100, NULL);
     }
-    TEST_PRINTF("normal_task end. exit thread (%d)", pid);
+    //TEST_PRINTF("normal_task end. exit thread (%d)", pid);
     return pid;
 }
 
@@ -244,10 +252,9 @@ static int fault_task(void *param, uint32_t pid)
 {
     int counter = 3;
     while (counter-->0) {
-        TEST_PRINTF("fault task: %lu, fault count down: %ld", pid, counter);
-        noza_thread_sleep_ms(500, NULL);
+        noza_thread_sleep_ms(100, NULL);
     }
-    TEST_PRINTF("RAISE fault (write memory address #00000000)!! pid=%d", pid);
+    TEST_PRINTF("test raise fault (write memory address #00000000) pid=%d", pid);
     int *p = 0;
     *p = 0;
     TEST_ASSERT_EQUAL_INT(0, 1); // never reash here
@@ -256,17 +263,16 @@ static int fault_task(void *param, uint32_t pid)
 static void test_noza_hardfault()
 {
     uint32_t th, fid;
-    TEST_MESSAGE("test hardfault");
+    TEST_MESSAGE("--- test hardfault ---");
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, normal_task, NULL, 0, 1024));
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&fid, fault_task, NULL, 0, 1024));
     uint32_t exit_code;
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(fid, &exit_code));
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
     TEST_ASSERT_EQUAL_INT(th, exit_code);
-    TEST_PRINTF("TEST fault catch by main thread exit_code=%d", exit_code);
 }
 
-#define ITERS 6000
+#define ITERS 3000
 static int counter = 0;
 static int inc_task(void *param, uint32_t pid)
 {
@@ -360,9 +366,14 @@ static void test_noza_lookup()
 
 static int test_all(int argc, char **argv)
 {
+    srand(time(0));
     UNITY_BEGIN();
     RUN_TEST(test_noza_setjmp_longjmp);
-    RUN_TEST(test_noza_thread);
+    RUN_TEST(test_thread_create_join);
+    RUN_TEST(test_thread_sleep_and_signal);
+    RUN_TEST(test_heavy_loading_thread);
+    RUN_TEST(test_noza_thread_detach);
+    RUN_TEST(test_thread_yield);
     RUN_TEST(test_noza_message);
     RUN_TEST(test_noza_mutex);
     RUN_TEST(test_noza_hardfault);

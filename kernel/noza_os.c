@@ -5,8 +5,8 @@
 #include "noza_config.h"
 #include "syscall.h"
 #include "platform.h"
-#include "errno.h"
-#include "posix/bits/signum.h" // for POSIX signaling number
+#include "posix/bits/signum.h"
+#include "posix/errno.h"
 
 //#define DEBUG
 
@@ -34,6 +34,16 @@
 
 #define NONE_DETACH             0
 #define FLAG_DETACH             0x01
+
+inline static uint8_t hash32to8(uint32_t value) {
+    uint8_t byte1 = (value >> 24) & 0xFF; // High byte
+    uint8_t byte2 = (value >> 16) & 0xFF; // Mid-high byte
+    uint8_t byte3 = (value >> 8) & 0xFF;  // Mid-low byte
+    uint8_t byte4 = value & 0xFF;         // Low byte
+
+    // XOR the chunks together
+    return byte1 ^ byte2 ^ byte3 ^ byte4;
+}
 
 inline static void HALT()
 {
@@ -187,6 +197,7 @@ typedef struct thread_s {
     info_t              info;                // thread information
     int64_t             expired_time;        // time when the thread expires
     uint32_t            exit_code;           // the exit code
+    uint32_t            vid;                 // virtual id
     kernel_trap_info_t  trap;                // kernel trap information
     noza_os_port_t      port;                // port information
     noza_os_message_t   message;             // message passing mechanism for the thread
@@ -196,6 +207,13 @@ typedef struct thread_s {
     uint8_t             callid;              // system call id  
 } thread_t;
 
+typedef struct vid_map_item_s {
+    struct vid_map_item_s *next;
+    uint32_t    pid;
+    uint32_t    vid;
+} vid_map_item_t;
+
+#define NUM_VID_SLOT    256
 // Define a structure for Noza OS management
 typedef struct {
     thread_t        *running[NOZA_OS_NUM_CORES];         // array of currently running threads for each core
@@ -204,9 +222,10 @@ typedef struct {
     thread_list_t   sleep;                               // list of threads in sleeping state
     thread_list_t   zombie;                              // list of threads in zombie state
     thread_list_t   free;                                // list of free/available threads
-    // context
     thread_t        thread[NOZA_OS_TASK_LIMIT];          // array of thread_t structures for task management
-    int64_t         next_tick;
+    vid_map_item_t  vid_map[NOZA_OS_TASK_LIMIT];
+    vid_map_item_t  *free_vid_map;
+    vid_map_item_t  *slot[NUM_VID_SLOT];
 } noza_os_t;
 
 
@@ -215,9 +234,26 @@ typedef struct {
 // declare the Noza kernel data structure instance
 //
 static noza_os_t noza_os;
-inline static uint32_t thread_get_pid(thread_t *th)
+inline static uint32_t _thread_get_pid(thread_t *th)
 {
     return (th - (thread_t *)&noza_os.thread[0]);
+}
+
+inline static uint32_t thread_get_vid(thread_t *th)
+{
+    return th->vid;
+}
+
+inline static int vid_to_pid(uint32_t vid)
+{
+    vid_map_item_t *vp_map = noza_os.slot[hash32to8(vid)];
+    while (vp_map) {
+        if (vp_map->vid == vid) {
+            return vp_map->pid;
+        }
+        vp_map = vp_map->next;
+    }
+    return -1; // not found
 }
 
 static void     noza_os_add_thread(thread_list_t *list, thread_t *thread);
@@ -236,7 +272,7 @@ static void     noza_os_scheduler();
 #endif
 
 #if defined(DEBUG)
-static inline void dump_threads()
+inline static void dump_threads()
 {
     uint32_t core = platform_get_running_core(); // get working core
     thread_t *running_thread = noza_os.running[core];
@@ -375,7 +411,7 @@ static void noza_os_send(thread_t *running, thread_t *target, void *msg, uint32_
         return;
     }
 
-    running->message.pid.target = thread_get_pid(target); 
+    running->message.pid.target = thread_get_vid(target); 
     running->message.ptr = msg;
     running->message.size = size;
     switch (target->info.port_state) {
@@ -386,10 +422,10 @@ static void noza_os_send(thread_t *running, thread_t *target, void *msg, uint32_
             // target thread should be in the wait list already, because the port state is PORT_READY
             // so just change the state from wait list to ready list
             if (target->info.state != THREAD_WAITING_MSG) {
-                kernel_panic("unexpected: target thread (pid:%ld) is not in the waiting list\n", thread_get_pid(target));
+                kernel_panic("unexpected: target thread (pid:%ld) is not in the waiting list\n", thread_get_vid(target));
             }
             noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);  // move target from wait list to ready list
-            noza_os_set_return_value4(target, 0, thread_get_pid(running), (uint32_t) msg, size); // 0 --> success
+            noza_os_set_return_value4(target, 0, thread_get_vid(running), (uint32_t) msg, size); // 0 --> success
             target->info.port_state = PORT_WAIT_LISTEN; 
             break;
 
@@ -415,7 +451,7 @@ static void noza_os_recv(thread_t *running)
 {
     if (running->port.pending_list.count > 0) {
         thread_t *source = running->port.pending_list.head->value; // get the first node in pending_list
-        noza_os_set_return_value4(running, 0, thread_get_pid(source), (uint32_t)source->message.ptr, source->message.size); // receive successfully
+        noza_os_set_return_value4(running, 0, thread_get_vid(source), (uint32_t)source->message.ptr, source->message.size); // receive successfully
         noza_os_change_state(source, &running->port.pending_list, &running->port.reply_list); // move from pending list to reply list
     } else {
         // change port stateu to READY and move the running thread to wait list (wait for messages)
@@ -434,34 +470,34 @@ static void noza_os_nonblock_recv(thread_t *running)
     }
 }
 
-static void noza_os_reply(thread_t *running, uint32_t pid, void *msg, uint32_t size)
+static void noza_os_reply(thread_t *running, uint32_t vid, void *msg, uint32_t size)
 {
     // sanity check
     if (running->info.port_state != PORT_WAIT_LISTEN) {
-        kernel_panic("unexpected: running thread (pid:%ld), port is not PORT_WAIT_LISTEN\n", thread_get_pid(running));
+        kernel_panic("unexpected: running thread (pid:%ld), port is not PORT_WAIT_LISTEN\n", thread_get_vid(running));
     }
     // search if pid is in the reply list (sanity check)
     thread_t *head_th = (thread_t *)running->port.reply_list.head->value;
     thread_t *th = head_th;
     while (th) {
-        if (thread_get_pid(th) == pid) {
+        if (thread_get_vid(th) == vid) {
             break;
         }
         th = th->state_node.next->value;
         if (th == head_th) { // not found in reply list !
-            kernel_panic("unexpected: noza_os_reply thread not found in reply list: pid=%ld\n", pid);
+            kernel_panic("unexpected: noza_os_reply thread not found in reply list: pid=%ld\n", vid);
             noza_os_set_return_value1(running, ESRCH); // error, not found
             return;
         }
     }
 
-    if (th->info.state == THREAD_FREE && th->info.state == THREAD_ZOMBIE) {
+    if (th->info.state == THREAD_FREE || th->info.state == THREAD_ZOMBIE) {
         noza_os_set_return_value1(running, ESRCH); // error, not found
         return;
     }
 
     noza_os_change_state(th, &running->port.reply_list, &noza_os.ready[th->info.priority]);
-    noza_os_set_return_value3(th, 0, (uint32_t)msg, size); // 0 -> send/reply success, TODO: think about if error code is needed
+    noza_os_set_return_value3(th, 0, (uint32_t)msg, size); // 0 -> send/reply success
     noza_os_set_return_value1(running, 0); // success
 }
 
@@ -470,23 +506,21 @@ static void noza_make_idle_context(uint32_t core);
 // start the noza os
 static void noza_init()
 {
-    int i;
     platform_io_init(); // initial all state in platform
 
     // init noza os / thread structure
     memset(&noza_os, 0, sizeof(noza_os_t));
     noza_os_lock_init();
-    for (i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
+    for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
         noza_os.ready[i].state_id = THREAD_READY;
     }
     noza_os.wait.state_id = THREAD_WAITING_MSG;
     noza_os.sleep.state_id = THREAD_SLEEP;
     noza_os.free.state_id = THREAD_FREE;
     noza_os.zombie.state_id = THREAD_ZOMBIE;
-//    noza_os.hardfault.state_id = THREAD_HARDFAULT;
 
     // init all thread structure
-    for (i=0; i<NOZA_OS_TASK_LIMIT; i++) {
+    for (int i=0; i<NOZA_OS_TASK_LIMIT; i++) {
         noza_os.thread[i].state_node.value = &noza_os.thread[i];
         noza_os_add_thread(&noza_os.free, &noza_os.thread[i]);
         noza_os.thread[i].port.pending_list.state_id = THREAD_WAITING_READ;
@@ -494,6 +528,13 @@ static void noza_init()
         noza_os.thread[i].join_th = NULL;
         noza_os.thread[i].callid = -1;
     }
+
+    // init all vid slots
+    for (int i=0; i<NOZA_OS_TASK_LIMIT-1; i++) {
+        noza_os.vid_map[i].next = &noza_os.vid_map[i+1];
+    }
+    noza_os.vid_map[NOZA_OS_TASK_LIMIT-1].next = NULL;
+    noza_os.free_vid_map = &noza_os.vid_map[0];
 
     // init all running thread to NULL
     for (int i=0; i<NOZA_OS_NUM_CORES; i++) {
@@ -518,8 +559,61 @@ static void noza_run()
     noza_os_scheduler(); // start os scheduler and never return
 }
 
+inline static void noza_os_insert_vid(thread_t *src_th)
+{
+    // add virtual pid slot
+    vid_map_item_t *vp_map = noza_os.free_vid_map;
+    if (vp_map==NULL) {
+        kernel_panic("fatal error: noza_thread_alloc: free_vid_map is NULL\n");
+    }
+    noza_os.free_vid_map = vp_map->next;
+
+    #if 0
+    uint32_t src_pid = _thread_get_pid(src_th);
+    int hash = hash32to8(src_pid); // TODO: change this
+
+    vp_map->pid = src_pid;
+    vp_map->vid = vp_map->pid; // TODO: change this
+    src_th->vid = vp_map->vid; // assign the vid to thread structure
+    #else
+    static uint32_t ID = 0;
+    uint32_t vid = ID++;
+    if (ID>=65536)
+        ID = 0; // maximun vid: 65535
+    vp_map->vid = vid;
+    vp_map->pid = _thread_get_pid(src_th);
+    src_th->vid = vid;
+    int hash = hash32to8(vid);
+    #endif
+    vp_map->next = noza_os.slot[hash]; // insert to the head of the list
+    noza_os.slot[hash] = vp_map;
+}
+
+inline static void noza_os_remove_vid(thread_t *src_th)
+{
+    uint32_t pid = _thread_get_pid(src_th);
+    int hash = hash32to8(src_th->vid);
+
+    vid_map_item_t *prev = NULL;
+    vid_map_item_t *vp_map = noza_os.slot[hash];
+    while (vp_map) {
+        if (vp_map->pid == pid) { // match
+            if (prev != NULL) {
+                prev->next = vp_map->next;
+            } else {
+                noza_os.slot[hash] = vp_map->next;
+            }
+            vp_map->next = noza_os.free_vid_map;
+            noza_os.free_vid_map = vp_map;
+            break;
+        }
+        prev = vp_map;
+        vp_map = vp_map->next;
+    }
+}
+
 // Noza OS scheduler
-static thread_t *noza_thread_alloc()
+inline static thread_t *noza_thread_alloc()
 {
     if (noza_os.free.count == 0) {
         return (thread_t *)0;
@@ -530,7 +624,7 @@ static thread_t *noza_thread_alloc()
     th->flags = NONE_DETACH; // reset the thread flags (says, detached)
     th->callid = -1;
     th->trap.state = SYSCALL_DONE;
-
+    noza_os_insert_vid(th);
     return th;
 }
 
@@ -650,14 +744,18 @@ static void noza_os_add_thread(thread_list_t *list, thread_t *thread)
     } else {
         list->head = cdl_add(list->head, &thread->state_node);
     }
+
     list->count++;
     thread->info.state = list->state_id;
+
+    if (list->state_id == THREAD_FREE) {
+        noza_os_remove_vid(thread);
+    }
 }
 
 static void noza_os_remove_thread(thread_list_t *list, thread_t *thread)
 {
     if (thread->info.state != list->state_id) {
-        printf("thread=%p, %s\n", thread, state_to_str(thread->info.state));
         kernel_panic("unexpected: thread state is not list:%s, thread:%s\n",
             state_to_str(list->state_id), state_to_str(thread->info.state));
     }
@@ -682,7 +780,8 @@ static void noza_make_idle_context(uint32_t core)
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
 {
-    th->stack_ptr = platform_build_stack(thread_get_pid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
+    th->stack_ptr = platform_build_stack(
+        thread_get_vid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
 static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t priority)
@@ -701,12 +800,10 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
     noza_os_add_thread(&noza_os.ready[priority], th);
     noza_make_app_context(th, entry, param);
 
-    *pth = thread_get_pid(th);
+    *pth = thread_get_vid(th);
     return 0; // success
 }
 
-//////////////////////////////////////////////////////////////
-//
 // system call implementation
 //
 extern void noza_init_kernel_stack(uint32_t *stack);
@@ -756,15 +853,17 @@ static void alarm_signal_handler(thread_t *running, thread_t *target)
         noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);
         noza_os_set_return_value1(target, EINTR);
     } else if (target->info.state == THREAD_WAITING_READ) {
-        // in some thread's port.pending_list
+        // target thread is in some thread's port.pending_list
         // TODO: think faster way to remove the thread from pending list
         kernel_log("fatal error: unimplement feature (1)\n");
     } else if (target->info.state == THREAD_WAITING_REPLY) {
-        // in some thread's port.reply_list
+        // target thread is in some thread's port.reply_list
         // TODO: think faster way to remove the thread from reply list
         kernel_log("fatal error: unimplement feature (2)\n");
     } else {
-        kernel_log("kernel: pid (%d) (%s) unhandled kill message\n", thread_get_pid(target), state_to_str(target->info.state));
+        kernel_log("kernel: vid (%d) (%s) unhandled kill message\n", thread_get_vid(target), state_to_str(target->info.state));
+        noza_os_set_return_value1(target, ESRCH);
+        return;
     }
 
     noza_os_set_return_value1(running, 0); // return success
@@ -808,13 +907,26 @@ static signal_handler_t signal_handler[32] = {
     [SIGUNUSED] = do_nothing_signal_handler      // reserved
 };
 
+inline static thread_t *get_thread_by_vid(uint32_t vid)
+{
+    int hash = hash32to8(vid);
+    vid_map_item_t *vp_map = noza_os.slot[hash];
+    while (vp_map) {
+        if (vp_map->vid == vid) {
+            return &noza_os.thread[vp_map->pid];
+        }
+        vp_map = vp_map->next;
+    }
+
+    return NULL;
+}
+
 static void syscall_thread_kill(thread_t *running)
 {
     uint32_t picked = running->trap.r1;
+    thread_t *picked_thread = get_thread_by_vid(picked);
     int sig = running->trap.r2;
-
-    // sanity check
-    if (picked >= NOZA_OS_TASK_LIMIT) {
+    if (picked_thread == NULL) {
         noza_os_set_return_value1(running, ESRCH);
         return;
     }
@@ -822,7 +934,7 @@ static void syscall_thread_kill(thread_t *running)
         noza_os_set_return_value1(running, EINVAL);
         return;
     }
-    signal_handler[sig](running, &noza_os.thread[picked]);
+    signal_handler[sig](running, picked_thread);
 }
 
 static void syscall_thread_create(thread_t *running)
@@ -837,29 +949,29 @@ static void syscall_thread_create(thread_t *running)
 
 static void syscall_thread_join(thread_t *running)
 {
-    uint32_t pid = running->trap.r1; // the pid of the thread to join
+    uint32_t picked = running->trap.r1; // the pid of the thread to join
+    thread_t *target = get_thread_by_vid(picked);
     // sanity check
-    if (pid >= NOZA_OS_TASK_LIMIT) {
+    if (target == NULL) {
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
-    thread_t *th = &noza_os.thread[pid];
-    if (th->flags & FLAG_DETACH) {
+    if (target->flags & FLAG_DETACH) {
         noza_os_set_return_value1(running, EINVAL); // error
         return;
     }
-    switch (th->info.state) {
+    switch (target->info.state) {
         case THREAD_FREE:
             noza_os_set_return_value1(running, ESRCH); // error
             break;
         case THREAD_ZOMBIE:
-            noza_os_set_return_value2(running, 0, th->exit_code);
-            noza_os_change_state(th, &noza_os.zombie, &noza_os.free); // free the thread
+            noza_os_set_return_value2(running, 0, target->exit_code);
+            noza_os_change_state(target, &noza_os.zombie, &noza_os.free); // free the thread
             break;
         case THREAD_RUNNING:
         default:
-            if (th->join_th == NULL) {
-                th->join_th = running;
+            if (target->join_th == NULL) {
+                target->join_th = running;
                 running->info.state = THREAD_PENDING_JOIN;
                 noza_os_clear_running_thread();
             } else {
@@ -871,38 +983,37 @@ static void syscall_thread_join(thread_t *running)
 
 static void syscall_thread_detach(thread_t *running)
 {
-    uint32_t pid = running->trap.r1;
+    uint32_t picked = running->trap.r1;
+    thread_t *target = get_thread_by_vid(picked);
     // sanity check
-    if (pid >= NOZA_OS_TASK_LIMIT) {
+    if (target == NULL) {
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
-    thread_t *th = &noza_os.thread[pid];
-    if (th->info.state == THREAD_FREE) {
+    if (target->info.state == THREAD_FREE) {
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
     // if the thread is in zombie state, then return the exit code, and free the thread
-    if (th->info.state == THREAD_ZOMBIE) {
+    if (target->info.state == THREAD_ZOMBIE) {
         noza_os_set_return_value1(running, EINVAL);
-        noza_os_change_state(th, &noza_os.zombie, &noza_os.free); // free the thread
+        noza_os_change_state(target, &noza_os.zombie, &noza_os.free); // free the thread
         return;
     }
     // set the detach flag, and return success
-    th->flags |= FLAG_DETACH;
+    target->flags |= FLAG_DETACH;
     noza_os_set_return_value1(running, 0); // success
 }
 
 static void syscall_thread_change_priority(thread_t *running)
 {
     kernel_trap_info_t *running_trap = &running->trap;
-
+    thread_t *target = get_thread_by_vid(running_trap->r1);
     // sanity check
-    if (running_trap->r1 >= NOZA_OS_TASK_LIMIT) {
+    if (target == NULL) {
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
-    thread_t *target = &noza_os.thread[running_trap->r1]; // TODO: introduce the capability and do sanity check
     if (target == running) {
         running->info.priority = running->trap.r2;
         noza_os_set_return_value1(running, 0);
@@ -931,7 +1042,6 @@ static void syscall_thread_terminate(thread_t *running)
     if (running->port.pending_list.count > 0) {
         thread_t *head = running->port.pending_list.head->value;
         while (head) {
-            printf("------a\n");
             noza_os_change_state(head, &running->port.pending_list, &noza_os.ready[head->info.priority]);
             noza_os_set_return_value1(head, EINTR);
             head = running->port.pending_list.head->value;
@@ -942,7 +1052,6 @@ static void syscall_thread_terminate(thread_t *running)
     if (running->port.reply_list.count > 0) {
         thread_t *head = running->port.reply_list.head->value;
         while (head) {
-            printf("------b\n");
             noza_os_change_state(head, &running->port.reply_list, &noza_os.ready[head->info.priority]);
             noza_os_set_return_value1(head, EINTR);
             head = running->port.reply_list.head->value;
@@ -959,15 +1068,6 @@ static void syscall_thread_terminate(thread_t *running)
             noza_os_add_thread(&noza_os.zombie, running); // move the thread to zombie list
         }
     } else {
-        #if 0
-        printf("terminate --> join self=%d, join=%d\n", thread_get_pid(running), thread_get_pid(running->join_th));
-        printf("self state=%s, join state=%s\n", state_to_str(running->info.state), state_to_str(running->join_th->info.state));
-        printf("join core\n");
-        platform_core_dump(running->join_th->stack_ptr, thread_get_pid(running->join_th));
-        printf("self core\n");
-        platform_core_dump(running->stack_ptr, thread_get_pid(running));
-        #endif
-
         noza_os_add_thread(&noza_os.ready[running->join_th->info.priority], running->join_th); // insert the thread back to ready queue
         noza_os_set_return_value2(running->join_th, 0, running->exit_code);
         running->join_th = NULL; // clear the join thread
@@ -991,24 +1091,24 @@ static void syscall_reply(thread_t *running)
 static void syscall_call(thread_t *running)
 {
     kernel_trap_info_t *running_trap = &running->trap;
+    thread_t *target = get_thread_by_vid(running_trap->r1);
     // sanity check
-    if (running_trap->r1 >= NOZA_OS_TASK_LIMIT) {
+    if (target == NULL) {
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
-    thread_t *target = &noza_os.thread[running_trap->r1];
     noza_os_send(running, target, (void *)running_trap->r2, running_trap->r3);
 }
 
 static void syscall_nbcall(thread_t *running)
 {
     kernel_trap_info_t *running_trap = &running->trap;
+    thread_t *target = get_thread_by_vid(running_trap->r1);
     // sanity check
-    if (running_trap->r1 >= NOZA_OS_TASK_LIMIT) {
+    if (target == NULL) {
         noza_os_set_return_value1(running, ESRCH); // error
         return;
     }
-    thread_t *target = &noza_os.thread[running_trap->r1];
     noza_os_nonblock_send(running, target, (void *)running_trap->r1, running_trap->r2);
 }
 
@@ -1037,7 +1137,7 @@ static syscall_func_t syscall_func[] = {
     [NSC_NB_CALL] = syscall_nbcall,
 };
 
-static inline void serv_syscall(uint32_t core)
+inline static void serv_syscall(uint32_t core)
 {
     thread_t *source = noza_os.running[core];
     // sanity check
@@ -1047,7 +1147,7 @@ static inline void serv_syscall(uint32_t core)
     } else {
         if (source->callid == 255) {
             // TODO: handle hardfault
-            platform_core_dump(source->stack_ptr, thread_get_pid(source));
+            platform_core_dump(source->stack_ptr, thread_get_vid(source));
             syscall_thread_terminate(source);
         } else {
             // system call not found !
@@ -1058,7 +1158,7 @@ static inline void serv_syscall(uint32_t core)
 }
 
 //////////////////////////////////////////////////////////////
-static inline uint32_t noza_wakeup(int64_t now)
+inline static uint32_t noza_wakeup(int64_t now)
 {
     if (noza_os.sleep.count == 0)
         return 0;
@@ -1075,7 +1175,7 @@ static inline uint32_t noza_wakeup(int64_t now)
     }
 }
 
-static inline void noza_reconfig_systick(int64_t now)
+inline static void noza_reconfig_systick(int64_t now)
 {
     cdl_node_t *cursor = noza_os.sleep.head;
     if (now == 0 || cursor == NULL) {
@@ -1090,16 +1190,16 @@ static inline void noza_reconfig_systick(int64_t now)
 
 extern uint32_t *noza_os_resume_thread(uint32_t *stack);
 // switch to user stack
-static inline void GO_RUN(int core, thread_t *running)
+inline static void GO_RUN(int core, thread_t *running)
 {
-    NOZAOS_PID[core] = thread_get_pid(running); // setup the shared variable
+    NOZAOS_PID[core] = thread_get_vid(running); // setup the shared variable
     noza_os_unlock(core);
     running->stack_ptr = noza_os_resume_thread(running->stack_ptr);
     noza_os_lock(core); 
 }
 
 // switch to idle stack
-static inline void GO_IDLE(int core)
+inline static void GO_IDLE(int core)
 {
     noza_os_unlock(core);
     idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
@@ -1107,7 +1207,7 @@ static inline void GO_IDLE(int core)
 }
 
 // pick a thread from ready queue base on priority
-static inline thread_t *pick_ready_thread()
+inline static thread_t *pick_ready_thread()
 {
     thread_t *running = NULL;
     // travel the ready queue list and find the highest priority thread
@@ -1121,7 +1221,7 @@ static inline thread_t *pick_ready_thread()
     return running;
 }
 
-static inline void check_syscall_output(thread_t *running)
+inline static void check_syscall_output(thread_t *running)
 {
     if (running->trap.state == SYSCALL_OUTPUT) {
         platform_trap(running->stack_ptr, &running->trap); // copy register to trap structure
@@ -1130,7 +1230,7 @@ static inline void check_syscall_output(thread_t *running)
     }
 }
 
-static inline void check_syscall_serve(int core, thread_t *running)
+inline static void check_syscall_serve(int core, thread_t *running)
 {
     if (running->trap.state == SYSCALL_PENDING) {
         running->callid = running->trap.r0; // save the callid
@@ -1148,9 +1248,7 @@ static void noza_os_scheduler()
 #endif
 
     noza_switch_handler(core); // switch to kernel stack (priviliged mode)
-    noza_os.next_tick = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
     platform_systick_config(NOZA_OS_TIME_SLICE); // start system tick 10ms
-
     // TODO: for lock, consider the case PendSV interrupt goes here, 
     // some other high priority interrupt is triggered, could cause deadlock here
     // maybe need to disable all interrupts here with spin lock

@@ -104,11 +104,12 @@ noza_reply:
 .global noza_call
 noza_call:
 	push {r4-r7, lr}
-	mov r4, r0				// save r0 to r4
+	push {r0}				// push noza msg pointer to stack
 	ldmia r0!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, load to register
 	movs r0, #NSC_CALL		// set r0 to the value of NSC_CALL
 	svc #0 					// system call, return value in r0
-	stmia r4!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, save to memory
+	pop {r4}				// pop noza msg pointer from stack
+	stmia r4!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, save to message structure
 	pop {r4-r7, pc}  
 
 .type noza_nonblock_call, %function

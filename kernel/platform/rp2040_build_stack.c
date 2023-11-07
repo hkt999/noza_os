@@ -59,14 +59,12 @@ uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t siz
 }
 
 // copy register from info to interrupt stack (for resume to user thread)
+#include <string.h>
 void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
 {
     uint32_t *stack_ptr = (uint32_t *)_stack_ptr;
     interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
-    is->r0 = info->r0;
-    is->r1 = info->r1;
-    is->r2 = info->r2;
-    is->r3 = info->r3;
+    memcpy(is, info, sizeof(uint32_t)*4);
 }
 
 static const char *syscall_id_to_name(uint32_t id) 
