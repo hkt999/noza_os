@@ -4,3 +4,6 @@
 [submodule "3rd_party/Unity"]
 	path = 3rd_party/Unity
 	url = https://github.com/ThrowTheSwitch/Unity.git
+[submodule "3rd_party/tinyalloc"]
+	path = 3rd_party/tinyalloc
+	url = https://github.com/thi-ng/tinyalloc.git

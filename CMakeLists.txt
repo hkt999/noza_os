@@ -167,6 +167,7 @@ set(
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
 	service/sync/sync_client.c
+	3rd_party/tinyalloc/tinyalloc.c
 	#service/vfs/rootfs.c
 	#service/vfs/romfs.c
 
