@@ -59,14 +59,14 @@ void *_sbrk(ptrdiff_t increment)
 }
 
 uint32_t memory_pid = 0;
+static tinyalloc_t tinyalloc;
 static int do_memory_server(void *param, uint32_t pid)
 {
     int ret;
 	memory_pid = pid;
     noza_msg_t msg;
-    
     void *heap = _sbrk(100*1024);
-    ta_init(heap, heap + 100*1024, 256, 16, 8);
+    ta_init(&tinyalloc, heap, heap + 100*1024, 256, 16, 8);
     for (;;) {
         if ((ret = noza_recv(&msg)) == 0) { // the pid in msg is the sender pid
 			mem_msg_t *mem_msg = (mem_msg_t *)msg.ptr;
@@ -74,7 +74,7 @@ static int do_memory_server(void *param, uint32_t pid)
 			switch (mem_msg->cmd) {
 				case MEMORY_MALLOC:
                     //mem_msg->ptr = malloc(mem_msg->size);
-                    mem_msg->ptr = ta_alloc(mem_msg->size);
+                    mem_msg->ptr = ta_alloc(&tinyalloc, mem_msg->size);
                     if (mem_msg->ptr == NULL) {
                         mem_msg->code = MEMORY_INVALID_OP;
                     } else {
@@ -84,7 +84,7 @@ static int do_memory_server(void *param, uint32_t pid)
 
 				case MEMORY_FREE:
                     //free(mem_msg->ptr);
-                    ta_free(mem_msg->ptr);
+                    ta_free(&tinyalloc, mem_msg->ptr);
                     mem_msg->ptr = NULL;
                     mem_msg->code = MEMORY_SUCCESS;
                     break;
