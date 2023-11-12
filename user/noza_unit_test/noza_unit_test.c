@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "nozaos.h"
+#include "spinlock.h"
 #include "posix/bits/signum.h"
 #include "kernel/noza_config.h"
 #include "posix/errno.h"
@@ -364,6 +365,71 @@ static void test_noza_lookup()
     TEST_PRINTF("remaing service count: %d", count);
 }
 
+typedef struct spinlock_test_s {
+    spinlock_t spinlock;
+    int counter;
+} spinlock_test_t;
+
+#define PAIR_ITER 100000
+static int spinlock_inc(void *param, uint32_t pid)
+{
+    spinlock_test_t *st = (spinlock_test_t *)param;
+    int iter = PAIR_ITER;
+    while (iter-->0) {
+        noza_spinlock_lock(&st->spinlock);
+        st->counter++;
+        noza_spinlock_unlock(&st->spinlock);
+    }
+    return 0;
+}
+
+static int spinlock_dec(void *param, uint32_t pid)
+{
+    spinlock_test_t *st = (spinlock_test_t *)param;
+    int iter = PAIR_ITER;
+    while (iter-->0) {
+        noza_spinlock_lock(&st->spinlock);
+        st->counter--;
+        noza_spinlock_unlock(&st->spinlock);
+    }
+    return 0;
+}
+
+static void test_noza_spinlock()
+{
+    spinlock_test_t spinlock_test;
+    uint32_t inc_th[NUM_PAIR], dec_th[NUM_PAIR];
+
+    memset(&spinlock_test, 0, sizeof(spinlock_test));
+    TEST_ASSERT_EQUAL_INT(0, noza_spinlock_init(&spinlock_test.spinlock));
+    TEST_ASSERT_EQUAL_INT(0, noza_spinlock_lock(&spinlock_test.spinlock));
+    TEST_ASSERT_EQUAL_INT(EDEADLK, noza_spinlock_lock(&spinlock_test.spinlock));
+    TEST_ASSERT_EQUAL_INT(EDEADLK, noza_spinlock_trylock(&spinlock_test.spinlock));
+    TEST_ASSERT_EQUAL_INT(0, noza_spinlock_unlock(&spinlock_test.spinlock));
+    TEST_ASSERT_EQUAL_INT(0, noza_spinlock_free(&spinlock_test.spinlock));
+
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&inc_th[i], spinlock_inc, &spinlock_test.spinlock,
+            (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
+        TEST_ASSERT_NOT_EQUAL(0, inc_th[i]);
+    }
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&dec_th[i], spinlock_inc, &spinlock_test.spinlock,
+            (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
+        TEST_ASSERT_NOT_EQUAL(0, dec_th[i]);
+    }
+
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_join(inc_th[i], NULL));
+    }
+
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_join(dec_th[i], NULL));
+    }
+
+    TEST_ASSERT_EQUAL_INT(0, counter);
+}
+
 static int test_all(int argc, char **argv)
 {
     srand(time(0));
@@ -378,6 +444,7 @@ static int test_all(int argc, char **argv)
     RUN_TEST(test_noza_mutex);
     RUN_TEST(test_noza_hardfault);
     RUN_TEST(test_noza_lookup);
+    RUN_TEST(test_noza_spinlock);
     UNITY_END();
     return 0;
 }

@@ -157,6 +157,7 @@ set(
 	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
 	user/libc/src/setjmp.S
+	user/libc/src/spinlock.c
 
 	# services
 	service/name_lookup/name_lookup_server.c
