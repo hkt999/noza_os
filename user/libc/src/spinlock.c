@@ -19,16 +19,21 @@ int noza_spinlock_free(spinlock_t *spinlock) {
     return 0; // success
 }
 
-int noza_spinlock_lock(spinlock_t *spinlock) {
-    uint32_t tid;
-    noza_thread_self(&tid);
-    if (spinlock->lock_thread == tid)
-        return EDEADLK; // deadlock
-
+int noza_raw_lock(spinlock_t *spinlock) {
     while (is_spin_locked(spinlock->spinlock)) {
         noza_thread_sleep_us(0, NULL); // yield
     }
     spin_lock_unsafe_blocking (spinlock->spinlock);
+
+    return 0;
+}
+
+int noza_spinlock_lock(spinlock_t *spinlock) {
+    uint32_t tid;
+    noza_thread_self(&tid); 
+    if (spinlock->lock_thread == tid)
+        return EDEADLK; // deadlock
+    noza_raw_lock(spinlock);
     spinlock->lock_thread = tid;
 
     return 0;
