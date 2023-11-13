@@ -6,7 +6,6 @@ typedef struct spinlock_s {
     int num;
     volatile uint32_t *spinlock;
     int lock_thread;
-    //int inited;
 } spinlock_t;
 
 int noza_spinlock_init(spinlock_t *spinlock);

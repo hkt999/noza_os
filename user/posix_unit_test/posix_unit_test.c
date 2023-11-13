@@ -482,6 +482,55 @@ void test_pthread_cond()
     TEST_ASSERT_EQUAL_INT(0, pthread_cond_destroy(&products.not_full));
 }
 
+void *test_lock_busy(void *arg) {
+    TEST_ASSERT_EQUAL_INT(EBUSY, noza_spinlock_trylock((spinlock_t *)arg));
+    return 0;
+}
+
+void *spinlock_inc(void *arg) {
+    pthread_spinlock_t *lock = (pthread_spinlock_t *)arg;
+    pthread_spin_lock(lock);
+    counter++;
+    pthread_spin_unlock(lock);
+    return NULL;
+}
+
+void *spinlock_dec(void *arg) {
+    pthread_spinlock_t *lock = (pthread_spinlock_t *)arg;
+    pthread_spin_lock(lock);
+    counter--;
+    pthread_spin_unlock(lock);
+    return NULL;
+}
+
+static void test_pthread_spinlock() {
+    pthread_spinlock_t spinlock;
+    pthread_t inc_th[NUM_PAIR], dec_th[NUM_PAIR];
+
+    counter = 0; // global test variable
+    TEST_ASSERT_EQUAL_INT(0, pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE));
+    TEST_ASSERT_EQUAL_INT(0, pthread_spin_lock(&spinlock));
+    TEST_ASSERT_EQUAL_INT(EDEADLK, pthread_spin_lock(&spinlock));
+    TEST_ASSERT_EQUAL_INT(0, pthread_spin_unlock(&spinlock));
+    TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_th[0], NULL, test_lock_busy, NULL));
+    TEST_ASSERT_EQUAL_INT(0, pthread_join(inc_th[0], NULL));
+
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_create(&inc_th[i], NULL, spinlock_inc, &spinlock));
+    }
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_create(&dec_th[i], NULL, spinlock_dec, &spinlock));
+    }
+
+    for (int i = 0; i < NUM_PAIR; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_join(inc_th[i], NULL));
+        TEST_ASSERT_EQUAL_INT(0, pthread_join(dec_th[i], NULL));
+    }
+
+    TEST_ASSERT_EQUAL_INT(0, counter);
+    TEST_ASSERT_EQUAL_INT(0, pthread_spin_destroy(&spinlock));
+}
+
 static int test_posix(int argc, char **argv)
 {
     UNITY_BEGIN();
@@ -504,6 +553,7 @@ static int test_posix(int argc, char **argv)
     RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
     RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
     RUN_TEST(test_pthread_attr_set_and_get_scope);
+    RUN_TEST(test_pthread_spinlock);
     UNITY_END();
     return 0;
 }
