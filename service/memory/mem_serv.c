@@ -1,7 +1,7 @@
 #include "mem_serv.h"
 #include "nozaos.h"
 #include "posix/errno.h"
-#include "3rd_party/tinyalloc/tinyalloc.h"
+#include "3rd_party/tinyalloc_port/tinyalloc.h"
 
 extern char __end__, __StackLimit; // __StackLimit is poorly named, it's actually the end of the heap
 void *heap_end = &__end__;
