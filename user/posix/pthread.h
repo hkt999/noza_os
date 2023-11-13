@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "errno.h"
 #include "noza_time.h"
+#include "spinlock.h"
 #include <service/sync/sync_client.h>
 
 #define NZ_PTHREAD_CREATE_JOINABLE 0
@@ -138,7 +139,6 @@ int nz_pthread_mutexattr_setpshared(nz_pthread_mutexattr_t *attr, int pshared);
 int nz_pthread_mutexattr_gettype(const nz_pthread_mutexattr_t *attr, int *type);
 int nz_pthread_mutexattr_settype(nz_pthread_mutexattr_t *attr, int type);
 
-
 typedef cond_t nz_pthread_cond_t;
 
 typedef struct {
@@ -159,6 +159,13 @@ int nz_pthread_condattr_getpshared(const nz_pthread_condattr_t *restrict attr, i
 int nz_pthread_condattr_setclock(nz_pthread_condattr_t *attr, nz_clockid_t clock_id);
 int nz_pthread_condattr_getclock(const nz_pthread_condattr_t *restrict attr, nz_clockid_t *restrict clock_id);
 
+typedef spinlock_t nz_pthread_spinlock_t;
+// spinlock
+int nz_pthread_spin_init(nz_pthread_spinlock_t *lock, int pshared);
+int nz_pthread_spin_destroy(nz_pthread_spinlock_t *lock);
+int nz_pthread_spin_lock(nz_pthread_spinlock_t *lock);
+int nz_pthread_spin_trylock(nz_pthread_spinlock_t *lock);
+int nz_pthread_spin_unlock(nz_pthread_spinlock_t *lock);
 
 ///////////////////////////////////////////////////////////
 // not supported

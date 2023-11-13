@@ -190,3 +190,11 @@ typedef nz_sem_t sem_t;
 #define sem_trywait(p1)                         nz_sem_trywait(p1)
 #define sem_post(p1)                            nz_sem_post(p1)
 #define sem_getvalue(p1, p2)                    nz_sem_getvalue(p1, p2)
+
+// spinlock
+typedef spinlock_t pthread_spinlock_t;
+#define pthread_spin_init(p1, p2)				nz_pthread_spin_init(p1, p2)
+#define pthread_spin_destroy(p1)				nz_pthread_spin_destroy(p1)
+#define pthread_spin_lock(p1)					nz_pthread_spin_lock(p1)
+#define pthread_spin_trylock(p1)				nz_pthread_spin_trylock(p1)
+#define pthread_spin_unlock(p1)					nz_pthread_spin_unlock(p1)
