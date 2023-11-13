@@ -395,8 +395,15 @@ static int spinlock_dec(void *param, uint32_t pid)
     return 0;
 }
 
+static int test_lock_busy(void *param, uint32_t pid)
+{
+    TEST_ASSERT_EQUAL_INT(EBUSY, noza_spinlock_trylock((spinlock_t *)param));
+    return 0;
+}
+
 static void test_noza_spinlock()
 {
+    uint32_t lth;
     spinlock_test_t spinlock_test;
     uint32_t inc_th[NUM_PAIR], dec_th[NUM_PAIR];
 
@@ -404,7 +411,8 @@ static void test_noza_spinlock()
     TEST_ASSERT_EQUAL_INT(0, noza_spinlock_init(&spinlock_test.spinlock));
     TEST_ASSERT_EQUAL_INT(0, noza_spinlock_lock(&spinlock_test.spinlock));
     TEST_ASSERT_EQUAL_INT(EDEADLK, noza_spinlock_lock(&spinlock_test.spinlock));
-    TEST_ASSERT_EQUAL_INT(EDEADLK, noza_spinlock_trylock(&spinlock_test.spinlock));
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&lth, test_lock_busy, &spinlock_test.spinlock, 1, 1024));
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_join(lth, NULL));
     TEST_ASSERT_EQUAL_INT(0, noza_spinlock_unlock(&spinlock_test.spinlock));
     TEST_ASSERT_EQUAL_INT(0, noza_spinlock_free(&spinlock_test.spinlock));
 

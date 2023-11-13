@@ -5,6 +5,7 @@
 #include "kernel/noza_config.h"
 #include "setjmp.h"
 #include "posix/errno.h"
+#include "spinlock.h"
 #include "service/memory/mem_client.h"
 
 #define NO_AUTO_FREE_STACK	0
@@ -22,6 +23,13 @@ inline static uint8_t hash32to8(uint32_t value) {
     return (byte1 ^ byte2 ^ byte3 ^ byte4);
 }
 
+typedef struct process_record_s {
+	struct process_record_s *link;
+} process_record_t;
+
+
+static process_record_t root_process;
+
 typedef struct thread_record_s {
 	int (*user_entry)(void *param, uint32_t pid);
 	void *user_param;
@@ -33,23 +41,27 @@ typedef struct thread_record_s {
 	struct thread_record_s *next; // if hash collision
 	void *thread_data;
 	jmp_buf jmp_buf;
+	process_record_t process;
 	uint32_t errno;
 } thread_record_t;
 
-static thread_record_t *THREAD_RECORD_HASH[256]; // hash table for thread record
+#define HASH_TABLE_SIZE		256
+static spinlock_t thread_record_lock;
+static thread_record_t *THREAD_RECORD_HASH[HASH_TABLE_SIZE]; // hash table for thread record -- need protect !!
 
 inline static thread_record_t *get_thread_record(uint32_t pid)
 {
 	int hash = hash32to8(pid);
+	noza_raw_lock(&thread_record_lock); // WARNING: this will cause deadlock
 	thread_record_t *thread_record = THREAD_RECORD_HASH[hash];
 	while (thread_record) {
-		if (thread_record->pid == pid) {
-			return thread_record;
-		}
+		if (thread_record->pid == pid)
+			break;
+
 		thread_record = thread_record->next;
 	}
-
-	return NULL;
+	noza_spinlock_unlock(&thread_record_lock);
+	return thread_record;
 }
 
 inline static uint32_t *get_stack_ptr(uint32_t pid, uint32_t *size)
@@ -100,6 +112,47 @@ void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint
 	service_count++;
 }
 
+void noza_root_process()
+{
+	// TODO: initial root process, and root thread, and create the first thread
+}
+
+void noza_init_root()
+{
+	#if 0 
+	static thread_record_t info; // root thread
+	thread_record_t *thread_record = &info;
+	thread_record->user_entry = NULL;
+	thread_record->user_param = NULL;
+	thread_record->stack_ptr = NULL;
+	thread_record->stack_size = 0; // TODO: check check
+	thread_record->priority = 0;
+	thread_record->need_free_stack = 0;
+	thread_record->pid = 0; // root task
+	thread_record->errno = 0;
+	int hash = hash32to8(0);
+
+	noza_spinlock_init(&thread_record_lock);
+	//noza_spinlock_lock(&thread_record_lock);
+	thread_record->next = THREAD_RECORD_HASH[hash];
+	THREAD_RECORD_HASH[hash] = thread_record;
+	//noza_spinlock_unlock(&thread_record_lock);
+	#else
+	noza_spinlock_init(&thread_record_lock);
+	#endif
+}
+
+void noza_free_root()
+{
+	int hash = hash32to8(0);
+	noza_raw_lock(&thread_record_lock);
+	thread_record_t *thread_record = THREAD_RECORD_HASH[hash];
+	if (thread_record) {
+		THREAD_RECORD_HASH[hash] = thread_record->next;
+	}
+	noza_spinlock_unlock(&thread_record_lock);
+}
+
 #define SERVICE_PRIORITY	0
 void noza_run_services()
 {
@@ -133,6 +186,7 @@ uint32_t free_stack(uint32_t pid, uint32_t code)
 
 	// remove the thread record from hash table
 	int hash = hash32to8(pid);
+	noza_raw_lock(&thread_record_lock);
 	thread_record_t *prev = NULL;
 	thread_record_t *current = THREAD_RECORD_HASH[hash];
 	while (current) {
@@ -150,6 +204,7 @@ uint32_t free_stack(uint32_t pid, uint32_t code)
 	if (thread_record->need_free_stack == AUTO_FREE_STACK) {
 		noza_free(thread_record->stack_ptr);
 	}
+	noza_spinlock_unlock(&thread_record_lock);
 
 	return code;
 }
@@ -172,6 +227,7 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 	thread_record->priority = priority;
 	thread_record->need_free_stack = auto_free_stack;
 	thread_record->pid = -1;
+	// TODO: initial proxess here
 	thread_record->errno = 0;
 
 	// setup register for system call
@@ -186,8 +242,10 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t p
 
 	// insert the thread record to hash table
 	int hash = hash32to8(info.r1);
+	noza_raw_lock(&thread_record_lock);
 	thread_record->next = THREAD_RECORD_HASH[hash];
 	THREAD_RECORD_HASH[hash] = thread_record;
+	noza_spinlock_unlock(&thread_record_lock);
 
 	return info.r0;
 }
