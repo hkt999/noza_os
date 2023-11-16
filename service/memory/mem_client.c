@@ -5,13 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-extern uint32_t mutex_pid;
-
-extern uint32_t memory_pid; // TODO: use lookup afterwards
+extern int32_t memory_pid; // TODO: use lookup afterwards
 void *noza_malloc(size_t size)
 {
-    //return malloc(size);
-    if (memory_pid == 0) {
+    if (memory_pid < 0) {
         return malloc(size); // TODO: consider the situation before memory service is on and want to create service thread
     }
     mem_msg_t msg = {.cmd = MEMORY_MALLOC, .size = size, .ptr = NULL, .code = 0};
@@ -29,10 +26,6 @@ void *noza_malloc(size_t size)
 
 void noza_free(void *ptr)
 {
-    if (memory_pid == 0) {
-        free(ptr);
-        return;
-    }
     mem_msg_t msg = {.cmd = MEMORY_FREE, .size = 0, .ptr = ptr, .code = 0};
     noza_msg_t noza_msg = {.to_vid = memory_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
     noza_call(&noza_msg); // TODO: error handling

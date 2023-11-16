@@ -542,15 +542,7 @@ static void noza_init()
     }
 }
 
-static void noza_root_task(void *param)
-{
-    extern void root_task(void *param);
-    extern void noza_run_services(); // application code
-
-    noza_run_services();
-    root_task(param); // root task is with very small stack
-}
-
+extern void noza_root_task(); // ini syslib.c
 static void noza_run()
 {
     uint32_t th;
@@ -568,23 +560,15 @@ inline static void noza_os_insert_vid(thread_t *src_th)
     }
     noza_os.free_vid_map = vp_map->next;
 
-    #if 0
-    uint32_t src_pid = _thread_get_pid(src_th);
-    int hash = hash32to8(src_pid); // TODO: change this
-
-    vp_map->pid = src_pid;
-    vp_map->vid = vp_map->pid; // TODO: change this
-    src_th->vid = vp_map->vid; // assign the vid to thread structure
-    #else
     static uint32_t ID = 0;
     uint32_t vid = ID++;
     if (ID>=65536)
         ID = 0; // maximun vid: 65535
+
     vp_map->vid = vid;
     vp_map->pid = _thread_get_pid(src_th);
     src_th->vid = vid;
     int hash = hash32to8(vid);
-    #endif
     vp_map->next = noza_os.slot[hash]; // insert to the head of the list
     noza_os.slot[hash] = vp_map;
 }
@@ -1246,7 +1230,6 @@ static void noza_os_scheduler()
     // triger the other core to start and run noza_os_scheduler, too
     platform_multicore_init(noza_os_scheduler);
 #endif
-
     noza_switch_handler(core); // switch to kernel stack (priviliged mode)
     platform_systick_config(NOZA_OS_TIME_SLICE); // start system tick 10ms
     // TODO: for lock, consider the case PendSV interrupt goes here, 

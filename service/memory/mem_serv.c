@@ -21,13 +21,14 @@ void *_sbrk(ptrdiff_t increment)
 }
 
 #include <stdio.h>
-uint32_t memory_pid = 0;
+int32_t memory_pid = -1;
 static tinyalloc_t tinyalloc;
 static int do_memory_server(void *param, uint32_t pid)
 {
     int ret;
 	memory_pid = pid;
     noza_msg_t msg;
+    void *my_heap_end = heap_end;
 
     ta_init(&tinyalloc, heap_end, heap_limit, 256, 16, 8);
     heap_end = heap_limit;

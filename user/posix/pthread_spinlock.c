@@ -1,4 +1,4 @@
-#include "spinlock.h"
+#include "nozaos.h"
 
 typedef spinlock_t nz_pthread_spinlock_t;
 int nz_pthread_spin_init(nz_pthread_spinlock_t *lock, int pshared)
