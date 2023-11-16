@@ -5,8 +5,8 @@
 #include "nozaos.h"
 #include "user/console/noza_console.h"
 
-_Thread_local int threadLocalVar = 0;
-void root_task(void *param)
+int user_root_task(void *param, uint32_t pid)
 {
     console_start();
+    return 0;
 }

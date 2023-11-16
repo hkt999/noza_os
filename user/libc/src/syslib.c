@@ -89,7 +89,7 @@ uint32_t noza_get_stack_space() {
     }
 }
 
-extern void app_run(thread_record_t *info);
+extern void app_run(thread_record_t *info, uint32_t pid);
 
 #define MAX_SERVICES    8 // TODO: move this to noza_config.h
 typedef struct service_entry {
@@ -117,29 +117,44 @@ void noza_root_process()
 	// TODO: initial root process, and root thread, and create the first thread
 }
 
-void noza_init_root()
+#define NOZA_ROOT_STACK_SIZE 2048
+#define SERVICE_PRIORITY	0
+void noza_run_services()
 {
-	#if 0 
-	static thread_record_t info; // root thread
-	thread_record_t *thread_record = &info;
-	thread_record->user_entry = NULL;
-	thread_record->user_param = NULL;
-	thread_record->stack_ptr = NULL;
-	thread_record->stack_size = 0; // TODO: check check
-	thread_record->priority = 0;
-	thread_record->need_free_stack = 0;
-	thread_record->pid = 0; // root task
-	thread_record->errno = 0;
-	int hash = hash32to8(0);
+    // initial all registered service
+    for (int i = 0; i < service_count; i++) {
+		uint32_t th;
+		noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
+			service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
+    }
+}
 
+extern int user_root_task(void *param, uint32_t pid);
+
+int boot2(void *param, uint32_t pid)
+{
+	noza_run_services();
+	user_root_task(param, pid);
+}
+
+void noza_root_task()
+{
+	//static uint8_t ROOT_STACK[NOZA_ROOT_STACK_SIZE];
 	noza_spinlock_init(&thread_record_lock);
-	//noza_spinlock_lock(&thread_record_lock);
-	thread_record->next = THREAD_RECORD_HASH[hash];
-	THREAD_RECORD_HASH[hash] = thread_record;
-	//noza_spinlock_unlock(&thread_record_lock);
-	#else
-	noza_spinlock_init(&thread_record_lock);
-	#endif
+
+	void *stack_ptr = noza_malloc(NOZA_ROOT_STACK_SIZE); // TODO: use default stack
+	thread_record_t *thread_record = (thread_record_t *)stack_ptr;
+	thread_record->user_entry = boot2;
+	thread_record->user_param = NULL;
+	thread_record->stack_ptr = (uint32_t *)stack_ptr;
+	thread_record->stack_size = NOZA_ROOT_STACK_SIZE;
+	thread_record->priority = 0;
+	thread_record->need_free_stack = NO_AUTO_FREE_STACK;
+	thread_record->pid = 0;
+	thread_record->errno = 0;
+	THREAD_RECORD_HASH[0] = thread_record;
+	noza_thread_detach(0);
+	app_run(thread_record, 0);
 }
 
 void noza_free_root()
@@ -151,17 +166,6 @@ void noza_free_root()
 		THREAD_RECORD_HASH[hash] = thread_record->next;
 	}
 	noza_spinlock_unlock(&thread_record_lock);
-}
-
-#define SERVICE_PRIORITY	0
-void noza_run_services()
-{
-    // initial all registered service
-    for (int i = 0; i < service_count; i++) {
-		uint32_t th;
-		noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
-			service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
-    }
 }
 
 // called from app_run.S
