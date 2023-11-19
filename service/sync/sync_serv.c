@@ -6,12 +6,7 @@
 #include "../name_lookup/name_lookup_client.h"
 #include "sync_serv.h"
 #include "nozaos.h"
-
-typedef struct _dblink_item_t {
-	struct _dblink_item_t *prev;
-	struct _dblink_item_t *next;
-	uint32_t index;
-} dblink_item_t;
+#include "type/dblist.h"
 
 typedef struct {
 	dblink_item_t link;
@@ -38,46 +33,6 @@ typedef struct {
 	uint32_t stoken;
 	int value;
 } sem_item_t;
-
-#define DBLIST_INIT(list, count) \
-	for (int i = 0; i < count-1; i++) { \
-		list[i].link.next = &list[i+1].link; \
-	} \
-	list[count-1].link.next = &list[0].link; \
-	list[0].link.index = 0; \
-	for (int i = 1; i < count; i++) { \
-		list[i].link.prev = &list[i-1].link; \
-		list[i].link.index = i; \
-	} \
-	list[0].link.prev = &list[count-1].link; 
-
-static dblink_item_t *dblist_insert_tail(dblink_item_t *head, dblink_item_t *item)
-{
-	if (head == NULL) {
-		item->next = item;
-		item->prev = item;
-		return item;
-	}
-	item->next = head;
-	item->prev = head->prev;
-	head->prev->next = item;
-	head->prev = item;
-	return head;
-}
-
-static dblink_item_t *dblist_remove_head(dblink_item_t *head)
-{
-	if (head == NULL) {
-		return NULL;
-	}
-	if (head->next == head) {
-		return NULL;
-	}
-	dblink_item_t *next = head->next;
-	head->prev->next = next;
-	next->prev = head->prev;
-	return next;
-}
 
 typedef struct {
 	mutex_item_t	mutex_store[MAX_LOCKS];
@@ -126,7 +81,6 @@ static inline pending_node_t *sem_get_pending_head(sem_item_t *working_sem)
 	working_sem->pending = (pending_node_t *)dblist_remove_head(&head->link); // remove the first item
 	return head;
 }
-
 
 static void mutex_server_acquire(noza_msg_t *msg, sync_info_t *si)
 {

@@ -655,8 +655,6 @@ static cdl_node_t *cdl_add(cdl_node_t *head, cdl_node_t *obj)
 static cdl_node_t *cdl_remove(cdl_node_t *head, cdl_node_t *obj)
 {
     if (head == NULL) {
-        // 0 element, just return NULL
-        kernel_panic("fatal error: cdl_remove: head is NULL\n");
         return NULL;
     }
     if (head == obj) {

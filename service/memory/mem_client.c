@@ -26,9 +26,13 @@ void *noza_malloc(size_t size)
 
 void noza_free(void *ptr)
 {
+    if (memory_pid < 0) {
+        free(ptr);
+        return;
+    }
     mem_msg_t msg = {.cmd = MEMORY_FREE, .size = 0, .ptr = ptr, .code = 0};
     noza_msg_t noza_msg = {.to_vid = memory_pid, .ptr = (void *)&msg, .size = sizeof(msg)};
-    noza_call(&noza_msg); // TODO: error handling
+    noza_call(&noza_msg);
     return;
 }
 
