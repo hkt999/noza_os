@@ -156,6 +156,8 @@ set(
 	user/libc/src/app_run.S
 	user/libc/src/syscall_asm.S
 	user/libc/src/syslib.c
+	user/libc/src/proc_api.c
+	user/libc/src/thread_api.c
 	user/libc/src/setjmp.S
 	user/libc/src/spinlock.c
 
@@ -168,6 +170,8 @@ set(
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
 	service/sync/sync_client.c
+	type/dblist.c
+	type/hashslot.c
 	3rd_party/tinyalloc_port/tinyalloc.c
 	#service/vfs/rootfs.c
 	#service/vfs/romfs.c
