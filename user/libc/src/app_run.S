@@ -2,7 +2,7 @@
 .syntax unified
 
 .type app_run, %function
-.global app_run, noza_thread_terminate, free_stack, dummy_stack_addr
+.global app_run, noza_thread_terminate, free_resource, dummy_stack_addr
 app_run:
     // C interface --> void app_run(thread_record_t *info, uint32_t thread_id)
     // r0: the pointer to the boot info structure
@@ -30,5 +30,5 @@ exit_entry:
     mov sp, r2      // restore the old stack pointer --> so that we can free the stack
     mov r1, r0      // move the return value to r1
     mov r0, r3      // pass thread id in r0
-    bl free_stack   // return r0 is the return code
+    bl free_resource   // return r0 is the return code
     bl noza_thread_terminate // call noza terminate to deallocate the resource
