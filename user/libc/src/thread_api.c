@@ -35,26 +35,34 @@ void noza_thread_exit(uint32_t exit_code) {
 	longjmp(thread_record->jmp_buf, exit_code);
 }
 
-static int boot2(void *param, uint32_t pid)
+static int process_boot(void *param, uint32_t pid)
 {
-    extern int user_root_task(void *param, uint32_t pid);
+    extern int user_root_task(int argc, char **argv);
     extern void noza_run_services();
-	noza_run_services();
-	user_root_task(param, pid);
+
+	noza_run_services(); // TODO: move this to somewhere else
+
+    process_record_t *proc = alloc_process_record();
+    proc->main_func = user_root_task;
+    proc->main_thread = 0; // root
+    noza_process_crt0(proc, 0); // 0 --> root thread
+    free_process_record(proc);
 }
 
 void noza_root_task()
 {
     mapping_init(&THREAD_RECORD_HASH);
+    extern int noza_process_init();
+    noza_process_init();
+
 	void *stack_ptr = noza_malloc(NOZA_ROOT_STACK_SIZE);
 	thread_record_t *thread_record = (thread_record_t *)stack_ptr;
-	thread_record->user_entry = boot2;
+	thread_record->user_entry = process_boot;
 	thread_record->user_param = NULL;
 	thread_record->stack_ptr = (uint32_t *)stack_ptr;
 	thread_record->stack_size = NOZA_ROOT_STACK_SIZE;
 	thread_record->priority = 0;
-	thread_record->need_free_stack = NO_AUTO_FREE_STACK;
-	thread_record->tid = 0;
+	thread_record->need_free_stack = AUTO_FREE_STACK;
 	thread_record->errno = 0;
     mapping_insert(&THREAD_RECORD_HASH, 0, &thread_record->hash_item, thread_record);
 	noza_thread_detach(0);
@@ -62,7 +70,7 @@ void noza_root_task()
 }
 
 // thread terminate, call free_stack
-uint32_t free_stack(uint32_t tid, uint32_t code)
+uint32_t free_resource(uint32_t tid, uint32_t code)
 {
 	thread_record_t *thread_record = get_thread_record(tid);
 	if (thread_record == NULL) {
@@ -73,9 +81,15 @@ uint32_t free_stack(uint32_t tid, uint32_t code)
 		printf("fatal: free_stack: pid %ld stack_ptr is NULL\n", tid);
 		return code;
 	}
+    if (((process_record_t *)(thread_record->process))->main_thread == tid) {
+        // terminate the main thread, terminate the process
+        noza_process_terminate_children_threads(thread_record->process);
+    } else {
+        noza_process_remove_thread(thread_record->process, tid); 
+    }
     mapping_remove(&THREAD_RECORD_HASH, tid);
     noza_free(thread_record->stack_ptr);
-    noza_process_remove_thread(thread_record->process, tid);
+
 	return code;
 }
 
@@ -101,7 +115,6 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t t
 	thread_record->stack_size = size;
 	thread_record->priority = priority;
 	thread_record->need_free_stack = auto_free_stack;
-	thread_record->tid = -1;
 	thread_record->errno = 0;
     thread_record->process = me->process;
 
@@ -112,9 +125,9 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t t
 	info.r3 = (uint32_t)priority;
 	extern void noza_thread_create_primitive(create_thread_t *info);
 	noza_thread_create_primitive(&info);
-	thread_record->tid = info.r1;
 	*pth = info.r1;
     mapping_insert(&THREAD_RECORD_HASH, info.r1, &thread_record->hash_item, thread_record);
+    noza_process_add_thread(me->process, info.r1);
 
 	return info.r0;
 }

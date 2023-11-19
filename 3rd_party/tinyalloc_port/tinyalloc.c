@@ -90,7 +90,7 @@ static void compact(tinyalloc_t *tinyalloc) {
 }
 #endif
 
-bool ta_init(tinyalloc_t *tinyalloc, const void *base, const void *limit, const size_t heap_blocks, const size_t split_thresh, const size_t alignment) {
+bool ta_init(tinyalloc_t *tinyalloc, const void *base, const void *limit,const size_t heap_blocks, const size_t split_thresh, const size_t alignment) {
     tinyalloc->heap = (Heap *)base;
     tinyalloc->heap_limit = limit;
     tinyalloc->heap_split_thresh = split_thresh;
