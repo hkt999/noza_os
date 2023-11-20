@@ -13,8 +13,6 @@ static hashslot_t PROCESS_RECORD_HASH;
 static process_record_t *process_head = NULL;
 static process_record_t PROCESS_SLOT[NOZA_MAX_PROCESSES];
 
-static env_t default_env = { .argc=1, .argv={"root"} };
-
 static process_record_t *alloc_process_record()
 {
 	static int process_count = 0;
@@ -27,7 +25,7 @@ static process_record_t *alloc_process_record()
 	// insert the process into hash table
 	if (process) {
 		mapping_insert(&PROCESS_RECORD_HASH, process_count++, &process->hash_item, process);
-		process->env = &default_env;
+		process->env = (env_t *)process->env_buf;
 	}
 
 	return process;
@@ -104,22 +102,29 @@ static size_t env_size(env_t *env)
 	return sz;
 }
 
-static env_t *env_copy(tinyalloc_t *ta, env_t *env)
+static void env_copy(env_t *dst, env_t *src)
+{
+	dst->argc = src->argc;
+	char *ptr = (char *)dst + sizeof(int) + src->argc * sizeof(char *);
+	for (int i=0; i<src->argc; i++) {
+		dst->argv[i] = ptr;
+		strcpy(ptr, src->argv[i]);
+		ptr += strlen(ptr) + 1;
+	}
+}
+
+#if 0
+static env_t *env_duplicate(tinyalloc_t *ta, env_t *env)
 {
 	size_t sz = env_size(env);
 	env_t *new_env = (env_t *)ta_alloc(ta, sz);
 	if (new_env == NULL) {
 		return NULL;
 	}
-	new_env->argc = env->argc;
-	char *ptr = (char *)new_env + sizeof(int) + env->argc * sizeof(char *);
-	for (int i=0; i<env->argc; i++) {
-		new_env->argv[i] = ptr;
-		strcpy(ptr, env->argv[i]);
-		ptr += strlen(ptr) + 1;
-	}
+	env_copy(new_env, env);
 	return new_env;
 }
+#endif
 
 int noza_process_crt0(void *param, uint32_t tid)
 {
@@ -142,7 +147,6 @@ int noza_process_crt0(void *param, uint32_t tid)
 	// initialize process heap
 	process->heap = noza_malloc(NOZA_PROCESS_HEAP_SIZE);
 	ta_init(&process->tinyalloc, process->heap, process->heap + NOZA_PROCESS_HEAP_SIZE, 256, 16, 8);
-	process->env = env_copy(&process->tinyalloc, process->env); // duplicate & copy into process heap
 	int ret =  process->entry(process->env->argc, process->env->argv);
 	noza_free(process->heap); // release process heap
 	free_process_record(process); // release this process record
@@ -158,8 +162,22 @@ int noza_process_exec(main_t entry, int argc, char *argv[])
 		return ENOMEM;
 
 	process->entry = entry;
-	process->env = &default_env; // TODO: fix this
-	noza_thread_create(&tid, noza_process_crt0, (void *)process, 0, 1024);  // TODO: consider the stack size
+	env_t env;
+	env.argc = argc;
+	for (int i=0; i<argc; i++) {
+		env.argv[i] = argv[i];
+	}
+	env_copy(process->env, &env);
+	if (noza_thread_create(&tid, noza_process_crt0, (void *)process, 0, 1024)!=0) { // TODO: consider the stack size
+		// TODO: error handling
+	}
+
+	uint32_t exit_code = 0;
+	if (noza_thread_join(tid, &exit_code) != 0) {
+		// TODO: error handling
+	}
+
+	return exit_code;
 }
 
 process_record_t *noza_process_self() // TODO: return process is instead of process_t
@@ -236,6 +254,7 @@ int process_boot(void *param, uint32_t pid)
 		return ENOMEM;
 
 	process->entry = user_root_task;
-	process->env = &default_env; // TODO: fix this
+	process->env->argc = 1;
+	process->env->argv[0] = "root";
     noza_process_crt0(process, 0); // 0 --> root thread
 }

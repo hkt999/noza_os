@@ -37,3 +37,7 @@ uint32_t noza_get_stack_space();
 // user level call
 int noza_set_errno(int errno);
 int noza_get_errno();
+
+// process
+typedef int (*main_t)(int argc, char **argv);
+int noza_process_exec(main_t entry, int argc, char *argv[]); 

@@ -124,11 +124,13 @@ typedef struct {
 	int (*main_func)(int argc, char **argv);
 } run_t;
 
+#if 0
 static int run_entry(void *param, uint32_t pid)
 {
 	run_t *run = (run_t *)param;
 	return run->main_func(run->argc, run->argv);
 }
+#endif
 
 #define MAX_ARGV  12
 static void noza_console_process_command(char *cmd_str, void *user_data)
@@ -152,13 +154,22 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 			} else  {
 				while (rc->name && rc->main_func) {
 					if (strncmp(rc->name, argv[0], 32) == 0) {
+						printf("parser argc=%d\n", argc);
+						for (int i=0; i<argc; i++) {
+							printf(".... argv[%d]=%s\n", i, argv[i]);
+						}
+#if 0
 						uint32_t th;
 						run_t run = {.argc  = argc, .argv = argv, .main_func = rc->main_func};
+
 						if (noza_thread_create(&th, run_entry, &run, 0, rc->stack_size) == 0) {
 							noza_thread_join(th, NULL);
 						} else {
 							printf("failed to create thread (%s)\n", rc->name);
 						}
+#else
+						noza_process_exec(rc->main_func, argc, argv);
+#endif
 						break;
 					}
 					rc++;
