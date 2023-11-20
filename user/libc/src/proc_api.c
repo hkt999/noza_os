@@ -15,7 +15,7 @@ static process_record_t PROCESS_SLOT[PROCESS_LIMIT];
 
 static env_t default_env;
 
-process_record_t *alloc_process_record()
+static process_record_t *alloc_process_record()
 {
 	static int process_count = 0;
 	noza_raw_lock(&PROCESS_RECORD_HASH.lock);
@@ -33,7 +33,7 @@ process_record_t *alloc_process_record()
 	return process;
 }
 
-void free_process_record(process_record_t *process)
+static void free_process_record(process_record_t *process)
 {
 	noza_raw_lock(&PROCESS_RECORD_HASH.lock);
 	process->next = process_head;
@@ -226,4 +226,18 @@ int noza_process_terminate_children_threads(process_record_t *process)
 		noza_thread_join(join_pid[i], NULL);
 	}
 	return 0;
+}
+
+int process_boot(void *param, uint32_t pid)
+{
+    extern int user_root_task(int argc, char **argv);
+    extern void noza_run_services();
+
+	noza_run_services(); // TODO: move this to somewhere else
+
+    process_record_t *proc = alloc_process_record();
+    proc->main_func = user_root_task;
+    proc->main_thread = 0; // root
+    noza_process_crt0(proc, 0); // 0 --> root thread
+    free_process_record(proc);
 }
