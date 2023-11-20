@@ -102,29 +102,16 @@ static size_t env_size(env_t *env)
 	return sz;
 }
 
-static void env_copy(env_t *dst, env_t *src)
+static void env_copy(env_t *dst, int argc, char *argv[])
 {
-	dst->argc = src->argc;
-	char *ptr = (char *)dst + sizeof(int) + src->argc * sizeof(char *);
-	for (int i=0; i<src->argc; i++) {
+	dst->argc = argc;
+	char *ptr = (char *)dst + sizeof(int) + argc * sizeof(char *);
+	for (int i=0; i<argc; i++) {
 		dst->argv[i] = ptr;
-		strcpy(ptr, src->argv[i]);
+		strcpy(ptr, argv[i]);
 		ptr += strlen(ptr) + 1;
 	}
 }
-
-#if 0
-static env_t *env_duplicate(tinyalloc_t *ta, env_t *env)
-{
-	size_t sz = env_size(env);
-	env_t *new_env = (env_t *)ta_alloc(ta, sz);
-	if (new_env == NULL) {
-		return NULL;
-	}
-	env_copy(new_env, env);
-	return new_env;
-}
-#endif
 
 int noza_process_crt0(void *param, uint32_t tid)
 {
@@ -162,19 +149,17 @@ int noza_process_exec(main_t entry, int argc, char *argv[])
 		return ENOMEM;
 
 	process->entry = entry;
-	env_t env;
-	env.argc = argc;
-	for (int i=0; i<argc; i++) {
-		env.argv[i] = argv[i];
-	}
-	env_copy(process->env, &env);
+	env_copy(process->env, argc, argv);
 	if (noza_thread_create(&tid, noza_process_crt0, (void *)process, 0, 1024)!=0) { // TODO: consider the stack size
 		// TODO: error handling
 	}
 
+	// check if the tail is '&' or not --> run in background
 	uint32_t exit_code = 0;
-	if (noza_thread_join(tid, &exit_code) != 0) {
-		// TODO: error handling
+	if (strcmp(argv[argc-1], "&") != 0) {
+		if (noza_thread_join(tid, &exit_code) != 0) {
+			// TODO: error handling
+		}
 	}
 
 	return exit_code;

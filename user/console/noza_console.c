@@ -99,7 +99,7 @@ static void parse_input_command(char *cmdbuf, int *argc, char **argv, int max_ar
 	while (*p != 0) {
 		switch (state) {
 			case STATE_NEW_TOKEN:
-				if ( isalnum(*p) || isalpha(*p) || (*p=='_') || (*p=='/') || (*p=='-') || (*p=='.') ) {
+				if ( isalnum(*p) || isalpha(*p) || (*p=='_') || (*p=='/') || (*p=='-') || (*p=='.') || (*p=='&')) {
 					argv[(*argc)++] = p;
 					state = STATE_PROCESSING;
 				} 
@@ -154,22 +154,13 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 			} else  {
 				while (rc->name && rc->main_func) {
 					if (strncmp(rc->name, argv[0], 32) == 0) {
+						#if 1
 						printf("parser argc=%d\n", argc);
 						for (int i=0; i<argc; i++) {
 							printf(".... argv[%d]=%s\n", i, argv[i]);
 						}
-#if 0
-						uint32_t th;
-						run_t run = {.argc  = argc, .argv = argv, .main_func = rc->main_func};
-
-						if (noza_thread_create(&th, run_entry, &run, 0, rc->stack_size) == 0) {
-							noza_thread_join(th, NULL);
-						} else {
-							printf("failed to create thread (%s)\n", rc->name);
-						}
-#else
+						#endif
 						noza_process_exec(rc->main_func, argc, argv);
-#endif
 						break;
 					}
 					rc++;
