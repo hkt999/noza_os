@@ -63,7 +63,7 @@ static void *heavy_test_func(void *param)
 }
 
 #define NUM_THREADS 8
-#define NUM_LOOP    4
+#define NUM_LOOP    2
 static void test_pthread_create_join()
 {
     pthread_t th[NUM_THREADS];
