@@ -4,7 +4,6 @@
 #include "spinlock.h"
 #include "type/hashslot.h"
 
-#define NOZA_ROOT_STACK_SIZE 2048
 #define SERVICE_PRIORITY	0
 
 typedef struct thread_record_s {

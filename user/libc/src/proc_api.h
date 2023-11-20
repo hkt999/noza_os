@@ -4,9 +4,7 @@
 #include "tinyalloc_port/tinyalloc.h"
 #include "type/hashslot.h"
 #include "spinlock.h"
-
-#define NUM_PROCESS 32
-#define PROC_THREAD_COUNT 32
+#include "kernel/noza_config.h"
 
 typedef struct env_s {
 	int argc;
@@ -21,7 +19,7 @@ typedef struct process_record_s {
 	tinyalloc_t tinyalloc;
 	uint32_t main_thread;
 	uint32_t thread_count;
-	uint32_t child_thread[PROC_THREAD_COUNT];
+	uint32_t child_thread[NOZA_PROC_THREAD_COUNT];
 	main_t main_func;
 	env_t *env;
 	void *heap;

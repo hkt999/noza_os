@@ -7,13 +7,13 @@
 #include "service/memory/mem_client.h"
 #include "posix/errno.h"
 #include "posix/bits/signum.h"
+#include "kernel/noza_config.h"
 
-#define PROCESS_LIMIT		16
 static hashslot_t PROCESS_RECORD_HASH;
 static process_record_t *process_head = NULL;
-static process_record_t PROCESS_SLOT[PROCESS_LIMIT];
+static process_record_t PROCESS_SLOT[NOZA_MAX_PROCESSES];
 
-static env_t default_env;
+static env_t default_env = { .argc=1, .argv={"root"} };
 
 static process_record_t *alloc_process_record()
 {
@@ -44,14 +44,11 @@ static void free_process_record(process_record_t *process)
 int noza_process_init()
 {
 	mapping_init(&PROCESS_RECORD_HASH);
-	for (int i=0; i<PROCESS_LIMIT; i++) {
+	for (int i=0; i<NOZA_MAX_PROCESSES-1; i++) {
 		PROCESS_SLOT[i].next = &PROCESS_SLOT[i+1];
 	}
-	PROCESS_SLOT[PROCESS_LIMIT-1].next = NULL;
+	PROCESS_SLOT[NOZA_MAX_PROCESSES-1].next = NULL;
 	process_head = &PROCESS_SLOT[0];
-	default_env.argc = 1;
-	default_env.argv[0] = "root";
-
 	return 0;
 }
 
@@ -126,7 +123,6 @@ static env_t *env_copy(tinyalloc_t *ta, env_t *env)
 	return new_env;
 }
 
-#define PROCESS_HEAP_SIZE	4096
 int noza_process_crt0(void *param, uint32_t tid)
 {
 	process_record_t *process = (process_record_t *)param;
@@ -143,9 +139,9 @@ int noza_process_crt0(void *param, uint32_t tid)
 		return -1;
 	}
 	main_thread->process = process;
-	process->heap = noza_malloc(PROCESS_HEAP_SIZE); // TODO: use a customized size heap
+	process->heap = noza_malloc(NOZA_PROCESS_HEAP_SIZE); // TODO: use a customized size heap
 	// initial heap
-	ta_init(&process->tinyalloc, process->heap, process->heap + PROCESS_HEAP_SIZE, 256, 16, 8);
+	ta_init(&process->tinyalloc, process->heap, process->heap + NOZA_PROCESS_HEAP_SIZE, 256, 16, 8);
 	process->env = env_copy(&process->tinyalloc, process->env); // duplicate & copy into process heap
 	int ret =  process->main_func(process->env->argc, process->env->argv);
 	noza_free(process->heap);
@@ -191,7 +187,7 @@ uint32_t save_exit_context(thread_record_t *thread_record, uint32_t pid)
 
 int noza_process_add_thread(process_record_t *process, uint32_t tid)
 {
-	if (process->thread_count >= PROC_THREAD_COUNT) {
+	if (process->thread_count >= NOZA_PROC_THREAD_COUNT) {
 		printf("fatal: noza_process_add_thread: too many threads\n");
 		return ENOMEM;
 	}
@@ -213,7 +209,7 @@ int noza_process_remove_thread(process_record_t *process, uint32_t tid)
 
 int noza_process_terminate_children_threads(process_record_t *process)
 {
-	uint32_t join_pid[PROC_THREAD_COUNT];
+	uint32_t join_pid[NOZA_PROC_THREAD_COUNT];
 	int count = 0;
 
 	noza_raw_lock(&PROCESS_RECORD_HASH.lock);

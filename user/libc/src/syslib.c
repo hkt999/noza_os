@@ -37,7 +37,6 @@ uint32_t noza_get_stack_space() {
     }
 }
 
-#define MAX_SERVICES    8 // TODO: move this to noza_config.h
 typedef struct service_entry {
 	int (*entry)(void *param, uint32_t pid);
 	void *stack;
@@ -47,7 +46,7 @@ typedef struct service_entry {
 static service_entry_t service_entry[NOZA_MAX_SERVICES];
 static int service_count = 0;
 void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size) {
-    if (service_count >= MAX_SERVICES) {
+    if (service_count >= NOZA_MAX_SERVICES) {
         printf("fatal: noza_add_service: too many services\n");
 		return;
     }

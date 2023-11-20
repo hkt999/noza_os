@@ -4,6 +4,7 @@
 #include "service/memory/mem_client.h"
 #include "nozaos.h"
 #include "kernel/syscall.h"
+#include "kernel/noza_config.h"
 #include "posix/errno.h"
 #include "proc_api.h"
 
