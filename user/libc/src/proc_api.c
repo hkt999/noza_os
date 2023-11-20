@@ -27,8 +27,8 @@ static process_record_t *alloc_process_record()
 	// insert the process into hash table
 	if (process) {
 		mapping_insert(&PROCESS_RECORD_HASH, process_count++, &process->hash_item, process);
+		process->env = &default_env;
 	}
-	process->env = &default_env;
 
 	return process;
 }
@@ -100,9 +100,7 @@ static size_t env_size(env_t *env)
 	for (int i=0; i<env->argc; i++) {
 		sz += strlen(env->argv[i]) + 1;
 	}
-
-	sz = 32 * ((sz + 31)/32); // align to 32 bytes
-
+	sz = 16 * ((sz + 15)/16); // align to 32 bytes
 	return sz;
 }
 
@@ -138,27 +136,29 @@ int noza_process_crt0(void *param, uint32_t tid)
 		printf("fatal: noza_process_crt0: get_thread_record failed\n");
 		return -1;
 	}
-	main_thread->process = process;
-	process->heap = noza_malloc(NOZA_PROCESS_HEAP_SIZE); // TODO: use a customized size heap
-	// initial heap
+	process->main_thread = tid;
+	main_thread->process = process; // setup process pointer
+
+	// initialize process heap
+	process->heap = noza_malloc(NOZA_PROCESS_HEAP_SIZE);
 	ta_init(&process->tinyalloc, process->heap, process->heap + NOZA_PROCESS_HEAP_SIZE, 256, 16, 8);
 	process->env = env_copy(&process->tinyalloc, process->env); // duplicate & copy into process heap
-	int ret =  process->main_func(process->env->argc, process->env->argv);
-	noza_free(process->heap);
+	int ret =  process->entry(process->env->argc, process->env->argv);
+	noza_free(process->heap); // release process heap
+	free_process_record(process); // release this process record
 
 	return ret;
 }
 
-int noza_process_exec(main_t entry, int argc, char **argv) {
-	uint32_t tid = 0;
-	if (process_head == NULL) {
-		printf("fatal: process_create: no more process slot\n");
-		return -1;
-	}
+int noza_process_exec(main_t entry, int argc, char *argv[])
+{
+	uint32_t tid;
+	process_record_t *process = alloc_process_record();
+	if (process == NULL)
+		return ENOMEM;
 
-	process_record_t *process = process_head;
-	memset(process, 0, sizeof(process_record_t));
-	process->main_func = entry;
+	process->entry = entry;
+	process->env = &default_env; // TODO: fix this
 	noza_thread_create(&tid, noza_process_crt0, (void *)process, 0, 1024);  // TODO: consider the stack size
 }
 
@@ -226,14 +226,16 @@ int noza_process_terminate_children_threads(process_record_t *process)
 
 int process_boot(void *param, uint32_t pid)
 {
-    extern int user_root_task(int argc, char **argv);
+    extern int user_root_task(int argc, char *argv[]);
     extern void noza_run_services();
 
 	noza_run_services(); // TODO: move this to somewhere else
 
-    process_record_t *proc = alloc_process_record();
-    proc->main_func = user_root_task;
-    proc->main_thread = 0; // root
-    noza_process_crt0(proc, 0); // 0 --> root thread
-    free_process_record(proc);
+	process_record_t *process = alloc_process_record();
+	if (process == NULL)
+		return ENOMEM;
+
+	process->entry = user_root_task;
+	process->env = &default_env; // TODO: fix this
+    noza_process_crt0(process, 0); // 0 --> root thread
 }

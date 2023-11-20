@@ -5,7 +5,7 @@
 #include "nozaos.h"
 #include "user/console/noza_console.h"
 
-int user_root_task(void *param, uint32_t pid)
+int user_root_task(int argc, char *argv[])
 {
     console_start();
     return 0;
