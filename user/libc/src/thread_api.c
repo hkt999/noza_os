@@ -35,22 +35,9 @@ void noza_thread_exit(uint32_t exit_code) {
 	longjmp(thread_record->jmp_buf, exit_code);
 }
 
-static int process_boot(void *param, uint32_t pid)
-{
-    extern int user_root_task(int argc, char **argv);
-    extern void noza_run_services();
-
-	noza_run_services(); // TODO: move this to somewhere else
-
-    process_record_t *proc = alloc_process_record();
-    proc->main_func = user_root_task;
-    proc->main_thread = 0; // root
-    noza_process_crt0(proc, 0); // 0 --> root thread
-    free_process_record(proc);
-}
-
 void noza_root_task()
-{
+{ 
+	extern int process_boot(void *param, uint32_t pid);
     mapping_init(&THREAD_RECORD_HASH);
     extern int noza_process_init();
     noza_process_init();

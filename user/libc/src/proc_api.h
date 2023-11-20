@@ -38,6 +38,3 @@ int noza_process_add_thread(process_record_t *process, uint32_t tid);
 int noza_process_remove_thread(process_record_t *process, uint32_t tid);
 int noza_process_terminate_children_threads(process_record_t *process);
 int noza_process_crt0(void *param, uint32_t tid);
-
-process_record_t *alloc_process_record();
-void free_process_record(process_record_t *process);
