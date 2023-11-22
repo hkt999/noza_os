@@ -90,10 +90,12 @@ int noza_process_crt0(void *param, uint32_t tid)
 	main_thread->process = process; // setup process pointer
 
 	// initialize process heap
-	process->heap = noza_malloc(NOZA_PROCESS_HEAP_SIZE);
-	ta_init(&process->tinyalloc, process->heap, process->heap + NOZA_PROCESS_HEAP_SIZE, 256, 16, 8);
+	process->heap = NULL;
 	int ret =  process->entry(process->env->argc, process->env->argv);
-	noza_free(process->heap); // release process heap
+	if (process->heap) {
+		noza_free(process->heap); // release process heap
+		process->heap = NULL;
+	}
 	free_process_record(process); // release this process record
 
 	return ret;
