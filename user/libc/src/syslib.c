@@ -57,14 +57,21 @@ void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint
 }
 
 #define SERVICE_PRIORITY    0
-void noza_run_services()
+int service_main(int argc, char *argv[])
 {   
     // initial all registered service
-    for (int i = 0; i < service_count; i++) {
-        uint32_t th;
-        noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
-            service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
-    }
+	if (service_count > 0) {
+		int i;
+		for (i = 0; i < service_count-1; i++) {
+			uint32_t th;
+			noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
+				service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
+		}
+		service_entry[i].entry(NULL, SERVICE_PRIORITY); // no return
+	}
+
+	// if there is no service, just return
+	return -1;
 }   
 
 
