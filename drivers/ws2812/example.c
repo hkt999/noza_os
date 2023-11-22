@@ -16,7 +16,8 @@ typedef struct {
 #define SATURATION   1.0f
 #define BRIGHTNESS   1.0f
 
-cRGB HSVtoRGB(float h, float s, float v) {
+static cRGB HSVtoRGB(float h, float s, float v)
+{
     float r, g, b;
     int i = (int)(h * 6.0f);
     float f = h * 6.0f - i;
@@ -42,11 +43,12 @@ cRGB HSVtoRGB(float h, float s, float v) {
     return rgb;
 }
 
-uint32_t cRGB_to_color(cRGB rgb) {
+static uint32_t cRGB_to_color(cRGB rgb)
+{
     return (rgb.red << 16) | (rgb.green << 8) | rgb.blue;
 }
 
-void gradient_effect(ws2812_t *led_strip) {
+static void gradient_effect(ws2812_t *led_strip) {
     float hue = 0.0f;
     int counter = 100; // 10s
 
@@ -66,11 +68,12 @@ void gradient_effect(ws2812_t *led_strip) {
             hue = 0.0f;
         }
     }
+
+    // turn off all leds
     uint32_t color = cRGB_to_color((cRGB){0, 0, 0});
     for (uint8_t ledIndex = 0; ledIndex < LED_LENGTH; ledIndex++) {
         ws2812_set_pixel(led_strip, ledIndex, color);
         ws2812_show(led_strip);
-        noza_thread_sleep_ms(100, NULL);
     }
     printf("demo finished\n");
 }

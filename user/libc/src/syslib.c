@@ -61,14 +61,14 @@ int service_main(int argc, char *argv[])
 {   
     // initial all registered service
 	if (service_count > 0) {
-		int i;
-		for (i = 0; i < service_count-1; i++) {
+		for (int i = 0; i < service_count; i++) {
 			uint32_t th;
 			noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
 				service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
 		}
-		service_entry[i].entry(NULL, SERVICE_PRIORITY); // no return
+		//service_entry[i].entry(NULL, SERVICE_PRIORITY); // no return
 	}
+	while (1) { noza_thread_sleep_ms(1000, NULL); }
 
 	// if there is no service, just return
 	return -1;
