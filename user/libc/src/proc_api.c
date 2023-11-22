@@ -197,18 +197,7 @@ int noza_process_terminate_children_threads(process_record_t *process)
 	return 0;
 }
 
-static int service_main(int argc, char *argv[])
-{
-	extern void noza_run_services();
-	noza_run_services();
-
-	// TODO: refactory this
-	int i = 0;
-	while (1) {
-		noza_thread_sleep_ms(1000, NULL);
-	}
-}
-
+extern int service_main(int argc, char *argv[]);
 static int boot2(int argc, char *argv[])
 {
     extern int user_root_task(int argc, char *argv[]);
