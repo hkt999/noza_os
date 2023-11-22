@@ -1,10 +1,10 @@
-#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
 #include "cmd_line.h"
 #include "noza_console.h"
 #include "nozaos.h"
+#include "nz_stdlib.h"
 
 #define MAX_BUILTIN_CMDS  16
 typedef struct {
@@ -154,13 +154,13 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 			} else  {
 				while (rc->name && rc->main_func) {
 					if (strncmp(rc->name, argv[0], 32) == 0) {
-						#if 1
-						printf("parser argc=%d\n", argc);
-						for (int i=0; i<argc; i++) {
-							printf(".... argv[%d]=%s\n", i, argv[i]);
+						if (strcmp(argv[argc-1], "&") == 0) {
+							argc--;
+							argv[argc] = NULL;
+							noza_process_exec_detached(rc->main_func, argc, argv);
+						} else {
+							noza_process_exec(rc->main_func, argc, argv, NULL);
 						}
-						#endif
-						noza_process_exec(rc->main_func, argc, argv, NULL);
 						break;
 					}
 					rc++;
@@ -183,9 +183,10 @@ int console_start()
 	for (;;) {
 		int ch = noza_console.cmd.driver.getc();
 		if (ch < 0)
-			noza_thread_sleep_ms(100, NULL);
-		else
+			noza_thread_sleep_ms(50, NULL);
+		else {
 			cmd_line_putc(&noza_console.cmd, ch);
+		}
 	}
 	return 0;
 }

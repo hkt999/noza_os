@@ -41,3 +41,4 @@ int noza_get_errno();
 // process
 typedef int (*main_t)(int argc, char **argv);
 int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code); 
+int noza_process_exec_detached(main_t entry, int argc, char *argv[]);

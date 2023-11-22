@@ -1,6 +1,6 @@
 #include <string.h>
-#include <stdlib.h>
 #include "history.h"
+#include "nz_stdlib.h"
 
 void history_init(history_t *h)
 {

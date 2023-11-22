@@ -160,6 +160,7 @@ set(
 	user/libc/src/thread_api.c
 	user/libc/src/setjmp.S
 	user/libc/src/spinlock.c
+	user/libc/src/nz_stdlib.c
 
 	# services
 	service/name_lookup/name_lookup_server.c

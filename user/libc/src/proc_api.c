@@ -50,48 +50,6 @@ int noza_process_init()
 	return 0;
 }
 
-void *pmalloc(size_t size)
-{
-	uint32_t tid;
-	if (noza_thread_self(&tid) == 0) {
-		thread_record_t *thread_record = get_thread_record(tid);
-		if (thread_record) {
-			process_record_t *process = thread_record->process;
-			if (process) {
-				noza_spinlock_lock(&process->lock);
-				void *ptr = ta_alloc(&process->tinyalloc, size);
-				noza_spinlock_unlock(&process->lock);
-				return ptr;
-			} else {
-				// unlikely to be here, TODO: exception
-			}
-		} else {
-			// unlikely to be here, TODO: exception
-		}
-	}
-	return NULL;
-}
-
-void pfree(void *ptr) 
-{
-	uint32_t tid;
-	if (noza_thread_self(&tid) == 0) {
-		thread_record_t *thread_record = get_thread_record(tid);
-		if (thread_record) {
-			process_record_t *process = get_thread_record(tid)->process;
-			if (process) {
-				noza_spinlock_lock(&process->lock);
-				ta_free(&process->tinyalloc, ptr);
-				noza_spinlock_unlock(&process->lock);
-			} else {
-				// unlikely to be here, TODO: exception
-			}
-		} else {
-			// unlikely to be here, TODO: exception
-		}
-	}
-}
-
 static size_t env_size(env_t *env)
 {
 	size_t sz = sizeof(int) + env->argc * sizeof(char *);
@@ -160,9 +118,6 @@ int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
 int noza_process_exec_detached(main_t entry, int argc, char *argv[])
 {
 	uint32_t tid;
-	if (strcmp(argv[argc-1], "&") == 0) {
-		return _noza_process_exec(entry, argc-1, argv, &tid);
-	}
 	return _noza_process_exec(entry, argc, argv, &tid);
 }
 
@@ -170,9 +125,6 @@ int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code)
 {
 	uint32_t tid;
 	*exit_code = 0;
-	if (strcmp(argv[argc-1], "&") == 0) {
-		return noza_process_exec_detached(entry, argc-1, argv);
-	} 
 	if (_noza_process_exec(entry, argc, argv, &tid) == 0) {
 		if (noza_thread_join(tid, (uint32_t *)exit_code) != 0) {
 			return ENOMEM;
@@ -249,9 +201,10 @@ static int service_main(int argc, char *argv[])
 {
 	extern void noza_run_services();
 	noza_run_services();
+
+	// TODO: refactory this
 	int i = 0;
 	while (1) {
-		printf("service tick (%d)\n", i++);
 		noza_thread_sleep_ms(1000, NULL);
 	}
 }
@@ -260,10 +213,6 @@ static int boot2(int argc, char *argv[])
 {
     extern int user_root_task(int argc, char *argv[]);
 	noza_process_exec_detached(service_main, argc, argv);
-	while (1) {
-		printf("detached process tick\n");
-		noza_thread_sleep_ms(100, NULL);
-	}
 	user_root_task(argc, argv);
 }
 
