@@ -170,11 +170,11 @@ set(
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
 	service/sync/sync_client.c
+	service/vfs/rootfs.c
+	service/vfs/romfs.c
 	type/dblist.c
 	type/hashslot.c
 	3rd_party/tinyalloc_port/tinyalloc.c
-	#service/vfs/rootfs.c
-	#service/vfs/romfs.c
 
 	# applciation demo
 	user/noza_os_demo.c

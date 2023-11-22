@@ -160,7 +160,7 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 							printf(".... argv[%d]=%s\n", i, argv[i]);
 						}
 						#endif
-						noza_process_exec(rc->main_func, argc, argv);
+						noza_process_exec(rc->main_func, argc, argv, NULL);
 						break;
 					}
 					rc++;

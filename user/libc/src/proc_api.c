@@ -141,28 +141,46 @@ int noza_process_crt0(void *param, uint32_t tid)
 	return ret;
 }
 
-int noza_process_exec(main_t entry, int argc, char *argv[])
+int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
 {
-	uint32_t tid;
+	*tid = 0;
 	process_record_t *process = alloc_process_record();
 	if (process == NULL)
 		return ENOMEM;
 
 	process->entry = entry;
 	env_copy(process->env, argc, argv);
-	if (noza_thread_create(&tid, noza_process_crt0, (void *)process, 0, 1024)!=0) { // TODO: consider the stack size
-		// TODO: error handling
+	if (noza_thread_create(tid, noza_process_crt0, (void *)process, 0, 1024)!=0) { // TODO: consider the stack size
+		return -1;
 	}
 
-	// check if the tail is '&' or not --> run in background
-	uint32_t exit_code = 0;
-	if (strcmp(argv[argc-1], "&") != 0) {
-		if (noza_thread_join(tid, &exit_code) != 0) {
-			// TODO: error handling
+	return 0;
+}
+
+int noza_process_exec_detached(main_t entry, int argc, char *argv[])
+{
+	uint32_t tid;
+	if (strcmp(argv[argc-1], "&") == 0) {
+		return _noza_process_exec(entry, argc-1, argv, &tid);
+	}
+	return _noza_process_exec(entry, argc, argv, &tid);
+}
+
+int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code)
+{
+	uint32_t tid;
+	*exit_code = 0;
+	if (strcmp(argv[argc-1], "&") == 0) {
+		return noza_process_exec_detached(entry, argc-1, argv);
+	} 
+	if (_noza_process_exec(entry, argc, argv, &tid) == 0) {
+		if (noza_thread_join(tid, (uint32_t *)exit_code) != 0) {
+			return ENOMEM;
 		}
+		return 0;
 	}
 
-	return exit_code;
+	return ENOMEM;
 }
 
 process_record_t *noza_process_self() // TODO: return process is instead of process_t
@@ -227,18 +245,36 @@ int noza_process_terminate_children_threads(process_record_t *process)
 	return 0;
 }
 
-int process_boot(void *param, uint32_t pid)
+static int service_main(int argc, char *argv[])
+{
+	extern void noza_run_services();
+	noza_run_services();
+	int i = 0;
+	while (1) {
+		printf("service tick (%d)\n", i++);
+		noza_thread_sleep_ms(1000, NULL);
+	}
+}
+
+static int boot2(int argc, char *argv[])
 {
     extern int user_root_task(int argc, char *argv[]);
-    extern void noza_run_services();
+	noza_process_exec_detached(service_main, argc, argv);
+	while (1) {
+		printf("detached process tick\n");
+		noza_thread_sleep_ms(100, NULL);
+	}
+	user_root_task(argc, argv);
+}
 
-	noza_run_services(); // TODO: move this to somewhere else
+int process_boot(void *param, uint32_t pid)
+{
 
 	process_record_t *process = alloc_process_record();
 	if (process == NULL)
 		return ENOMEM;
 
-	process->entry = user_root_task;
+	process->entry = boot2;
 	process->env->argc = 1;
 	process->env->argv[0] = "root";
     noza_process_crt0(process, 0); // 0 --> root thread
