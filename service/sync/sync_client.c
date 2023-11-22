@@ -7,7 +7,8 @@
 
 // TODO: move sync_pid form "ask"
 static uint32_t sync_vid = 0;
-static inline void check_sync_vid() {
+static inline void check_sync_vid()
+{
 	while (sync_vid == 0) {
 		uint32_t value;
 		if (name_lookup_search("noza_sync", &value) == 0) {
