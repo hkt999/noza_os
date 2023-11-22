@@ -1242,10 +1242,9 @@ inline static void check_syscall_serve(int core, thread_t *running)
     }
 }
 
-inline static int is_with_higher_priority_thread(thread_t *runninig)
+inline static int is_with_higher_priority_thread(thread_t *running)
 {
-    int priority = runninig->info.priority;
-    for (int i=0; i<priority; i++) {
+    for (int i=0; i<running->info.priority; i++) {
         if (noza_os.ready[i].count > 0) {
             return 1;
         }
@@ -1270,9 +1269,9 @@ static void noza_os_scheduler()
     noza_os.next_tick_time = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
     for (;;) {
         thread_t *running = pick_ready_thread();
+        int64_t now = platform_get_absolute_time_us();
         if (running) {
             // a ready thread is picked
-            int64_t now = platform_get_absolute_time_us();
             int64_t expired = now + NOZA_OS_TIME_SLICE; // pick up a new thread, and setup time slice
             running->info.state = THREAD_RUNNING;
             noza_os.running[core] = running;
@@ -1297,7 +1296,6 @@ static void noza_os_scheduler()
             }
         } else {
             // there is no candidate thread to run, check the next tick and go idle
-            int64_t now = platform_get_absolute_time_us();
             if (noza_wakeup(now) == 0) {
                 check_sleep_period(now);
                 GO_IDLE(core);
