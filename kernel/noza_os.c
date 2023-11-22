@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <inttypes.h>
 
 #include "noza_config.h"
 #include "syscall.h"
@@ -226,6 +227,7 @@ typedef struct {
     vid_map_item_t  vid_map[NOZA_OS_TASK_LIMIT];
     vid_map_item_t  *free_vid_map;
     vid_map_item_t  *slot[NUM_VID_SLOT];
+    int64_t         next_tick_time;
 } noza_os_t;
 
 
@@ -716,8 +718,24 @@ static void noza_os_add_thread_by_expired_time(thread_list_t *list, thread_t *th
             list->head = cdl_add(list->head, &thread->state_node);
         }
     }
-}
 
+#if 0
+    // check the order of this list
+    node = list->head;
+    if (node) {
+        printf("now=%" PRId64 "\n", platform_get_absolute_time_us());
+        printf("** head diff = %" PRId64 "\n", ((thread_t *)node->value)->expired_time - platform_get_absolute_time_us());
+        cdl_node_t *tail = node->prev;
+        while (node != tail) {
+            if (((thread_t *)node->value)->expired_time > ((thread_t *)node->next->value)->expired_time) {
+                kernel_panic("fatal error: noza_os_add_thread_by_expired_time: list is not sorted\n");
+            }
+            //printf("expired_time=%" PRId64 ", %" PRId64 "\n", ((thread_t *)node->value)->expired_time, ((thread_t *)node->next->value)->expired_time);
+            node = node->next;
+        }
+    }
+#endif
+}
 
 static void noza_os_add_thread(thread_list_t *list, thread_t *thread)
 {
@@ -801,7 +819,7 @@ static void syscall_thread_sleep(thread_t *running)
     if (duration <= 0) {
         noza_os_add_thread(&noza_os.ready[running->info.priority], running);
     } else { 
-    running->expired_time = platform_get_absolute_time_us() + duration; // setup expired time
+        running->expired_time = platform_get_absolute_time_us() + duration; // setup expired time
         noza_os_add_thread(&noza_os.sleep, running);
     }
     noza_os_clear_running_thread();
@@ -1145,29 +1163,33 @@ inline static uint32_t noza_wakeup(int64_t now)
     if (noza_os.sleep.count == 0)
         return 0;
 
+    uint32_t wakeup_count = 0;
     cdl_node_t *cursor = noza_os.sleep.head;
     while (cursor != NULL) {
         thread_t *th = (thread_t *)cursor->value;
         if (th->expired_time <= now) {
+            wakeup_count++;
             noza_os_change_state(th, &noza_os.sleep, &noza_os.ready[th->info.priority]);
             noza_os_set_return_value3(th, 0, 0, 0); // return 0, high=0, low=0 successfully timeout
             cursor = noza_os.sleep.head;
         } else
             break;
     }
+
+    return wakeup_count;
 }
 
-inline static void noza_reconfig_systick(int64_t now)
+inline static void check_sleep_period(int64_t now)
 {
+    noza_os.next_tick_time = now + NOZA_OS_TIME_SLICE;
     cdl_node_t *cursor = noza_os.sleep.head;
-    if (now == 0 || cursor == NULL) {
-        // no thread is sleeping, then set the next tick to 10ms
-        platform_systick_config(NOZA_OS_TIME_SLICE);
-    } else {
-        // some thread is sleeping, then set the next tick to the first thread's expired time
+    if (cursor) {
         thread_t *th = (thread_t *)cursor->value;
-        platform_systick_config(th->expired_time - now);
+        if (th->expired_time < noza_os.next_tick_time) {
+            noza_os.next_tick_time = th->expired_time;
+        }
     }
+    platform_systick_config(noza_os.next_tick_time - now);
 }
 
 extern uint32_t *noza_os_resume_thread(uint32_t *stack);
@@ -1220,6 +1242,17 @@ inline static void check_syscall_serve(int core, thread_t *running)
     }
 }
 
+inline static int is_with_higher_priority_thread(thread_t *runninig)
+{
+    int priority = runninig->info.priority;
+    for (int i=0; i<priority; i++) {
+        if (noza_os.ready[i].count > 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void noza_os_scheduler()
 {
     uint32_t core = platform_get_running_core(); // get working core
@@ -1234,6 +1267,7 @@ static void noza_os_scheduler()
     // some other high priority interrupt is triggered, could cause deadlock here
     // maybe need to disable all interrupts here with spin lock
     noza_os_lock(core);
+    noza_os.next_tick_time = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
     for (;;) {
         thread_t *running = pick_ready_thread();
         if (running) {
@@ -1245,11 +1279,14 @@ static void noza_os_scheduler()
             for (;;) {
                 check_syscall_output(running); // check if the call pending on output
                 if (expired > now) {
+                    check_sleep_period(now); // update tick from the sleeping queue
                     GO_RUN(core, running);
                     now = platform_get_absolute_time_us();  // update time
                     check_syscall_serve(core, running);     // check if any syscall is pending, if pending, then serve it
                     if (noza_os.running[core] == NULL)
-                        break; 
+                        break;
+                    if (is_with_higher_priority_thread(running))
+                        break;
                 } else
                     break;
             }
@@ -1259,14 +1296,13 @@ static void noza_os_scheduler()
                 noza_os.running[core] = NULL;
             }
         } else {
+            // there is no candidate thread to run, check the next tick and go idle
             int64_t now = platform_get_absolute_time_us();
             if (noza_wakeup(now) == 0) {
-                noza_reconfig_systick(now);
+                check_sleep_period(now);
                 GO_IDLE(core);
-                noza_reconfig_systick(0);
-                if (core == 0) {
+                if (core == 0)
                     platform_tick_cores();
-                }
             }
         }
     }
