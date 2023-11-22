@@ -3,6 +3,7 @@
 #include "nozaos.h"
 #include <stdint.h>
 
+extern uint32_t NAME_SERVER_PID;
 int name_lookup_register(const char *name, uint32_t value)
 {
     name_msg_t msg = {.cmd = NAME_LOOKUP_REGISTER, .name = name, .value = value};

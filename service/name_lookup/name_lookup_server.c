@@ -44,16 +44,14 @@ static void map_init(simap_t *m, node_mgr_t *node_mgr) {
     m->alloc_param = node_mgr;
 }
 
+uint32_t NAME_SERVER_PID = 0;
 static int do_name_server(void *param, uint32_t pid)
 {
     noza_msg_t msg;
     simap_t map;
     static node_mgr_t node_mgr;
 
-    if (pid != NAME_SERVER_PID) {
-        printf("name server panic: invalid pid %d\n", pid);
-        return -1;
-    }
+    NAME_SERVER_PID = pid;
 
     // setup node manager
     node_mgr_init(&node_mgr);

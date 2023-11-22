@@ -2,7 +2,6 @@
 #include <stdint.h>
 
 #define NOZA_MAX_SERVICE    16 // TODO: leave it to options in makefile
-#define NAME_SERVER_PID         1 // force the name server PID as 1, the first thread after root (bootstrap)
 
 #define NAME_LOOKUP_REGISTER    1
 #define NAME_LOOKUP_SEARCH      2

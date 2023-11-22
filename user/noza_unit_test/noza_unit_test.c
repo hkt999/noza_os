@@ -321,7 +321,6 @@ static void test_noza_mutex()
     TEST_ASSERT_EQUAL_INT(0, mutex_trylock(&noza_mutex));
     TEST_ASSERT_EQUAL_INT(EBUSY, mutex_trylock(&noza_mutex));
     TEST_ASSERT_EQUAL_INT(0, mutex_unlock(&noza_mutex));
-
     TEST_ASSERT_EQUAL_INT(0, mutex_release(&noza_mutex));
 }
 
