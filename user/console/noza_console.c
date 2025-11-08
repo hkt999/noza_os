@@ -1,6 +1,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include "pico/stdio.h"
+
 #include "cmd_line.h"
 #include "noza_console.h"
 #include "nozaos.h"
@@ -32,9 +34,6 @@ void console_add_command(const char *name, int (*main)(int argc, char **argv), c
 	cmd->stack_size = stack_size;
     table->count++;
 }
-
-extern int getchar_timeout_us(uint32_t timeout_us);
-extern int putchar_raw(int c);
 
 static void noza_char_putc(int c)
 {
