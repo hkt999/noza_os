@@ -14,9 +14,26 @@ void *nz_malloc(size_t size)
 				noza_spinlock_lock(&process->lock);
 				if (process->heap == NULL) {
 					process->heap = noza_malloc(NOZA_PROCESS_HEAP_SIZE); // a little big danger, hold and wait
-					ta_init(&process->tinyalloc, process->heap, process->heap + NOZA_PROCESS_HEAP_SIZE, 256, 16, 8);
+					if (process->heap) {
+#if NOZA_PROCESS_USE_TLSF
+						process->tlsf = tlsf_create_with_pool(process->heap, NOZA_PROCESS_HEAP_SIZE);
+						if (process->tlsf == NULL) {
+							noza_free(process->heap);
+							process->heap = NULL;
+						}
+#else
+						ta_init(&process->tinyalloc, process->heap, process->heap + NOZA_PROCESS_HEAP_SIZE, 256, 16, 8);
+#endif
+					}
 				}
-				void *ptr = ta_alloc(&process->tinyalloc, size);
+				void *ptr = NULL;
+				if (process->heap) {
+#if NOZA_PROCESS_USE_TLSF
+					ptr = tlsf_malloc(process->tlsf, size);
+#else
+					ptr = ta_alloc(&process->tinyalloc, size);
+#endif
+				}
 				noza_spinlock_unlock(&process->lock);
 				return ptr;
 			} else {
@@ -39,7 +56,11 @@ void nz_free(void *ptr)
 			if (process) {
 				noza_spinlock_lock(&process->lock);
 				if (process->heap) { // the heap is already allocated
+#if NOZA_PROCESS_USE_TLSF
+					tlsf_free(process->tlsf, ptr);
+#else
 					ta_free(&process->tinyalloc, ptr);
+#endif
 				}
 				noza_spinlock_unlock(&process->lock);
 			} else {

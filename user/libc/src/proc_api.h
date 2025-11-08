@@ -1,7 +1,11 @@
 #pragma once
 
 #include "type/dblist.h"
+#if NOZA_PROCESS_USE_TLSF
+#include "tlsf_port/tlsf.h"
+#else
 #include "tinyalloc_port/tinyalloc.h"
+#endif
 #include "type/hashslot.h"
 #include "spinlock.h"
 #include "kernel/noza_config.h"
@@ -15,7 +19,11 @@ typedef struct env_s {
 typedef struct process_record_s {
 	spinlock_t lock;
 	hash_item_t hash_item;
+#if NOZA_PROCESS_USE_TLSF
+	tlsf_t tlsf;
+#else
 	tinyalloc_t tinyalloc;
+#endif
 	main_t entry;
 	uint32_t main_thread;
 	uint32_t thread_count;

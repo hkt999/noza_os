@@ -13,6 +13,26 @@ static hashslot_t PROCESS_RECORD_HASH;
 static process_record_t *process_head = NULL;
 static process_record_t PROCESS_SLOT[NOZA_MAX_PROCESSES];
 
+static void process_record_reset(process_record_t *process)
+{
+	if (process == NULL)
+		return;
+	memset(&process->hash_item, 0, sizeof(process->hash_item));
+#if NOZA_PROCESS_USE_TLSF
+	process->tlsf = NULL;
+#else
+	memset(&process->tinyalloc, 0, sizeof(process->tinyalloc));
+#endif
+	process->entry = NULL;
+	process->main_thread = 0;
+	process->thread_count = 0;
+	memset(process->child_thread, 0, sizeof(process->child_thread));
+	process->heap = NULL;
+	process->env = (env_t *)process->env_buf;
+	memset(process->env_buf, 0, sizeof(process->env_buf));
+	process->next = NULL;
+}
+
 static process_record_t *alloc_process_record()
 {
 	static int process_count = 0;
@@ -24,8 +44,8 @@ static process_record_t *alloc_process_record()
 	noza_spinlock_unlock(&PROCESS_RECORD_HASH.lock);
 	// insert the process into hash table
 	if (process) {
+		process_record_reset(process);
 		mapping_insert(&PROCESS_RECORD_HASH, process_count++, &process->hash_item, process);
-		process->env = (env_t *)process->env_buf;
 	}
 
 	return process;
@@ -33,6 +53,8 @@ static process_record_t *alloc_process_record()
 
 static void free_process_record(process_record_t *process)
 {
+	mapping_remove(&PROCESS_RECORD_HASH, process->hash_item.id);
+	process_record_reset(process);
 	noza_raw_lock(&PROCESS_RECORD_HASH.lock);
 	process->next = process_head;
 	process_head = process;
@@ -42,19 +64,24 @@ static void free_process_record(process_record_t *process)
 int noza_process_init()
 {
 	mapping_init(&PROCESS_RECORD_HASH);
-	for (int i=0; i<NOZA_MAX_PROCESSES-1; i++) {
-		PROCESS_SLOT[i].next = &PROCESS_SLOT[i+1];
+	for (int i=0; i<NOZA_MAX_PROCESSES; i++) {
+		noza_spinlock_init(&PROCESS_SLOT[i].lock);
+		process_record_reset(&PROCESS_SLOT[i]);
+		if (i < NOZA_MAX_PROCESSES - 1) {
+			PROCESS_SLOT[i].next = &PROCESS_SLOT[i+1];
+		} else {
+			PROCESS_SLOT[i].next = NULL;
+		}
 	}
-	PROCESS_SLOT[NOZA_MAX_PROCESSES-1].next = NULL;
 	process_head = &PROCESS_SLOT[0];
 	return 0;
 }
 
-static size_t env_size(env_t *env)
+static size_t calc_env_size(int argc, char *argv[])
 {
-	size_t sz = sizeof(int) + env->argc * sizeof(char *);
-	for (int i=0; i<env->argc; i++) {
-		sz += strlen(env->argv[i]) + 1;
+	size_t sz = sizeof(int) + argc * sizeof(char *);
+	for (int i=0; i<argc; i++) {
+		sz += strlen(argv[i]) + 1;
 	}
 	sz = 16 * ((sz + 15)/16); // align to 32 bytes
 	return sz;
@@ -95,6 +122,9 @@ int noza_process_crt0(void *param, uint32_t tid)
 	if (process->heap) {
 		noza_free(process->heap); // release process heap
 		process->heap = NULL;
+#if NOZA_PROCESS_USE_TLSF
+		process->tlsf = NULL;
+#endif
 	}
 	free_process_record(process); // release this process record
 
@@ -109,9 +139,16 @@ int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
 		return ENOMEM;
 
 	process->entry = entry;
+	size_t required_env = calc_env_size(argc, argv);
+	if (required_env > sizeof(process->env_buf)) {
+		free_process_record(process);
+		return ENOMEM;
+	}
 	env_copy(process->env, argc, argv);
-	if (noza_thread_create(tid, noza_process_crt0, (void *)process, 0, 1024)!=0) { // TODO: consider the stack size
-		return -1;
+	int create_ret = noza_thread_create(tid, noza_process_crt0, (void *)process, 0, 1024); // TODO: consider the stack size
+	if (create_ret != 0) {
+		free_process_record(process);
+		return create_ret;
 	}
 
 	return 0;
@@ -162,23 +199,36 @@ uint32_t save_exit_context(thread_record_t *thread_record, uint32_t pid)
 
 int noza_process_add_thread(process_record_t *process, uint32_t tid)
 {
+	int ret = noza_spinlock_lock(&process->lock);
+	if (ret != 0)
+		return ret;
+
 	if (process->thread_count >= NOZA_PROC_THREAD_COUNT) {
 		printf("fatal: noza_process_add_thread: too many threads\n");
-		return ENOMEM;
+		ret = ENOMEM;
+	} else {
+		process->child_thread[process->thread_count++] = tid;
 	}
-	process->child_thread[process->thread_count++] = tid;
-	return 0;
+	noza_spinlock_unlock(&process->lock);
+	return ret;
 }
 
 int noza_process_remove_thread(process_record_t *process, uint32_t tid)
 {
+	int ret = noza_spinlock_lock(&process->lock);
+	if (ret != 0)
+		return ret;
+
 	for (int i=0; i<process->thread_count; i++) {
 		if (process->child_thread[i] == tid) {
 			process->child_thread[i] = process->child_thread[process->thread_count-1];
 			process->thread_count--;
+			process->child_thread[process->thread_count] = 0;
+			noza_spinlock_unlock(&process->lock);
 			return 0; // success
 		}
 	}
+	noza_spinlock_unlock(&process->lock);
 	return ESRCH;
 }
 
@@ -187,12 +237,20 @@ int noza_process_terminate_children_threads(process_record_t *process)
 	uint32_t join_pid[NOZA_PROC_THREAD_COUNT];
 	int count = 0;
 
-	noza_raw_lock(&PROCESS_RECORD_HASH.lock);
+	int ret = noza_spinlock_lock(&process->lock);
+	if (ret != 0)
+		return ret;
+
 	for (int i=0; i<process->thread_count; i++) {
 		join_pid[count++] = process->child_thread[i];
-		noza_thread_kill(process->child_thread[i], SIGKILL); // TODO: implement SIGKILL in kernel
 	}
-	noza_spinlock_unlock(&PROCESS_RECORD_HASH.lock);
+	process->thread_count = 0;
+	memset(process->child_thread, 0, sizeof(process->child_thread));
+	noza_spinlock_unlock(&process->lock);
+
+	for (int i=0; i<count; i++) {
+		noza_thread_kill(join_pid[i], SIGKILL); // TODO: implement SIGKILL in kernel
+	}
 	for (int i=0; i<count; i++) {
 		noza_thread_join(join_pid[i], NULL);
 	}
