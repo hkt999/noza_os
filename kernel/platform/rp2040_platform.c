@@ -30,27 +30,38 @@ uint32_t platform_get_running_core()
 }
 
 #if NOZA_OS_NUM_CORES > 1
-static void core1_interrupt_handler() {
-
-    while (multicore_fifo_rvalid()){
+static void multicore_irq_common_handler(void)
+{
+    while (multicore_fifo_rvalid()) {
         multicore_fifo_pop_blocking();
     }
     multicore_fifo_clear_irq(); // clear interrupt
-
     scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
+}
+
+static void core0_interrupt_handler()
+{
+    multicore_irq_common_handler();
+}
+
+static void core1_interrupt_handler()
+{
+    multicore_irq_common_handler();
 }
 #endif
 
 void platform_multicore_init(void (*noza_os_scheduler)(void))
 {
 #if NOZA_OS_NUM_CORES > 1
-    if (get_core_num() == 0) { 
+    if (get_core_num() == 0) {
+        multicore_fifo_clear_irq();
+        irq_set_exclusive_handler(SIO_IRQ_PROC0, core0_interrupt_handler);
+        irq_set_priority(SIO_IRQ_PROC0, 32);
+        irq_set_enabled(SIO_IRQ_PROC0, true);
         multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
     } else {
         multicore_fifo_clear_irq();
         irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_interrupt_handler);
-        // set priority to 32, priority higher then pendSV interrupt
-        // hardware interrupt priority is only 2 bits, the svc and pensv are both seting to 0x3
         irq_set_priority(SIO_IRQ_PROC1, 32);
         irq_set_enabled(SIO_IRQ_PROC1, true); // enable the FIFO interrupt
     }
@@ -77,11 +88,28 @@ void platform_systick_config(unsigned int n)
     systick_hw->csr = 0x03; // arm irq, start counter with 1 usec clock
 }
 
+void platform_request_schedule(int target_core)
+{
+#if NOZA_OS_NUM_CORES > 1
+    int current = get_core_num();
+    if (target_core < 0 || target_core >= NOZA_OS_NUM_CORES)
+        return;
+    if (target_core == current)
+        return;
+    multicore_fifo_push_timeout_us(0, 0);
+#else
+    (void)target_core;
+#endif
+}
+
 void platform_tick_cores()
 {
 #if NOZA_OS_NUM_CORES > 1
-    if (get_core_num()==0) {
-        multicore_fifo_push_blocking(0); // tick core1
+    int current = get_core_num();
+    for (int core = 0; core < NOZA_OS_NUM_CORES; core++) {
+        if (core == current)
+            continue;
+        platform_request_schedule(core);
     }
 #endif
 }

@@ -15,6 +15,7 @@ typedef struct {
 void        platform_io_init();
 uint32_t    platform_get_running_core();
 void        platform_multicore_init(void (*noza_os_scheduler)(void));
+void        platform_request_schedule(int target_core);
 int64_t     platform_get_absolute_time_us();
 uint32_t    platform_get_random();
 void        platform_systick_config(unsigned int n);
