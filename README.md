@@ -8,6 +8,24 @@ The design of Noza is partly inspired by the limitations of some real-time opera
 * Thread management: Noza supports preemptive multithread for SMP core, APIs including thread creation, termination, and synchronization through system calls, enabling efficient multi-threading.
 * Inter-process communication (IPC): Noza facilitates communication between threads using message passing, ensuring seamless and synchronized execution of tasks.
 
+# Multicore Scheduling Notes
+Noza currently targets dual-core RP2040/RP2350-class MCUs, where ARM Cortex-M cores lack a hardware Inter-Processor Interrupt (IPI) controller. We therefore reuse the RP2040 multicore FIFO as a lightweight software IPI: core A pushes a single 32-bit token, core B's SIO interrupt handler drains the FIFO and sets `PendSV` to enter the scheduler immediately. This approach is officially supported by the Pico SDK, keeps latency low (tens of nanoseconds when the FIFO is not full), and avoids dedicating scarce hardware spinlocks. We evaluated using spinlock-triggered IRQs or SEV/WFE mailboxes, but FIFO offered the best mix of simplicity, deterministic wakeups, and compatibility with existing SDK tooling. Spinlock-based IPIs remain an option if future workloads demand a FIFO dedicated to user-space IPC, yet FIFO signaling is the default because it requires no extra housekeeping and integrates directly with the current scheduling infrastructure.
+
+# Kernel Primitives
+To support higher-level APIs (POSIX, pthread, etc.) without bloating the microkernel, Noza now exposes a focused set of synchronization and timing primitives:
+* Wait queues & futexes: generic block/unblock infrastructure with microsecond timeouts, plus `noza_futex_wait/wake` syscalls for pthread-style locks and condition variables.
+* Timers: lightweight timer objects that can be armed, canceled, and awaited; they share the global systick pipeline so both one-shot and periodic timers wake wait queues precisely.
+* Clock queries: `noza_clock_gettime` provides monotonic and realtime timestamps derived from the platform counter.
+* Signals: per-thread pending-bit tracking with `noza_signal_send/take` lets runtimes deliver asynchronous events while the kernel handles wakeups of sleeping or blocked threads.
+
+# Process Libc & Naming
+RP2040 的 Pico SDK 會拉入 newlib 版本的 `malloc/free/printf/open` 等符號，硬體驅動也依賴這套 libc，因此 Noza 目前採雙層設計：
+- **平台層**仍使用 Pico SDK/newlib，確保 USB/UART、硬體驅動與啟動碼可以順利連結與執行。
+- **Process 層**提供自有的 `noza_*` API（例如 `noza_process_exec`、`noza_call`、未來的 `noza_open/noza_read/...`）來透過 IPC 與服務互動，並使用 per-process heap allocator（`noza_process_malloc`/`noza_process_free`）。這些名稱刻意避開標準 `malloc/open` 以免和 newlib 符號互相踩踏。
+- 預設 per-process heap 採用 `tinyalloc`，也可以在 CMake 開啟 `-DNOZA_PROCESS_USE_TLSF=ON` 切換到 TLSF（Two-Level Segregated Fit） allocator，以獲得較穩定的配置延遲。兩種 allocator 都共享相同 API，僅影響記憶體管理策略。
+- Application 若需要 POSIX 風格名稱，可以在自己的 header 中選擇 `#define open noza_open` 等別名，但預設請直接使用 `noza_*` 版本，確保呼叫會走到 Noza 的服務層而不是 Pico SDK 的預設 stub。
+- 若完全停用 newlib，需自行提供啟動碼、`__aeabi_*` runtime 及 syscall stub，並重新調整 Pico SDK 的 link 過程。本專案暫時維持「平台層 newlib + process 層 Noza libc」的分層方式，以便同時享有硬體支援與 process 隔離。
+
 # System Calls
 * `noza_thread_join(uint32_t thread_id)`: Waits for the specified thread to terminate before continuing. 
 * `noza_thread_sleep(uint32_t ms)`: Puts the current thread to sleep for the specified number of milliseconds. 
@@ -69,5 +87,4 @@ After completing these steps, you should have successfully built and uploaded th
 # Future works
 1. POSIX Style API
 2. Virtual file system interface
-
 

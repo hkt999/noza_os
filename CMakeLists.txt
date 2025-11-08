@@ -1,3 +1,19 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.2.0)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.2.0-a4)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
+set(PICO_BOARD pico CACHE STRING "Board type")
+
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -9,6 +25,7 @@ option(NOZAOS_UNITTEST "build unit test" ON)
 # posix system
 option(NOZAOS_POSIX	"build posix" ON)
 option(NOZAOS_UNITTEST_POSIX "build posix unit test" ON)
+option(NOZA_PROCESS_USE_TLSF "use TLSF for per-process heap allocator" OFF)
 
 # lua interpreter
 option(NOZAOS_LUA "build lua interpreter" OFF)
@@ -95,6 +112,14 @@ mark_as_advanced(
 # initalize pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
+if(NOT PICO_SDK_PATH OR NOT EXISTS "${PICO_SDK_PATH}")
+    set(PICO_SDK_PATH ${USERHOME}/.pico-sdk/sdk/${sdkVersion})
+endif()
+set(PICO_SDK_PATH ${PICO_SDK_PATH} CACHE PATH "Path to the Raspberry Pi Pico SDK" FORCE)
+
+# ensure USB stdio is enabled by default so `cmake ..; cmake --build .`
+# produces a firmware image that enumerates as a USB CDC device
+set(PICO_STDIO_USB ON CACHE BOOL "Enable stdio over USB" FORCE)
 
 # pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -187,6 +212,10 @@ set(
 	user/console/noza_term.c
 )
 
+if (NOZA_PROCESS_USE_TLSF)
+	list(APPEND NOZA_SOURCES 3rd_party/tlsf_port/tlsf.c)
+endif()
+
 if (NOZAOS_UNITTEST) 
 	list(APPEND NOZA_SOURCES user/noza_unit_test/noza_unit_test.c)
 endif()
@@ -252,6 +281,10 @@ if (NOZAOS_UNITTEST OR NOZAOS_UNITTEST_POSIX)
 	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/unity_port)
 endif()
 
+if (NOZA_PROCESS_USE_TLSF)
+	list(APPEND NOZA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/3rd_party/tlsf_port)
+endif()
+
 target_include_directories(
 	noza
 	PRIVATE
@@ -308,3 +341,8 @@ target_link_libraries(
 pico_add_extra_outputs(noza)
 pico_enable_stdio_usb(noza 1)
 
+if (NOZA_PROCESS_USE_TLSF)
+	target_compile_definitions(noza PRIVATE NOZA_PROCESS_USE_TLSF=1)
+else()
+	target_compile_definitions(noza PRIVATE NOZA_PROCESS_USE_TLSF=0)
+endif()
