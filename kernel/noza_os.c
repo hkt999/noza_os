@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include "noza_config.h"
 #include "syscall.h"
@@ -21,9 +22,10 @@
 #define THREAD_WAITING_MSG      3
 #define THREAD_WAITING_READ     4
 #define THREAD_WAITING_REPLY    5
-#define THREAD_SLEEP            6
-#define THREAD_ZOMBIE           7
-#define THREAD_PENDING_JOIN     8
+#define THREAD_WAITING_SYNC     6
+#define THREAD_SLEEP            7
+#define THREAD_ZOMBIE           8
+#define THREAD_PENDING_JOIN     9
 
 #define SYSCALL_DONE            0
 #define SYSCALL_PENDING         1
@@ -35,6 +37,11 @@
 
 #define NONE_DETACH             0
 #define FLAG_DETACH             0x01
+#define FLAG_WAIT_TIMEOUT       0x02
+#define NOZA_INVALID_CORE       0xFF
+#define NOZA_CORE_ANY           (-1)
+#define NOZA_WAIT_FOREVER       ((int64_t)-1)
+#define NOZA_FUTEX_SLOT_COUNT   64
 
 inline static uint8_t hash32to8(uint32_t value) {
     uint8_t byte1 = (value >> 24) & 0xFF; // High byte
@@ -92,6 +99,7 @@ const char *state_to_str(uint32_t id)
         [THREAD_WAITING_MSG] = "THREAD_WAITING_MSG",
         [THREAD_WAITING_READ] = "THREAD_WAITING_READ",
         [THREAD_WAITING_REPLY] = "THREAD_WAITING_REPLY",
+        [THREAD_WAITING_SYNC] = "THREAD_WAITING_SYNC",
         [THREAD_SLEEP] = "THREAD_SLEEP",
         [THREAD_ZOMBIE] = "THREAD_ZOMBIE",
         [THREAD_PENDING_JOIN] = "THREAD_PENDING_JOIN"
@@ -175,6 +183,19 @@ typedef struct {
     thread_list_t   pending_list;   // a list of threads waiting for this port
 } noza_os_port_t;
 
+typedef struct noza_wait_queue_s {
+    cdl_node_t      *head;
+    uint32_t         count;
+} noza_wait_queue_t;
+
+static inline void noza_wait_queue_init(noza_wait_queue_t *queue);
+
+typedef struct {
+    uintptr_t           key;
+    bool                in_use;
+    noza_wait_queue_t   queue;
+} noza_futex_slot_t;
+
 typedef struct {
     uint32_t    priority:8;
     uint32_t    state:8;
@@ -195,6 +216,7 @@ typedef struct {
 typedef struct thread_s {
     uint32_t            *stack_ptr;          // pointer to the thread's stack
     cdl_node_t          state_node;          // node for managing the thread state
+    cdl_node_t          sync_node;           // node for synchronization wait queues
     info_t              info;                // thread information
     int64_t             expired_time;        // time when the thread expires
     uint32_t            exit_code;           // the exit code
@@ -203,6 +225,7 @@ typedef struct thread_s {
     noza_os_port_t      port;                // port information
     noza_os_message_t   message;             // message passing mechanism for the thread
     thread_t            *join_th;             // thread waiting to join this thread
+    noza_wait_queue_t   *waiting_queue;      // wait queue currently blocked on
     uint32_t            stack_area[NOZA_OS_STACK_SIZE]; // stack memory area for the thread
     uint8_t             flags;               // reserved flags
     uint8_t             callid;              // system call id  
@@ -221,6 +244,7 @@ typedef struct {
     thread_list_t   ready[NOZA_OS_PRIORITY_LIMIT];       // array of ready threads for each priority level
     thread_list_t   wait;                                // list of threads in waiting state for thread pending on noza_recv
     thread_list_t   sleep;                               // list of threads in sleeping state
+    thread_list_t   sync_sleep;                          // threads waiting on synchronization objects
     thread_list_t   zombie;                              // list of threads in zombie state
     thread_list_t   free;                                // list of free/available threads
     thread_t        thread[NOZA_OS_TASK_LIMIT];          // array of thread_t structures for task management
@@ -236,6 +260,7 @@ typedef struct {
 // declare the Noza kernel data structure instance
 //
 static noza_os_t noza_os;
+static noza_futex_slot_t noza_futex_slots[NOZA_FUTEX_SLOT_COUNT];
 inline static uint32_t _thread_get_pid(thread_t *th)
 {
     return (th - (thread_t *)&noza_os.thread[0]);
@@ -512,18 +537,22 @@ static void noza_init()
 
     // init noza os / thread structure
     memset(&noza_os, 0, sizeof(noza_os_t));
+    memset(noza_futex_slots, 0, sizeof(noza_futex_slots));
     noza_os_lock_init();
     for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
         noza_os.ready[i].state_id = THREAD_READY;
     }
     noza_os.wait.state_id = THREAD_WAITING_MSG;
     noza_os.sleep.state_id = THREAD_SLEEP;
+    noza_os.sync_sleep.state_id = THREAD_WAITING_SYNC;
     noza_os.free.state_id = THREAD_FREE;
     noza_os.zombie.state_id = THREAD_ZOMBIE;
 
     // init all thread structure
     for (int i=0; i<NOZA_OS_TASK_LIMIT; i++) {
         noza_os.thread[i].state_node.value = &noza_os.thread[i];
+        noza_os.thread[i].sync_node.value = &noza_os.thread[i];
+        noza_os.thread[i].waiting_queue = NULL;
         noza_os_add_thread(&noza_os.free, &noza_os.thread[i]);
         noza_os.thread[i].port.pending_list.state_id = THREAD_WAITING_READ;
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING_REPLY;
@@ -676,6 +705,129 @@ static cdl_node_t *cdl_remove(cdl_node_t *head, cdl_node_t *obj)
         obj->next->prev = obj->prev;
         return head;
     }
+}
+
+static inline void noza_wait_queue_init(noza_wait_queue_t *queue)
+{
+    if (queue == NULL)
+        return;
+    queue->head = NULL;
+    queue->count = 0;
+}
+
+static inline void noza_wait_queue_enqueue(noza_wait_queue_t *queue, thread_t *thread)
+{
+    if (queue == NULL || thread == NULL)
+        return;
+    thread->sync_node.value = thread;
+    queue->head = cdl_add(queue->head, &thread->sync_node);
+    queue->count++;
+    thread->waiting_queue = queue;
+}
+
+static inline void noza_wait_queue_remove(noza_wait_queue_t *queue, thread_t *thread)
+{
+    if (queue == NULL || thread == NULL)
+        return;
+    if (thread->waiting_queue != queue)
+        return;
+    queue->head = cdl_remove(queue->head, &thread->sync_node);
+    if (queue->count > 0)
+        queue->count--;
+    thread->waiting_queue = NULL;
+}
+
+static inline void noza_wait_queue_cancel_timeout(thread_t *thread)
+{
+    if (thread == NULL)
+        return;
+    if ((thread->flags & FLAG_WAIT_TIMEOUT) && thread->info.state == THREAD_WAITING_SYNC) {
+        noza_os_remove_thread(&noza_os.sync_sleep, thread);
+        thread->flags &= ~FLAG_WAIT_TIMEOUT;
+    }
+}
+
+static inline uint32_t noza_wait_queue_wake(noza_wait_queue_t *queue, uint32_t count, int result)
+{
+    if (queue == NULL || count == 0)
+        return 0;
+
+    uint32_t woke = 0;
+    while (queue->count > 0 && woke < count) {
+        thread_t *th = queue->head->value;
+        noza_wait_queue_remove(queue, th);
+        noza_wait_queue_cancel_timeout(th);
+        noza_os_add_thread(&noza_os.ready[th->info.priority], th);
+        noza_os_set_return_value1(th, result);
+        woke++;
+    }
+    return woke;
+}
+
+static inline int noza_wait_queue_sleep(noza_wait_queue_t *queue, int64_t timeout_us)
+{
+    if (queue == NULL)
+        return EINVAL;
+
+    thread_t *running = noza_os_get_running_thread();
+    if (running == NULL)
+        return EINVAL;
+
+    if (timeout_us == 0) {
+        return ETIMEDOUT;
+    }
+
+    noza_wait_queue_enqueue(queue, running);
+    running->info.state = THREAD_WAITING_SYNC;
+
+    if (timeout_us == NOZA_WAIT_FOREVER) {
+        running->flags &= ~FLAG_WAIT_TIMEOUT;
+    } else if (timeout_us > 0) {
+        running->flags |= FLAG_WAIT_TIMEOUT;
+        running->expired_time = platform_get_absolute_time_us() + timeout_us;
+        noza_os_add_thread(&noza_os.sync_sleep, running);
+    } else {
+        noza_wait_queue_remove(queue, running);
+        return ETIMEDOUT;
+    }
+
+    noza_os_clear_running_thread();
+    return 0;
+}
+
+static inline uint32_t noza_futex_hash(uintptr_t key)
+{
+    key ^= key >> 4;
+    key ^= key >> 9;
+    key ^= key >> 16;
+    return key & (NOZA_FUTEX_SLOT_COUNT - 1);
+}
+
+static noza_wait_queue_t *noza_futex_get_queue(void *addr, bool create)
+{
+    if (addr == NULL)
+        return NULL;
+
+    uintptr_t key = (uintptr_t)addr;
+    uint32_t start = noza_futex_hash(key);
+
+    for (uint32_t i = 0; i < NOZA_FUTEX_SLOT_COUNT; i++) {
+        uint32_t idx = (start + i) & (NOZA_FUTEX_SLOT_COUNT - 1);
+        noza_futex_slot_t *slot = &noza_futex_slots[idx];
+        if (slot->in_use && slot->key == key) {
+            return &slot->queue;
+        }
+        if (!slot->in_use && create) {
+            slot->in_use = true;
+            slot->key = key;
+            noza_wait_queue_init(&slot->queue);
+            return &slot->queue;
+        }
+        if (!slot->in_use && !create) {
+            return NULL;
+        }
+    }
+    return NULL;
 }
 
 static void noza_os_add_thread_by_expired_time(thread_list_t *list, thread_t *thread)
@@ -851,6 +1003,14 @@ static void alarm_signal_handler(thread_t *running, thread_t *target)
         target->expired_time = 0;
     } else if (target->info.state == THREAD_WAITING_MSG) {
         noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);
+        noza_os_set_return_value1(target, EINTR);
+    } else if (target->info.state == THREAD_WAITING_SYNC) {
+        if (target->waiting_queue) {
+            noza_wait_queue_remove(target->waiting_queue, target);
+            target->waiting_queue = NULL;
+        }
+        noza_wait_queue_cancel_timeout(target);
+        noza_os_add_thread(&noza_os.ready[target->info.priority], target);
         noza_os_set_return_value1(target, EINTR);
     } else if (target->info.state == THREAD_WAITING_READ) {
         // target thread is in some thread's port.pending_list
@@ -1117,6 +1277,55 @@ static void syscall_nbrecv(thread_t *running)
     noza_os_nonblock_recv(running);
 }
 
+static void syscall_futex_wait(thread_t *running)
+{
+    uint32_t *addr = (uint32_t *)running->trap.r1;
+    uint32_t expected = running->trap.r2;
+    int32_t timeout_us = (int32_t)running->trap.r3;
+
+    if (addr == NULL) {
+        noza_os_set_return_value1(running, EINVAL);
+        return;
+    }
+
+    if (*(volatile uint32_t *)addr != expected) {
+        noza_os_set_return_value1(running, EAGAIN);
+        return;
+    }
+
+    noza_wait_queue_t *queue = noza_futex_get_queue(addr, true);
+    if (queue == NULL) {
+        noza_os_set_return_value1(running, ENOMEM);
+        return;
+    }
+
+    int64_t wait_time = (timeout_us < 0) ? NOZA_WAIT_FOREVER : (int64_t)timeout_us;
+    int ret = noza_wait_queue_sleep(queue, wait_time);
+    if (ret != 0) {
+        noza_os_set_return_value1(running, ret);
+    }
+}
+
+static void syscall_futex_wake(thread_t *running)
+{
+    uint32_t *addr = (uint32_t *)running->trap.r1;
+    uint32_t count = running->trap.r2;
+
+    if (addr == NULL || count == 0) {
+        noza_os_set_return_value1(running, 0);
+        return;
+    }
+
+    noza_wait_queue_t *queue = noza_futex_get_queue(addr, false);
+    if (queue == NULL) {
+        noza_os_set_return_value1(running, 0);
+        return;
+    }
+
+    uint32_t woke = noza_wait_queue_wake(queue, count, 0);
+    noza_os_set_return_value1(running, woke);
+}
+
 typedef void (*syscall_func_t)(thread_t *source);
 
 static syscall_func_t syscall_func[] = {
@@ -1135,6 +1344,8 @@ static syscall_func_t syscall_func[] = {
     [NSC_CALL] = syscall_call,
     [NSC_NB_RECV] = syscall_nbrecv,
     [NSC_NB_CALL] = syscall_nbcall,
+    [NSC_FUTEX_WAIT] = syscall_futex_wait,
+    [NSC_FUTEX_WAKE] = syscall_futex_wake,
 };
 
 inline static void serv_syscall(uint32_t core)
@@ -1179,10 +1390,43 @@ inline static uint32_t noza_wakeup(int64_t now)
     return wakeup_count;
 }
 
+inline static uint32_t noza_wakeup_sync(int64_t now)
+{
+    if (noza_os.sync_sleep.count == 0)
+        return 0;
+
+    uint32_t wakeup_count = 0;
+    cdl_node_t *cursor = noza_os.sync_sleep.head;
+    while (cursor != NULL) {
+        thread_t *th = (thread_t *)cursor->value;
+        if (th->expired_time <= now) {
+            wakeup_count++;
+            noza_os_change_state(th, &noza_os.sync_sleep, &noza_os.ready[th->info.priority]);
+            if (th->waiting_queue) {
+                noza_wait_queue_remove(th->waiting_queue, th);
+                th->waiting_queue = NULL;
+            }
+            th->flags &= ~FLAG_WAIT_TIMEOUT;
+            noza_os_set_return_value1(th, ETIMEDOUT);
+            cursor = noza_os.sync_sleep.head;
+        } else {
+            break;
+        }
+    }
+    return wakeup_count;
+}
+
 inline static void check_sleep_period(int64_t now)
 {
     noza_os.next_tick_time = now + NOZA_OS_TIME_SLICE;
     cdl_node_t *cursor = noza_os.sleep.head;
+    if (cursor) {
+        thread_t *th = (thread_t *)cursor->value;
+        if (th->expired_time < noza_os.next_tick_time) {
+            noza_os.next_tick_time = th->expired_time;
+        }
+    }
+    cursor = noza_os.sync_sleep.head;
     if (cursor) {
         thread_t *th = (thread_t *)cursor->value;
         if (th->expired_time < noza_os.next_tick_time) {
@@ -1296,7 +1540,7 @@ static void noza_os_scheduler()
             }
         } else {
             // there is no candidate thread to run, check the next tick and go idle
-            if (noza_wakeup(now) == 0) {
+            if (noza_wakeup(now) == 0 && noza_wakeup_sync(now) == 0) {
                 check_sleep_period(now);
                 GO_IDLE(core);
                 if (core == 0)

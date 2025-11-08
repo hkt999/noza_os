@@ -14,5 +14,6 @@
 #define NSC_CALL                        9
 #define NSC_NB_RECV                     10
 #define NSC_NB_CALL                     11
-#define NSC_NUM_SYSCALLS                12
-
+#define NSC_FUTEX_WAIT                  12
+#define NSC_FUTEX_WAKE                  13
+#define NSC_NUM_SYSCALLS                14

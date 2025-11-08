@@ -147,6 +147,48 @@ static void test_noza_thread_detach()
     }
 }
 
+typedef struct {
+    volatile uint32_t futex_word;
+    int result;
+} futex_ctx_t;
+
+static int futex_wait_worker(void *param, uint32_t pid)
+{
+    futex_ctx_t *ctx = (futex_ctx_t *)param;
+    ctx->result = noza_futex_wait((uint32_t *)&ctx->futex_word, 0, -1);
+    return ctx->result;
+}
+
+static int futex_timeout_worker(void *param, uint32_t pid)
+{
+    return noza_futex_wait((uint32_t *)param, 0, 20000);
+}
+
+static void test_futex_wait_wake(void)
+{
+    futex_ctx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+
+    uint32_t th;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, futex_wait_worker, &ctx, 1, 1024));
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(5, NULL));
+    ctx.futex_word = 1;
+    TEST_ASSERT_EQUAL_INT(1, noza_futex_wake((uint32_t *)&ctx.futex_word, 1));
+    uint32_t exit_code = 0;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
+    TEST_ASSERT_EQUAL_INT(0, exit_code);
+}
+
+static void test_futex_timeout(void)
+{
+    volatile uint32_t futex_word = 0;
+    uint32_t th;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, futex_timeout_worker, (void *)&futex_word, 1, 1024));
+    uint32_t exit_code = 0;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
+    TEST_ASSERT_EQUAL_INT(ETIMEDOUT, exit_code);
+}
+
 // test message passing
 #define SERVER_EXIT_CODE    0x0123beef
 #define CLIENT_EXIT_CODE    0x0eadbeef
@@ -447,6 +489,8 @@ static int test_all(int argc, char **argv)
     RUN_TEST(test_heavy_loading_thread);
     RUN_TEST(test_noza_thread_detach);
     RUN_TEST(test_thread_yield);
+    RUN_TEST(test_futex_wait_wake);
+    RUN_TEST(test_futex_timeout);
     RUN_TEST(test_noza_message);
     RUN_TEST(test_noza_mutex);
     RUN_TEST(test_noza_hardfault);

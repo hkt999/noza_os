@@ -13,6 +13,8 @@
 .equ NSC_CALL,						9
 .equ NSC_NB_RECV,					10
 .equ NSC_NB_CALL,					11
+.equ NSC_FUTEX_WAIT,				12
+.equ NSC_FUTEX_WAKE,				13
 
 .type noza_thread_join, %function
 .global noza_thread_join
@@ -132,6 +134,27 @@ noza_nonblock_recv:
 	svc #0 					// system call, return value in r0
 	stmia r4!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, save to memory
 	pop {r4-r7, pc}  
+
+.type noza_futex_wait, %function
+.global noza_futex_wait
+noza_futex_wait:
+	push {r4-r7, lr}
+	mov r3, r2
+	mov r2, r1
+	mov r1, r0
+	movs r0, #NSC_FUTEX_WAIT
+	svc #0
+	pop {r4-r7, pc}
+
+.type noza_futex_wake, %function
+.global noza_futex_wake
+noza_futex_wake:
+	push {r4-r7, lr}
+	mov r2, r1
+	mov r1, r0
+	movs r0, #NSC_FUTEX_WAKE
+	svc #0
+	pop {r4-r7, pc}
 
 .type noza_thread_create_primitive, %function
 .global noza_thread_create_primitive

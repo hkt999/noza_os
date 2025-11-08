@@ -25,6 +25,8 @@ int     noza_thread_detach(uint32_t thread_id);
 int     noza_thread_join(uint32_t thread_id, uint32_t *code);
 void    noza_thread_terminate(int exit_code);
 int     noza_thread_self(uint32_t *pid);
+int     noza_futex_wait(uint32_t *addr, uint32_t expected, int32_t timeout_us);
+int     noza_futex_wake(uint32_t *addr, uint32_t count);
 
 // Noza message API
 int     noza_recv(noza_msg_t *msg);
