@@ -17,6 +17,9 @@ static void process_record_reset(process_record_t *process)
 {
 	if (process == NULL)
 		return;
+	process->lock.num = -1;
+	process->lock.spinlock = NULL;
+	process->lock.lock_thread = -1;
 	memset(&process->hash_item, 0, sizeof(process->hash_item));
 #if NOZA_PROCESS_USE_TLSF
 	process->tlsf = NULL;
@@ -46,6 +49,7 @@ static process_record_t *alloc_process_record()
 	if (process) {
 		process_record_reset(process);
 		mapping_insert(&PROCESS_RECORD_HASH, process_count++, &process->hash_item, process);
+		noza_spinlock_init(&process->lock);
 	}
 
 	return process;
@@ -54,6 +58,9 @@ static process_record_t *alloc_process_record()
 static void free_process_record(process_record_t *process)
 {
 	mapping_remove(&PROCESS_RECORD_HASH, process->hash_item.id);
+	if (process->lock.spinlock) {
+		noza_spinlock_free(&process->lock);
+	}
 	process_record_reset(process);
 	noza_raw_lock(&PROCESS_RECORD_HASH.lock);
 	process->next = process_head;
@@ -65,7 +72,6 @@ int noza_process_init()
 {
 	mapping_init(&PROCESS_RECORD_HASH);
 	for (int i=0; i<NOZA_MAX_PROCESSES; i++) {
-		noza_spinlock_init(&PROCESS_SLOT[i].lock);
 		process_record_reset(&PROCESS_SLOT[i]);
 		if (i < NOZA_MAX_PROCESSES - 1) {
 			PROCESS_SLOT[i].next = &PROCESS_SLOT[i+1];

@@ -17,7 +17,12 @@ int noza_spinlock_init(spinlock_t *spinlock)
 
 int noza_spinlock_free(spinlock_t *spinlock)
 {
-    spin_lock_unclaim(spinlock->num);
+    if (spinlock->spinlock) {
+        spin_lock_unclaim(spinlock->num);
+        spinlock->spinlock = NULL;
+        spinlock->num = -1;
+        spinlock->lock_thread = -1;
+    }
     return 0; // success
 }
 
