@@ -14,6 +14,7 @@
 #include "pico/stdlib.h"
 #include "hardware/regs/rosc.h"
 #include "hardware/regs/addressmap.h"
+#include <stdbool.h>
 
 void platform_io_init()
 {
@@ -30,6 +31,8 @@ uint32_t platform_get_running_core()
 }
 
 #if NOZA_OS_NUM_CORES > 1
+static volatile bool core_irq_ready[NOZA_OS_NUM_CORES];
+
 static void multicore_irq_common_handler(void)
 {
     while (multicore_fifo_rvalid()) {
@@ -55,15 +58,17 @@ void platform_multicore_init(void (*noza_os_scheduler)(void))
 #if NOZA_OS_NUM_CORES > 1
     if (get_core_num() == 0) {
         multicore_fifo_clear_irq();
+        multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
         irq_set_exclusive_handler(SIO_IRQ_PROC0, core0_interrupt_handler);
         irq_set_priority(SIO_IRQ_PROC0, 32);
         irq_set_enabled(SIO_IRQ_PROC0, true);
-        multicore_launch_core1(noza_os_scheduler); // launch core1 to run noza_os_scheduler
+        core_irq_ready[0] = true;
     } else {
         multicore_fifo_clear_irq();
         irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_interrupt_handler);
         irq_set_priority(SIO_IRQ_PROC1, 32);
         irq_set_enabled(SIO_IRQ_PROC1, true); // enable the FIFO interrupt
+        core_irq_ready[1] = true;
     }
 #endif
 }
@@ -95,6 +100,8 @@ void platform_request_schedule(int target_core)
     if (target_core < 0 || target_core >= NOZA_OS_NUM_CORES)
         return;
     if (target_core == current)
+        return;
+    if (!core_irq_ready[target_core])
         return;
     multicore_fifo_push_timeout_us(0, 0);
 #else
