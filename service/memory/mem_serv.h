@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+#define NOZA_MEMORY_SERVICE_NAME "noza_memory"
+
 enum {
 	MEMORY_SUCCESS = 0,
     MEMORY_INVALID_OP,

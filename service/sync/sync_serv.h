@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include "posix/errno.h"
 
+#define NOZA_SYNC_SERVICE_NAME "noza_sync"
+
 enum {
 	MUTEX_SUCCESS = 0,
 	MUTEX_LOCK_FAIL = EBUSY,
@@ -75,4 +77,3 @@ typedef struct {
 } sem_msg_t;
 
 typedef mutex_msg_t packet_t;
-

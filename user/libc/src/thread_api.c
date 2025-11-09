@@ -8,6 +8,8 @@
 #include "posix/errno.h"
 #include "proc_api.h"
 
+extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
+
 static hashslot_t THREAD_RECORD_HASH;
 thread_record_t *get_thread_record(uint32_t tid)
 {
@@ -52,9 +54,18 @@ void noza_root_task()
 	thread_record->priority = 0;
 	thread_record->need_free_stack = AUTO_FREE_STACK;
 	thread_record->errno = 0;
-    mapping_insert(&THREAD_RECORD_HASH, 0, &thread_record->hash_item, thread_record);
-	noza_thread_detach(0);
-	app_run(thread_record, 0);
+	uint32_t tid = 0;
+	if (noza_thread_self(&tid) != 0 || tid == 0) {
+		for (int core = 0; core < NOZA_OS_NUM_CORES; core++) {
+			if (NOZAOS_PID[core] != 0) {
+				tid = NOZAOS_PID[core];
+				break;
+			}
+		}
+	}
+	mapping_insert(&THREAD_RECORD_HASH, tid, &thread_record->hash_item, thread_record);
+	noza_thread_detach(tid);
+	app_run(thread_record, tid);
 }
 
 // thread terminate, call free_stack

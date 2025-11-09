@@ -605,8 +605,14 @@ static void sync_init(sync_info_t *si)
 static int do_synchorization_server(void *param, uint32_t pid)
 {
 	static sync_info_t si;
+	(void)param;
+	(void)pid;
 
-	name_lookup_register("noza_sync", pid); // register service
+	static uint32_t sync_service_id;
+	int lookup_ret = name_lookup_register(NOZA_SYNC_SERVICE_NAME, &sync_service_id);
+	if (lookup_ret != NAME_LOOKUP_OK) {
+		printf("sync: name register failed (%d)\n", lookup_ret);
+	}
 
 	extern uint32_t platform_get_random(void);
 	srand(platform_get_random()); // for access token

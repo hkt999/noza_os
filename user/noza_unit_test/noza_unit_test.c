@@ -451,42 +451,47 @@ static void test_noza_mutex()
 
 static void test_noza_lookup()
 {
-    // test name_lookup_server_register() and name_lookup_server_lookup()
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_register("key1", 1));
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_register("key2", 2));
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_register("key3", 3));
+	uint32_t key1_id = 0;
+	uint32_t key2_id = 0;
+	uint32_t key3_id = 0;
 
-    uint32_t value;
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key1", &value));
-    TEST_ASSERT_EQUAL_INT(1, value);
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key2", &value));
-    TEST_ASSERT_EQUAL_INT(2, value);
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key3", &value));
-    TEST_ASSERT_EQUAL_INT(3, value);
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_register("key1", &key1_id));
+	TEST_ASSERT_NOT_EQUAL(0u, key1_id);
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_register("key2", &key2_id));
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_register("key3", &key3_id));
 
-    // test name_lookup_server_unregister()
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister("key1"));
-    TEST_ASSERT_EQUAL_INT(ENOENT, name_lookup_search("key1", &value)); // not found
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key2", &value));
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_search("key3", &value));
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister("key2"));
-    TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister("key3"));
+	uint32_t resolved_id = 0;
+	uint32_t vid = 0;
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_resolve("key1", &resolved_id, &vid));
+	TEST_ASSERT_EQUAL_UINT32(key1_id, resolved_id);
+	TEST_ASSERT_NOT_EQUAL(0u, vid);
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_resolve("key2", &resolved_id, &vid));
+	TEST_ASSERT_EQUAL_UINT32(key2_id, resolved_id);
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_resolve("key3", &resolved_id, &vid));
+	TEST_ASSERT_EQUAL_UINT32(key3_id, resolved_id);
 
-    // test name_lookup_server_register() with too many services
-    int i;
-    for (i = 0; i < 128; i++) {
-        char key[16];
-        sprintf(key, "key%d", i);
-        if (name_lookup_register(key, i) != 0)
-            break;
-    }
-    int count = i;
-    for (i = 0; i<count; i++) {
-        char key[16];
-        sprintf(key, "key%d", i);
-        TEST_ASSERT_EQUAL_INT(0, name_lookup_unregister(key));
-    }
-    TEST_PRINTF("remaing service count: %d", count);
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_unregister(key1_id));
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_ERR_NOT_FOUND, name_lookup_resolve("key1", NULL, &vid));
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_resolve("key2", NULL, &vid));
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_resolve("key3", NULL, &vid));
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_unregister(key2_id));
+	TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_unregister(key3_id));
+
+	uint32_t ids[128] = {0};
+	int i;
+	for (i = 0; i < 128; i++) {
+		char key[16];
+		sprintf(key, "key%d", i);
+		if (name_lookup_register(key, &ids[i]) != NAME_LOOKUP_OK)
+			break;
+	}
+	int count = i;
+	for (i = 0; i < count; i++) {
+		if (ids[i] != 0) {
+			TEST_ASSERT_EQUAL_INT(NAME_LOOKUP_OK, name_lookup_unregister(ids[i]));
+		}
+	}
+	TEST_PRINTF("remaing service count: %d", count);
 }
 
 typedef struct spinlock_test_s {

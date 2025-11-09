@@ -2,6 +2,7 @@
 #include "nozaos.h"
 #include "posix/errno.h"
 #include "3rd_party/tinyalloc_port/tinyalloc.h"
+#include "../name_lookup/name_lookup_client.h"
 
 extern char __end__, __StackLimit; // __StackLimit is poorly named, it's actually the end of the heap
 void *heap_end = &__end__;
@@ -21,17 +22,23 @@ void *_sbrk(ptrdiff_t increment)
 }
 
 #include <stdio.h>
-int32_t memory_pid = -1;
 static tinyalloc_t tinyalloc;
 static int do_memory_server(void *param, uint32_t pid)
 {
     int ret;
-	memory_pid = pid;
+    (void)param;
+    (void)pid;
     noza_msg_t msg;
-    void *my_heap_end = heap_end;
 
     ta_init(&tinyalloc, heap_end, heap_limit, 256, 16, 8);
     heap_end = heap_limit;
+
+    static uint32_t memory_service_id;
+    int lookup_ret = name_lookup_register(NOZA_MEMORY_SERVICE_NAME, &memory_service_id);
+    if (lookup_ret != NAME_LOOKUP_OK) {
+        printf("memory: name register failed (%d)\n", lookup_ret);
+    }
+
     for (;;) {
         if ((ret = noza_recv(&msg)) == 0) { // the pid in msg is the sender pid
 			mem_msg_t *mem_msg = (mem_msg_t *)msg.ptr;

@@ -23,6 +23,7 @@
 .equ NSC_CLOCK_GETTIME,            19
 .equ NSC_SIGNAL_SEND,              20
 .equ NSC_SIGNAL_TAKE,              21
+.equ NSC_THREAD_BIND_VID,          22
 
 .type noza_thread_join, %function
 .global noza_thread_join
@@ -81,6 +82,15 @@ noza_thread_change_priority:
 	movs r0, #NSC_THREAD_CHANGE_PRIORITY	// set r0 to the value of NSC_THREAD_CHANGE_PRIORITY
 	svc #0 		// system call, return value in r0
 	pop {r4-r7, pc}  
+
+.type noza_thread_bind_vid, %function
+.global noza_thread_bind_vid
+noza_thread_bind_vid:
+	push {r4-r7, lr}
+	mov r1, r0
+	movs r0, #NSC_THREAD_BIND_VID
+	svc #0
+	pop {r4-r7, pc}
 
 .type noza_thread_terminate, %function
 .global noza_thread_terminate

@@ -167,6 +167,7 @@ const char *syscall_to_str(uint32_t callid)
         [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
         [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
         [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
+        [NSC_THREAD_BIND_VID] = "NSC_THREAD_BIND_VID",
         [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
         [NSC_RECV] = "NSC_RECV",
         [NSC_REPLY] = "NSC_REPLY",
@@ -315,6 +316,8 @@ inline static uint32_t thread_get_vid(thread_t *th)
 {
     return th->vid;
 }
+
+static thread_t *get_thread_by_vid(uint32_t vid);
 
 inline static int vid_to_pid(uint32_t vid)
 {
@@ -638,7 +641,7 @@ static void noza_run()
     noza_os_scheduler(); // start os scheduler and never return
 }
 
-inline static void noza_os_insert_vid(thread_t *src_th)
+inline static void noza_os_insert_vid_with_value(thread_t *src_th, uint32_t vid)
 {
     // add virtual pid slot
     vid_map_item_t *vp_map = noza_os.free_vid_map;
@@ -646,18 +649,29 @@ inline static void noza_os_insert_vid(thread_t *src_th)
         kernel_panic("fatal error: noza_thread_alloc: free_vid_map is NULL\n");
     }
     noza_os.free_vid_map = vp_map->next;
-
-    static uint32_t ID = 0;
-    uint32_t vid = ID++;
-    if (ID>=65536)
-        ID = 0; // maximun vid: 65535
-
     vp_map->vid = vid;
     vp_map->pid = _thread_get_pid(src_th);
     src_th->vid = vid;
     int hash = hash32to8(vid);
     vp_map->next = noza_os.slot[hash]; // insert to the head of the list
     noza_os.slot[hash] = vp_map;
+}
+
+inline static void noza_os_insert_vid(thread_t *src_th)
+{
+    static uint32_t ID = 1;
+    uint32_t vid = ID++;
+    if (ID >= 65536)
+        ID = 1; // wrap but keep 0 reserved
+
+    while (get_thread_by_vid(vid) != NULL) {
+        vid = ID++;
+        if (ID >= 65536) {
+            ID = 1;
+        }
+    }
+
+    noza_os_insert_vid_with_value(src_th, vid);
 }
 
 inline static void noza_os_remove_vid(thread_t *src_th)
@@ -681,6 +695,8 @@ inline static void noza_os_remove_vid(thread_t *src_th)
         prev = vp_map;
         vp_map = vp_map->next;
     }
+
+    src_th->vid = 0;
 }
 
 // Noza OS scheduler
@@ -1465,6 +1481,29 @@ static void syscall_thread_change_priority(thread_t *running)
     }
 }
 
+static void syscall_thread_bind_vid(thread_t *running)
+{
+    uint32_t requested_vid = running->trap.r1;
+    if (requested_vid >= 65536) {
+        noza_os_set_return_value1(running, EINVAL);
+        return;
+    }
+
+    if (thread_get_vid(running) == requested_vid) {
+        noza_os_set_return_value1(running, 0);
+        return;
+    }
+
+    if (get_thread_by_vid(requested_vid) != NULL) {
+        noza_os_set_return_value1(running, EEXIST);
+        return;
+    }
+
+    noza_os_remove_vid(running);
+    noza_os_insert_vid_with_value(running, requested_vid);
+    noza_os_set_return_value1(running, 0);
+}
+
 static void syscall_thread_terminate(thread_t *running)
 {
     running->exit_code = running->trap.r1; // r0 is the # of syscall, r1 is the exit code
@@ -1791,6 +1830,7 @@ static syscall_func_t syscall_func[] = {
     [NSC_THREAD_JOIN] = syscall_thread_join,
     [NSC_THREAD_DETACH] = syscall_thread_detach,
     [NSC_THREAD_TERMINATE] = syscall_thread_terminate,
+    [NSC_THREAD_BIND_VID] = syscall_thread_bind_vid,
 
     // messages and ports
     [NSC_RECV] = syscall_recv,
