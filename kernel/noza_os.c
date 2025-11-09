@@ -11,6 +11,8 @@
 #include "posix/errno.h"
 
 //#define DEBUG
+//#define FUTEX_DEBUG
+//#define TIMER_DEBUG
 
 //////////////////////////////////////////////////////////////
 //
@@ -42,6 +44,7 @@
 #define NOZA_CORE_ANY           (-1)
 #define NOZA_WAIT_FOREVER       ((int64_t)-1)
 #define NOZA_FUTEX_SLOT_COUNT   64
+#define NOZA_MAX_TIMERS         32
 
 inline static uint8_t hash32to8(uint32_t value) {
     uint8_t byte1 = (value >> 24) & 0xFF; // High byte
@@ -72,6 +75,20 @@ void kernel_log(const char *fmt, ...)
     printf("log: %s", buffer);
     #endif
 }
+
+#ifdef FUTEX_DEBUG
+#define FUTEX_LOG(fmt, ...) \
+    printf("[futex] " fmt "\n", ##__VA_ARGS__)
+#else
+#define FUTEX_LOG(fmt, ...) ((void)0)
+#endif
+
+#ifdef TIMER_DEBUG
+#define TIMER_LOG(fmt, ...) \
+    printf("[timer] " fmt "\n", ##__VA_ARGS__)
+#else
+#define TIMER_LOG(fmt, ...) ((void)0)
+#endif
 
 void kernel_panic(const char *fmt, ...)
 {
@@ -156,6 +173,13 @@ const char *syscall_to_str(uint32_t callid)
         [NSC_CALL] = "NSC_CALL",
         [NSC_NB_RECV] = "NSC_NB_RECV",
         [NSC_NB_CALL] = "NSC_NB_CALL",
+        [NSC_FUTEX_WAIT] = "NSC_FUTEX_WAIT",
+        [NSC_FUTEX_WAKE] = "NSC_FUTEX_WAKE",
+        [NSC_TIMER_CREATE] = "NSC_TIMER_CREATE",
+        [NSC_TIMER_DELETE] = "NSC_TIMER_DELETE",
+        [NSC_TIMER_ARM] = "NSC_TIMER_ARM",
+        [NSC_TIMER_CANCEL] = "NSC_TIMER_CANCEL",
+        [NSC_TIMER_WAIT] = "NSC_TIMER_WAIT",
     };
     if (callid >= NSC_NUM_SYSCALLS) {
         return "UNKNOWN";
@@ -187,6 +211,19 @@ typedef struct noza_wait_queue_s {
     cdl_node_t      *head;
     uint32_t         count;
 } noza_wait_queue_t;
+
+typedef struct noza_timer_s {
+    cdl_node_t          node;
+    noza_wait_queue_t   wait_queue;
+    uint32_t            id;
+    uint32_t            owner_vid;
+    int64_t             deadline;
+    int64_t             period_us;
+    uint32_t            flags;
+    uint32_t            pending_fires;
+    bool                in_use;
+    bool                armed;
+} noza_timer_t;
 
 static inline void noza_wait_queue_init(noza_wait_queue_t *queue);
 
@@ -261,6 +298,11 @@ typedef struct {
 //
 static noza_os_t noza_os;
 static noza_futex_slot_t noza_futex_slots[NOZA_FUTEX_SLOT_COUNT];
+static noza_timer_t noza_timers[NOZA_MAX_TIMERS];
+static cdl_node_t *noza_timer_head;
+static uint32_t noza_timer_seq;
+static volatile uint32_t futex_wake_counter;
+static volatile uint32_t futex_last_wake_count;
 inline static uint32_t _thread_get_pid(thread_t *th)
 {
     return (th - (thread_t *)&noza_os.thread[0]);
@@ -538,6 +580,9 @@ static void noza_init()
     // init noza os / thread structure
     memset(&noza_os, 0, sizeof(noza_os_t));
     memset(noza_futex_slots, 0, sizeof(noza_futex_slots));
+    memset(noza_timers, 0, sizeof(noza_timers));
+    noza_timer_head = NULL;
+    noza_timer_seq = 1;
     noza_os_lock_init();
     for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
         noza_os.ready[i].state_id = THREAD_READY;
@@ -558,6 +603,11 @@ static void noza_init()
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING_REPLY;
         noza_os.thread[i].join_th = NULL;
         noza_os.thread[i].callid = -1;
+    }
+
+    for (int i = 0; i < NOZA_MAX_TIMERS; i++) {
+        noza_wait_queue_init(&noza_timers[i].wait_queue);
+        noza_timers[i].node.value = &noza_timers[i];
     }
 
     // init all vid slots
@@ -723,6 +773,9 @@ static inline void noza_wait_queue_enqueue(noza_wait_queue_t *queue, thread_t *t
     queue->head = cdl_add(queue->head, &thread->sync_node);
     queue->count++;
     thread->waiting_queue = queue;
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("enqueue thread=%p queue=%p count=%u", thread, queue, queue->count);
+#endif
 }
 
 static inline void noza_wait_queue_remove(noza_wait_queue_t *queue, thread_t *thread)
@@ -735,6 +788,9 @@ static inline void noza_wait_queue_remove(noza_wait_queue_t *queue, thread_t *th
     if (queue->count > 0)
         queue->count--;
     thread->waiting_queue = NULL;
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("remove thread=%p queue=%p count=%u", thread, queue, queue->count);
+#endif
 }
 
 static inline void noza_wait_queue_cancel_timeout(thread_t *thread)
@@ -752,15 +808,24 @@ static inline uint32_t noza_wait_queue_wake(noza_wait_queue_t *queue, uint32_t c
     if (queue == NULL || count == 0)
         return 0;
 
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wake start queue=%p count=%u current=%u", queue, count, queue->count);
+#endif
     uint32_t woke = 0;
     while (queue->count > 0 && woke < count) {
         thread_t *th = queue->head->value;
+#ifdef FUTEX_DEBUG
+        FUTEX_LOG("wake loop head=%p th=%p count=%u queue_count=%u", queue->head, th, count, queue->count);
+#endif
         noza_wait_queue_remove(queue, th);
         noza_wait_queue_cancel_timeout(th);
         noza_os_add_thread(&noza_os.ready[th->info.priority], th);
         noza_os_set_return_value1(th, result);
         woke++;
     }
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wake done queue=%p woke=%u remaining=%u", queue, woke, queue->count);
+#endif
     return woke;
 }
 
@@ -780,17 +845,25 @@ static inline int noza_wait_queue_sleep(noza_wait_queue_t *queue, int64_t timeou
     noza_wait_queue_enqueue(queue, running);
     running->info.state = THREAD_WAITING_SYNC;
 
+    int64_t wait_until = 0;
     if (timeout_us == NOZA_WAIT_FOREVER) {
         running->flags &= ~FLAG_WAIT_TIMEOUT;
     } else if (timeout_us > 0) {
         running->flags |= FLAG_WAIT_TIMEOUT;
         running->expired_time = platform_get_absolute_time_us() + timeout_us;
+        wait_until = running->expired_time;
         noza_os_add_thread(&noza_os.sync_sleep, running);
     } else {
         noza_wait_queue_remove(queue, running);
+#ifdef FUTEX_DEBUG
+        FUTEX_LOG("sleep immediate timeout thread=%p queue=%p", running, queue);
+#endif
         return ETIMEDOUT;
     }
-
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("sleep enter thread=%p queue=%p timeout=%" PRId64 " wait_until=%" PRId64,
+        running, queue, timeout_us, wait_until);
+#endif
     noza_os_clear_running_thread();
     return 0;
 }
@@ -815,19 +888,168 @@ static noza_wait_queue_t *noza_futex_get_queue(void *addr, bool create)
         uint32_t idx = (start + i) & (NOZA_FUTEX_SLOT_COUNT - 1);
         noza_futex_slot_t *slot = &noza_futex_slots[idx];
         if (slot->in_use && slot->key == key) {
+#ifdef FUTEX_DEBUG
+            FUTEX_LOG("reuse slot idx=%u addr=%p queue=%p count=%u", idx, addr, &slot->queue, slot->queue.count);
+#endif
             return &slot->queue;
         }
         if (!slot->in_use && create) {
             slot->in_use = true;
             slot->key = key;
             noza_wait_queue_init(&slot->queue);
+#ifdef FUTEX_DEBUG
+            FUTEX_LOG("create slot idx=%u addr=%p queue=%p", idx, addr, &slot->queue);
+#endif
             return &slot->queue;
         }
         if (!slot->in_use && !create) {
             return NULL;
         }
     }
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("futex slot full for addr=%p", addr);
+#endif
     return NULL;
+}
+
+static inline void noza_timer_remove(noza_timer_t *timer)
+{
+    if (timer == NULL || !timer->armed || noza_timer_head == NULL)
+        return;
+    noza_timer_head = cdl_remove(noza_timer_head, &timer->node);
+    timer->armed = false;
+    TIMER_LOG("remove id=%u owner=%u deadline=%" PRId64, timer->id, timer->owner_vid, timer->deadline);
+}
+
+static inline void noza_timer_insert(noza_timer_t *timer)
+{
+    if (timer == NULL)
+        return;
+
+    cdl_node_t *node = &timer->node;
+    node->value = timer;
+    if (noza_timer_head == NULL) {
+        node->next = node;
+        node->prev = node;
+        noza_timer_head = node;
+        timer->armed = true;
+        TIMER_LOG("insert head id=%u owner=%u deadline=%" PRId64, timer->id, timer->owner_vid, timer->deadline);
+        return;
+    }
+
+    cdl_node_t *cursor = noza_timer_head;
+    do {
+        noza_timer_t *cur = (noza_timer_t *)cursor->value;
+        if (cur->deadline > timer->deadline) {
+            node->next = cursor;
+            node->prev = cursor->prev;
+            cursor->prev->next = node;
+            cursor->prev = node;
+            if (cursor == noza_timer_head) {
+                noza_timer_head = node;
+            }
+            timer->armed = true;
+            TIMER_LOG("insert before id=%u owner=%u deadline=%" PRId64, timer->id, timer->owner_vid, timer->deadline);
+            return;
+        }
+        cursor = cursor->next;
+    } while (cursor != noza_timer_head);
+
+    node->next = noza_timer_head;
+    node->prev = noza_timer_head->prev;
+    noza_timer_head->prev->next = node;
+    noza_timer_head->prev = node;
+    timer->armed = true;
+    TIMER_LOG("insert tail id=%u owner=%u deadline=%" PRId64, timer->id, timer->owner_vid, timer->deadline);
+}
+
+static inline noza_timer_t *noza_timer_lookup(uint32_t id)
+{
+    for (int i = 0; i < NOZA_MAX_TIMERS; i++) {
+        if (noza_timers[i].in_use && noza_timers[i].id == id) {
+            TIMER_LOG("lookup id=%u owner=%u armed=%d pending=%u", id, noza_timers[i].owner_vid,
+                noza_timers[i].armed, noza_timers[i].pending_fires);
+            return &noza_timers[i];
+        }
+    }
+    TIMER_LOG("lookup failed id=%u", id);
+    return NULL;
+}
+
+static inline noza_timer_t *noza_timer_alloc(uint32_t owner_vid)
+{
+    for (int i = 0; i < NOZA_MAX_TIMERS; i++) {
+        if (!noza_timers[i].in_use) {
+            noza_timers[i].in_use = true;
+            noza_timers[i].armed = false;
+            noza_timers[i].owner_vid = owner_vid;
+            noza_timers[i].pending_fires = 0;
+            noza_timers[i].deadline = 0;
+            noza_timers[i].period_us = 0;
+            noza_timers[i].flags = 0;
+            noza_timers[i].id = noza_timer_seq++;
+            if (noza_timer_seq == 0) {
+                noza_timer_seq = 1;
+            }
+            noza_wait_queue_init(&noza_timers[i].wait_queue);
+            noza_timers[i].node.value = &noza_timers[i];
+            TIMER_LOG("alloc idx=%d id=%u owner=%u", i, noza_timers[i].id, owner_vid);
+            return &noza_timers[i];
+        }
+    }
+    TIMER_LOG("alloc failed owner=%u", owner_vid);
+    return NULL;
+}
+
+static inline void noza_timer_release(noza_timer_t *timer)
+{
+    if (timer == NULL)
+        return;
+    noza_timer_remove(timer);
+    if (timer->wait_queue.count > 0) {
+        noza_wait_queue_wake(&timer->wait_queue, timer->wait_queue.count, ECANCELED);
+    }
+    noza_wait_queue_init(&timer->wait_queue);
+    timer->in_use = false;
+    timer->pending_fires = 0;
+    timer->owner_vid = 0;
+    timer->flags = 0;
+    timer->period_us = 0;
+    timer->deadline = 0;
+    TIMER_LOG("release id=%u", timer->id);
+}
+
+static inline void noza_timer_fire(noza_timer_t *timer)
+{
+    if (timer == NULL)
+        return;
+    if (timer->wait_queue.count > 0) {
+        noza_wait_queue_wake(&timer->wait_queue, 1, 0);
+    } else {
+        timer->pending_fires++;
+    }
+    TIMER_LOG("fire id=%u owner=%u pending=%u armed=%d flags=0x%x", timer->id, timer->owner_vid,
+        timer->pending_fires, timer->armed, timer->flags);
+
+    if ((timer->flags & NOZA_TIMER_FLAG_PERIODIC) && timer->period_us > 0) {
+        timer->deadline += timer->period_us;
+        noza_timer_insert(timer);
+    } else {
+        timer->armed = false;
+    }
+}
+
+static inline void noza_timer_tick(int64_t now)
+{
+    while (noza_timer_head) {
+        noza_timer_t *timer = (noza_timer_t *)noza_timer_head->value;
+        if (timer->deadline > now) {
+            break;
+        }
+        TIMER_LOG("tick now=%" PRId64 " firing id=%u deadline=%" PRId64, now, timer->id, timer->deadline);
+        noza_timer_remove(timer);
+        noza_timer_fire(timer);
+    }
 }
 
 static void noza_os_add_thread_by_expired_time(thread_list_t *list, thread_t *thread)
@@ -1288,7 +1510,15 @@ static void syscall_futex_wait(thread_t *running)
         return;
     }
 
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wait entry addr=%p expected=%u timeout=%d actual=%u",
+        addr, expected, timeout_us, *(volatile uint32_t *)addr);
+#endif
+
     if (*(volatile uint32_t *)addr != expected) {
+#ifdef FUTEX_DEBUG
+        FUTEX_LOG("wait addr=%p expected=%u actual=%u mismatch", addr, expected, *(volatile uint32_t *)addr);
+#endif
         noza_os_set_return_value1(running, EAGAIN);
         return;
     }
@@ -1300,7 +1530,14 @@ static void syscall_futex_wait(thread_t *running)
     }
 
     int64_t wait_time = (timeout_us < 0) ? NOZA_WAIT_FOREVER : (int64_t)timeout_us;
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wait addr=%p expected=%u timeout=%d queue=%p count=%u", addr, expected, timeout_us, queue, queue->count);
+#endif
     int ret = noza_wait_queue_sleep(queue, wait_time);
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wait sleep ret=%d queue=%p wake_counter=%u last_count=%u",
+        ret, queue, futex_wake_counter, futex_last_wake_count);
+#endif
     if (ret != 0) {
         noza_os_set_return_value1(running, ret);
     }
@@ -1316,6 +1553,10 @@ static void syscall_futex_wake(thread_t *running)
         return;
     }
 
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wake syscall addr=%p count=%u", addr, count);
+#endif
+
     noza_wait_queue_t *queue = noza_futex_get_queue(addr, false);
     if (queue == NULL) {
         noza_os_set_return_value1(running, 0);
@@ -1323,7 +1564,123 @@ static void syscall_futex_wake(thread_t *running)
     }
 
     uint32_t woke = noza_wait_queue_wake(queue, count, 0);
+#ifdef FUTEX_DEBUG
+    futex_wake_counter++;
+    futex_last_wake_count = woke;
+#endif
+#ifdef FUTEX_DEBUG
+    FUTEX_LOG("wake addr=%p count=%u woke=%u remaining=%u", addr, count, woke, queue->count);
+#endif
     noza_os_set_return_value1(running, woke);
+}
+
+static void syscall_timer_create(thread_t *running)
+{
+    noza_timer_t *timer = noza_timer_alloc(thread_get_vid(running));
+    if (timer == NULL) {
+        noza_os_set_return_value1(running, ENOMEM);
+        return;
+    }
+    TIMER_LOG("syscall create tid=%u timer_id=%u", thread_get_vid(running), timer->id);
+    noza_os_set_return_value2(running, 0, timer->id);
+}
+
+static void syscall_timer_delete(thread_t *running)
+{
+    uint32_t timer_id = running->trap.r1;
+    noza_timer_t *timer = noza_timer_lookup(timer_id);
+    if (timer == NULL) {
+        noza_os_set_return_value1(running, ESRCH);
+        return;
+    }
+    if (timer->owner_vid != thread_get_vid(running)) {
+        noza_os_set_return_value1(running, EPERM);
+        return;
+    }
+    TIMER_LOG("syscall delete tid=%u timer_id=%u", thread_get_vid(running), timer_id);
+    noza_timer_release(timer);
+    noza_os_set_return_value1(running, 0);
+}
+
+static void syscall_timer_arm(thread_t *running)
+{
+    uint32_t timer_id = running->trap.r1;
+    uint32_t duration_us = running->trap.r2;
+    uint32_t flags = running->trap.r3;
+    if (duration_us == 0) {
+        noza_os_set_return_value1(running, EINVAL);
+        return;
+    }
+
+    noza_timer_t *timer = noza_timer_lookup(timer_id);
+    if (timer == NULL) {
+        noza_os_set_return_value1(running, ESRCH);
+        return;
+    }
+    if (timer->owner_vid != thread_get_vid(running)) {
+        noza_os_set_return_value1(running, EPERM);
+        return;
+    }
+
+    noza_timer_remove(timer);
+    timer->flags = flags;
+    timer->period_us = (flags & NOZA_TIMER_FLAG_PERIODIC) ? (int64_t)duration_us : 0;
+    timer->deadline = platform_get_absolute_time_us() + (int64_t)duration_us;
+    timer->pending_fires = 0;
+    TIMER_LOG("syscall arm tid=%u timer_id=%u dur=%u flags=0x%x deadline=%" PRId64,
+        thread_get_vid(running), timer_id, duration_us, flags, timer->deadline);
+    noza_timer_insert(timer);
+    noza_os_set_return_value1(running, 0);
+}
+
+static void syscall_timer_cancel(thread_t *running)
+{
+    uint32_t timer_id = running->trap.r1;
+    noza_timer_t *timer = noza_timer_lookup(timer_id);
+    if (timer == NULL) {
+        noza_os_set_return_value1(running, ESRCH);
+        return;
+    }
+    if (timer->owner_vid != thread_get_vid(running)) {
+        noza_os_set_return_value1(running, EPERM);
+        return;
+    }
+
+    noza_timer_remove(timer);
+    TIMER_LOG("syscall cancel tid=%u timer_id=%u", thread_get_vid(running), timer_id);
+    noza_os_set_return_value1(running, 0);
+}
+
+static void syscall_timer_wait(thread_t *running)
+{
+    uint32_t timer_id = running->trap.r1;
+    int32_t timeout_us = (int32_t)running->trap.r2;
+    noza_timer_t *timer = noza_timer_lookup(timer_id);
+    if (timer == NULL) {
+        noza_os_set_return_value1(running, ESRCH);
+        return;
+    }
+    if (timer->owner_vid != thread_get_vid(running)) {
+        noza_os_set_return_value1(running, EPERM);
+        return;
+    }
+
+    if (timer->pending_fires > 0) {
+        timer->pending_fires--;
+        TIMER_LOG("syscall wait immediate tid=%u timer_id=%u pending=%u",
+            thread_get_vid(running), timer_id, timer->pending_fires);
+        noza_os_set_return_value1(running, 0);
+        return;
+    }
+
+    int64_t wait_time = (timeout_us < 0) ? NOZA_WAIT_FOREVER : (int64_t)timeout_us;
+    TIMER_LOG("syscall wait tid=%u timer_id=%u timeout=%d armed=%d",
+        thread_get_vid(running), timer_id, timeout_us, timer->armed);
+    int ret = noza_wait_queue_sleep(&timer->wait_queue, wait_time);
+    if (ret != 0) {
+        TIMER_LOG("syscall wait exit tid=%u timer_id=%u ret=%d", thread_get_vid(running), timer_id, ret);
+        noza_os_set_return_value1(running, ret);
+    }
 }
 
 typedef void (*syscall_func_t)(thread_t *source);
@@ -1346,6 +1703,11 @@ static syscall_func_t syscall_func[] = {
     [NSC_NB_CALL] = syscall_nbcall,
     [NSC_FUTEX_WAIT] = syscall_futex_wait,
     [NSC_FUTEX_WAKE] = syscall_futex_wake,
+    [NSC_TIMER_CREATE] = syscall_timer_create,
+    [NSC_TIMER_DELETE] = syscall_timer_delete,
+    [NSC_TIMER_ARM] = syscall_timer_arm,
+    [NSC_TIMER_CANCEL] = syscall_timer_cancel,
+    [NSC_TIMER_WAIT] = syscall_timer_wait,
 };
 
 inline static void serv_syscall(uint32_t core)
@@ -1433,6 +1795,12 @@ inline static void check_sleep_period(int64_t now)
             noza_os.next_tick_time = th->expired_time;
         }
     }
+    if (noza_timer_head) {
+        noza_timer_t *timer = (noza_timer_t *)noza_timer_head->value;
+        if (timer->deadline < noza_os.next_tick_time) {
+            noza_os.next_tick_time = timer->deadline;
+        }
+    }
     platform_systick_config(noza_os.next_tick_time - now);
 }
 
@@ -1512,8 +1880,9 @@ static void noza_os_scheduler()
     noza_os_lock(core);
     noza_os.next_tick_time = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
     for (;;) {
-        thread_t *running = pick_ready_thread();
         int64_t now = platform_get_absolute_time_us();
+        noza_timer_tick(now);
+        thread_t *running = pick_ready_thread();
         if (running) {
             // a ready thread is picked
             int64_t expired = now + NOZA_OS_TIME_SLICE; // pick up a new thread, and setup time slice
@@ -1525,6 +1894,7 @@ static void noza_os_scheduler()
                     check_sleep_period(now); // update tick from the sleeping queue
                     GO_RUN(core, running);
                     now = platform_get_absolute_time_us();  // update time
+                    noza_timer_tick(now);
                     check_syscall_serve(core, running);     // check if any syscall is pending, if pending, then serve it
                     if (noza_os.running[core] == NULL)
                         break;
@@ -1556,6 +1926,11 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 {
     // callback from SVC servie routine, make system call pending
     // and trap into kernel later
+#ifdef FUTEX_DEBUG
+    if (r0 == NSC_FUTEX_WAIT || r0 == NSC_FUTEX_WAKE) {
+        printf("[futex] trap callid=%u\n", r0);
+    }
+#endif
     thread_t *th = noza_os_get_running_thread();
     if (th) {
         kernel_trap_info_t *trap = &th->trap;

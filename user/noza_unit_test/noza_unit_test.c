@@ -173,7 +173,9 @@ static void test_futex_wait_wake(void)
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, futex_wait_worker, &ctx, 1, 1024));
     TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(5, NULL));
     ctx.futex_word = 1;
-    TEST_ASSERT_EQUAL_INT(1, noza_futex_wake((uint32_t *)&ctx.futex_word, 1));
+    int wake_ret = noza_futex_wake((uint32_t *)&ctx.futex_word, 1);
+    TEST_PRINTF("futex_wait_wake: wake_ret=%d ctx.result=%d", wake_ret, ctx.result);
+    TEST_ASSERT_EQUAL_INT(1, wake_ret);
     uint32_t exit_code = 0;
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
     TEST_ASSERT_EQUAL_INT(0, exit_code);
@@ -186,7 +188,40 @@ static void test_futex_timeout(void)
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, futex_timeout_worker, (void *)&futex_word, 1, 1024));
     uint32_t exit_code = 0;
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
+    TEST_PRINTF("futex_timeout: thread exit_code=%u", exit_code);
     TEST_ASSERT_EQUAL_INT(ETIMEDOUT, exit_code);
+}
+
+static void test_timer_one_shot(void)
+{
+    uint32_t timer_id = 0;
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_create(&timer_id));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_arm(timer_id, 20000, 0));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_wait(timer_id, 50000));
+    TEST_ASSERT_EQUAL_INT(ETIMEDOUT, noza_timer_wait(timer_id, 5000));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_delete(timer_id));
+}
+
+static void test_timer_periodic(void)
+{
+    uint32_t timer_id = 0;
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_create(&timer_id));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_arm(timer_id, 10000, NOZA_TIMER_FLAG_PERIODIC));
+    for (int i = 0; i < 3; i++) {
+        TEST_ASSERT_EQUAL_INT(0, noza_timer_wait(timer_id, 50000));
+    }
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_cancel(timer_id));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_delete(timer_id));
+}
+
+static void test_timer_cancel(void)
+{
+    uint32_t timer_id = 0;
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_create(&timer_id));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_arm(timer_id, 50000, 0));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_cancel(timer_id));
+    TEST_ASSERT_EQUAL_INT(ETIMEDOUT, noza_timer_wait(timer_id, 10000));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_delete(timer_id));
 }
 
 // test message passing
@@ -491,6 +526,9 @@ static int test_all(int argc, char **argv)
     RUN_TEST(test_thread_yield);
     RUN_TEST(test_futex_wait_wake);
     RUN_TEST(test_futex_timeout);
+    RUN_TEST(test_timer_one_shot);
+    RUN_TEST(test_timer_periodic);
+    RUN_TEST(test_timer_cancel);
     RUN_TEST(test_noza_message);
     RUN_TEST(test_noza_mutex);
     RUN_TEST(test_noza_hardfault);
@@ -501,7 +539,23 @@ static int test_all(int argc, char **argv)
 }
 
 #include "user/console/noza_console.h"
+
+static int futex_only(int argc, char **argv)
+{
+    UNITY_BEGIN();
+    RUN_TEST(test_futex_wait_wake);
+    RUN_TEST(test_futex_timeout);
+    UNITY_END();
+    return 0;
+}
+
+#include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_noza_unittest()
 {
     console_add_command("noza_unittest", test_all, "nozaos and lib, unit-test suite", 2048);
+}
+
+void __attribute__((constructor(1001))) register_futex_command()
+{
+    console_add_command("futex_test", futex_only, "run futex-only unit tests", 2048);
 }

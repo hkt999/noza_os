@@ -15,6 +15,11 @@
 .equ NSC_NB_CALL,					11
 .equ NSC_FUTEX_WAIT,				12
 .equ NSC_FUTEX_WAKE,				13
+.equ NSC_TIMER_CREATE,				14
+.equ NSC_TIMER_DELETE,				15
+.equ NSC_TIMER_ARM,				16
+.equ NSC_TIMER_CANCEL,			17
+.equ NSC_TIMER_WAIT,				18
 
 .type noza_thread_join, %function
 .global noza_thread_join
@@ -135,9 +140,9 @@ noza_nonblock_recv:
 	stmia r4!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, save to memory
 	pop {r4-r7, pc}  
 
-.type noza_futex_wait, %function
-.global noza_futex_wait
-noza_futex_wait:
+.type __noza_futex_wait, %function
+.global __noza_futex_wait
+__noza_futex_wait:
 	push {r4-r7, lr}
 	mov r3, r2
 	mov r2, r1
@@ -146,13 +151,67 @@ noza_futex_wait:
 	svc #0
 	pop {r4-r7, pc}
 
-.type noza_futex_wake, %function
-.global noza_futex_wake
-noza_futex_wake:
+.type __noza_futex_wake, %function
+.global __noza_futex_wake
+__noza_futex_wake:
 	push {r4-r7, lr}
 	mov r2, r1
 	mov r1, r0
 	movs r0, #NSC_FUTEX_WAKE
+	svc #0
+	pop {r4-r7, pc}
+
+.type noza_timer_create, %function
+.global noza_timer_create
+noza_timer_create:
+	push {r4-r7, lr}
+	mov r4, r0
+	movs r0, #NSC_TIMER_CREATE
+	svc #0
+	mov r5, r0
+	cmp r4, #0
+	beq noza_timer_create_skip
+	str r1, [r4]
+noza_timer_create_skip:
+	mov r0, r5
+	pop {r4-r7, pc}
+
+.type noza_timer_delete, %function
+.global noza_timer_delete
+noza_timer_delete:
+	push {r4-r7, lr}
+	mov r1, r0
+	movs r0, #NSC_TIMER_DELETE
+	svc #0
+	pop {r4-r7, pc}
+
+.type noza_timer_arm, %function
+.global noza_timer_arm
+noza_timer_arm:
+	push {r4-r7, lr}
+	mov r3, r2
+	mov r2, r1
+	mov r1, r0
+	movs r0, #NSC_TIMER_ARM
+	svc #0
+	pop {r4-r7, pc}
+
+.type noza_timer_cancel, %function
+.global noza_timer_cancel
+noza_timer_cancel:
+	push {r4-r7, lr}
+	mov r1, r0
+	movs r0, #NSC_TIMER_CANCEL
+	svc #0
+	pop {r4-r7, pc}
+
+.type noza_timer_wait, %function
+.global noza_timer_wait
+noza_timer_wait:
+	push {r4-r7, lr}
+	mov r2, r1
+	mov r1, r0
+	movs r0, #NSC_TIMER_WAIT
 	svc #0
 	pop {r4-r7, pc}
 

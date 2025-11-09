@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include "spinlock.h"
 
+typedef struct {
+    uint32_t    high;
+    uint32_t    low;
+} noza_time64_t;
+
 // Noza IPC
 typedef struct {
     uint32_t    to_vid;
@@ -13,6 +18,7 @@ typedef struct {
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK	1
+#define NOZA_TIMER_FLAG_PERIODIC 0x01
 
 // Noza thread & scheduling
 int     noza_thread_sleep_us(int64_t us, int64_t *remain_us);
@@ -35,6 +41,11 @@ int     noza_reply(noza_msg_t *msg);
 int     noza_nonblock_call(noza_msg_t *msg);
 int     noza_nonblock_recv(noza_msg_t *msg);
 uint32_t noza_get_stack_space();
+int     noza_timer_create(uint32_t *timer_id);
+int     noza_timer_delete(uint32_t timer_id);
+int     noza_timer_arm(uint32_t timer_id, uint32_t duration_us, uint32_t flags);
+int     noza_timer_cancel(uint32_t timer_id);
+int     noza_timer_wait(uint32_t timer_id, int32_t timeout_us);
 
 // user level call
 int noza_set_errno(int errno);

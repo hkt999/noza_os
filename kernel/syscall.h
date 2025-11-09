@@ -16,4 +16,14 @@
 #define NSC_NB_CALL                     11
 #define NSC_FUTEX_WAIT                  12
 #define NSC_FUTEX_WAKE                  13
-#define NSC_NUM_SYSCALLS                14
+// timer
+#define NSC_TIMER_CREATE                14
+#define NSC_TIMER_DELETE                15
+#define NSC_TIMER_ARM                   16
+#define NSC_TIMER_CANCEL                17
+#define NSC_TIMER_WAIT                  18
+
+#define NSC_NUM_SYSCALLS                19
+
+// timer flags
+#define NOZA_TIMER_FLAG_PERIODIC        0x01

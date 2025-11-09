@@ -45,6 +45,8 @@ isr_hardfault:
 isr_pendsv: // for context switching in an OS
     b isr_systick // do timer context switch
 
+.equ NSC_MAX_SYSCALL, 32
+
 .type isr_svcall, %function 
 .global isr_svcall
 .global show_svc
@@ -57,8 +59,8 @@ isr_svcall: // for system calls
     pop {r4}
 
     // sanity check
-    cmp r0, #12
-    ble go_service
+    cmp r0, #NSC_MAX_SYSCALL
+    blt go_service
     cmp r0, #255
     beq go_service
     bx lr

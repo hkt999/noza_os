@@ -17,9 +17,10 @@ static void process_record_reset(process_record_t *process)
 {
 	if (process == NULL)
 		return;
-	process->lock.num = -1;
-	process->lock.spinlock = NULL;
+	process->lock.state = 0;
 	process->lock.lock_thread = -1;
+	process->lock.owner_file = NULL;
+	process->lock.owner_line = 0;
 	memset(&process->hash_item, 0, sizeof(process->hash_item));
 #if NOZA_PROCESS_USE_TLSF
 	process->tlsf = NULL;
@@ -58,9 +59,7 @@ static process_record_t *alloc_process_record()
 static void free_process_record(process_record_t *process)
 {
 	mapping_remove(&PROCESS_RECORD_HASH, process->hash_item.id);
-	if (process->lock.spinlock) {
-		noza_spinlock_free(&process->lock);
-	}
+	noza_spinlock_free(&process->lock);
 	process_record_reset(process);
 	noza_raw_lock(&PROCESS_RECORD_HASH.lock);
 	process->next = process_head;
@@ -141,18 +140,22 @@ int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
 {
 	*tid = 0;
 	process_record_t *process = alloc_process_record();
-	if (process == NULL)
+	if (process == NULL) {
+		printf("noza_process_exec: no free process slot (argc=%d)\n", argc);
 		return ENOMEM;
+	}
 
 	process->entry = entry;
 	size_t required_env = calc_env_size(argc, argv);
 	if (required_env > sizeof(process->env_buf)) {
+		printf("noza_process_exec: env overflow (need %zu)\n", required_env);
 		free_process_record(process);
 		return ENOMEM;
 	}
 	env_copy(process->env, argc, argv);
 	int create_ret = noza_thread_create(tid, noza_process_crt0, (void *)process, 0, 1024); // TODO: consider the stack size
 	if (create_ret != 0) {
+		printf("noza_process_exec: thread_create ret=%d\n", create_ret);
 		free_process_record(process);
 		return create_ret;
 	}

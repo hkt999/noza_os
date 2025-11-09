@@ -12,6 +12,8 @@
 #define AUTO_FREE_STACK		1
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
+extern int __noza_futex_wait(uint32_t *addr, uint32_t expected, int32_t timeout_us);
+extern int __noza_futex_wake(uint32_t *addr, uint32_t count);
 
 inline static uint32_t *get_stack_ptr(uint32_t pid, uint32_t *size) {
 	thread_record_t *record = get_thread_record(pid);
@@ -75,19 +77,14 @@ int service_main(int argc, char *argv[])
 }   
 
 
-typedef struct time64_s {
-	uint32_t high;
-	uint32_t low;
-} time64_t;
-
 int noza_thread_sleep_us(int64_t us, int64_t *remain_us) {
-	time64_t tm;
-	time64_t remain;
+	noza_time64_t tm;
+	noza_time64_t remain;
 
 	tm.high = (uint32_t)(us >> 32);
 	tm.low = (uint32_t)(us & 0xFFFFFFFF);
 
-	extern uint32_t __noza_thread_sleep(time64_t *tm, time64_t *remain); // in assembly
+	extern uint32_t __noza_thread_sleep(noza_time64_t *tm, noza_time64_t *remain); // in assembly
 	uint32_t ret = __noza_thread_sleep(&tm, &remain);
 
 	if (remain_us) {
@@ -150,4 +147,16 @@ int noza_thread_self(uint32_t *pid) {
 	}
 
 	return -1;
+}
+
+int noza_futex_wait(uint32_t *addr, uint32_t expected, int32_t timeout_us)
+{
+	return __noza_futex_wait(addr, expected, timeout_us);
+}
+
+int noza_futex_wake(uint32_t *addr, uint32_t count)
+{
+	int ret = __noza_futex_wake(addr, count);
+	printf("[user futex] wake addr=%p count=%u ret=%d\n", addr, count, ret);
+	return ret;
 }
