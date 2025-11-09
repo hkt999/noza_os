@@ -263,6 +263,8 @@ typedef struct thread_s {
     noza_os_message_t   message;             // message passing mechanism for the thread
     thread_t            *join_th;             // thread waiting to join this thread
     noza_wait_queue_t   *waiting_queue;      // wait queue currently blocked on
+    uint32_t            signal_pending;      // pending signal bits
+    uint32_t            signal_mask;         // masked signals
     uint32_t            stack_area[NOZA_OS_STACK_SIZE]; // stack memory area for the thread
     uint8_t             flags;               // reserved flags
     uint8_t             callid;              // system call id  
@@ -301,6 +303,7 @@ static noza_futex_slot_t noza_futex_slots[NOZA_FUTEX_SLOT_COUNT];
 static noza_timer_t noza_timers[NOZA_MAX_TIMERS];
 static cdl_node_t *noza_timer_head;
 static uint32_t noza_timer_seq;
+static int64_t noza_realtime_offset_us;
 static volatile uint32_t futex_wake_counter;
 static volatile uint32_t futex_last_wake_count;
 inline static uint32_t _thread_get_pid(thread_t *th)
@@ -583,6 +586,7 @@ static void noza_init()
     memset(noza_timers, 0, sizeof(noza_timers));
     noza_timer_head = NULL;
     noza_timer_seq = 1;
+    noza_realtime_offset_us = 0;
     noza_os_lock_init();
     for (int i=0; i<NOZA_OS_PRIORITY_LIMIT; i++) {
         noza_os.ready[i].state_id = THREAD_READY;
@@ -603,6 +607,8 @@ static void noza_init()
         noza_os.thread[i].port.reply_list.state_id = THREAD_WAITING_REPLY;
         noza_os.thread[i].join_th = NULL;
         noza_os.thread[i].callid = -1;
+        noza_os.thread[i].signal_pending = 0;
+        noza_os.thread[i].signal_mask = 0;
     }
 
     for (int i = 0; i < NOZA_MAX_TIMERS; i++) {
@@ -689,6 +695,8 @@ inline static thread_t *noza_thread_alloc()
     th->flags = NONE_DETACH; // reset the thread flags (says, detached)
     th->callid = -1;
     th->trap.state = SYSCALL_DONE;
+    th->signal_pending = 0;
+    th->signal_mask = 0;
     noza_os_insert_vid(th);
     return th;
 }
@@ -866,6 +874,46 @@ static inline int noza_wait_queue_sleep(noza_wait_queue_t *queue, int64_t timeou
 #endif
     noza_os_clear_running_thread();
     return 0;
+}
+
+static inline void noza_signal_interrupt_thread(thread_t *target)
+{
+    if (target == NULL)
+        return;
+
+    switch (target->info.state) {
+    case THREAD_WAITING_SYNC:
+        if (target->waiting_queue) {
+            noza_wait_queue_remove(target->waiting_queue, target);
+            target->waiting_queue = NULL;
+        }
+        noza_wait_queue_cancel_timeout(target);
+        noza_os_add_thread(&noza_os.ready[target->info.priority], target);
+        noza_os_set_return_value1(target, EINTR);
+        break;
+    case THREAD_WAITING_MSG:
+        noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);
+        noza_os_set_return_value1(target, EINTR);
+        break;
+    case THREAD_SLEEP:
+        noza_os_change_state(target, &noza_os.sleep, &noza_os.ready[target->info.priority]);
+        noza_os_set_return_value1(target, EINTR);
+        break;
+    default:
+        break;
+    }
+}
+
+static inline void noza_signal_send_thread(thread_t *target, uint32_t signum)
+{
+    if (target == NULL || signum == 0 || signum > 32)
+        return;
+
+    uint32_t bit = 1u << (signum - 1);
+    target->signal_pending |= bit;
+    if ((target->signal_mask & bit) == 0) {
+        noza_signal_interrupt_thread(target);
+    }
 }
 
 static inline uint32_t noza_futex_hash(uintptr_t key)
@@ -1171,6 +1219,8 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
     }
     th->info.priority = priority;
     th->flags = 0x0;
+    th->signal_pending = 0;
+    th->signal_mask = 0;
     noza_os_add_thread(&noza_os.ready[priority], th);
     noza_make_app_context(th, entry, param);
 
@@ -1683,6 +1733,53 @@ static void syscall_timer_wait(thread_t *running)
     }
 }
 
+static void syscall_clock_gettime(thread_t *running)
+{
+    uint32_t clock_id = running->trap.r1;
+    int64_t now_us = platform_get_absolute_time_us();
+    int64_t value_us;
+    switch (clock_id) {
+    case NOZA_CLOCK_REALTIME:
+        value_us = noza_realtime_offset_us + now_us;
+        break;
+    case NOZA_CLOCK_MONOTONIC:
+    default:
+        value_us = now_us;
+        break;
+    }
+
+    int64_t value_ns = value_us * 1000;
+    uint32_t high = (uint32_t)(value_ns >> 32);
+    uint32_t low = (uint32_t)(value_ns & 0xffffffff);
+    noza_os_set_return_value3(running, 0, high, low);
+}
+
+static void syscall_signal_send(thread_t *running)
+{
+    uint32_t target_vid = running->trap.r1;
+    uint32_t signum = running->trap.r2;
+    if (signum == 0 || signum > 32) {
+        noza_os_set_return_value1(running, EINVAL);
+        return;
+    }
+
+    thread_t *target = get_thread_by_vid(target_vid);
+    if (target == NULL) {
+        noza_os_set_return_value1(running, ESRCH);
+        return;
+    }
+
+    noza_signal_send_thread(target, signum);
+    noza_os_set_return_value1(running, 0);
+}
+
+static void syscall_signal_take(thread_t *running)
+{
+    uint32_t pending = running->signal_pending;
+    running->signal_pending = 0;
+    noza_os_set_return_value1(running, pending);
+}
+
 typedef void (*syscall_func_t)(thread_t *source);
 
 static syscall_func_t syscall_func[] = {
@@ -1708,6 +1805,9 @@ static syscall_func_t syscall_func[] = {
     [NSC_TIMER_ARM] = syscall_timer_arm,
     [NSC_TIMER_CANCEL] = syscall_timer_cancel,
     [NSC_TIMER_WAIT] = syscall_timer_wait,
+    [NSC_CLOCK_GETTIME] = syscall_clock_gettime,
+    [NSC_SIGNAL_SEND] = syscall_signal_send,
+    [NSC_SIGNAL_TAKE] = syscall_signal_take,
 };
 
 inline static void serv_syscall(uint32_t core)

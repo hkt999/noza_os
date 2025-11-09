@@ -22,8 +22,15 @@
 #define NSC_TIMER_ARM                   16
 #define NSC_TIMER_CANCEL                17
 #define NSC_TIMER_WAIT                  18
+#define NSC_CLOCK_GETTIME               19
+#define NSC_SIGNAL_SEND                 20
+#define NSC_SIGNAL_TAKE                 21
 
-#define NSC_NUM_SYSCALLS                19
+#define NSC_NUM_SYSCALLS                22
 
 // timer flags
 #define NOZA_TIMER_FLAG_PERIODIC        0x01
+
+// clock ids
+#define NOZA_CLOCK_REALTIME             0
+#define NOZA_CLOCK_MONOTONIC            1

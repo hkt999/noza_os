@@ -156,7 +156,5 @@ int noza_futex_wait(uint32_t *addr, uint32_t expected, int32_t timeout_us)
 
 int noza_futex_wake(uint32_t *addr, uint32_t count)
 {
-	int ret = __noza_futex_wake(addr, count);
-	printf("[user futex] wake addr=%p count=%u ret=%d\n", addr, count, ret);
-	return ret;
+	return __noza_futex_wake(addr, count);
 }

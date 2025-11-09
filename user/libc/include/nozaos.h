@@ -18,6 +18,8 @@ typedef struct {
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK	1
+#define NOZA_CLOCK_REALTIME     0
+#define NOZA_CLOCK_MONOTONIC    1
 #define NOZA_TIMER_FLAG_PERIODIC 0x01
 
 // Noza thread & scheduling
@@ -46,6 +48,9 @@ int     noza_timer_delete(uint32_t timer_id);
 int     noza_timer_arm(uint32_t timer_id, uint32_t duration_us, uint32_t flags);
 int     noza_timer_cancel(uint32_t timer_id);
 int     noza_timer_wait(uint32_t timer_id, int32_t timeout_us);
+int     noza_clock_gettime(uint32_t clock_id, noza_time64_t *timestamp);
+int     noza_signal_send(uint32_t tid, uint32_t signum);
+uint32_t noza_signal_take(void);
 
 // user level call
 int noza_set_errno(int errno);

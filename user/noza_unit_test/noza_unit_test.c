@@ -147,6 +147,18 @@ static void test_noza_thread_detach()
     }
 }
 
+static uint64_t time64_to_ns(const noza_time64_t *ts)
+{
+    return ((uint64_t)ts->high << 32) | ts->low;
+}
+
+static uint64_t monotonic_ns(void)
+{
+    noza_time64_t ts;
+    TEST_ASSERT_EQUAL_INT(0, noza_clock_gettime(NOZA_CLOCK_MONOTONIC, &ts));
+    return time64_to_ns(&ts);
+}
+
 typedef struct {
     volatile uint32_t futex_word;
     int result;
@@ -173,9 +185,7 @@ static void test_futex_wait_wake(void)
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, futex_wait_worker, &ctx, 1, 1024));
     TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(5, NULL));
     ctx.futex_word = 1;
-    int wake_ret = noza_futex_wake((uint32_t *)&ctx.futex_word, 1);
-    TEST_PRINTF("futex_wait_wake: wake_ret=%d ctx.result=%d", wake_ret, ctx.result);
-    TEST_ASSERT_EQUAL_INT(1, wake_ret);
+    TEST_ASSERT_EQUAL_INT(1, noza_futex_wake((uint32_t *)&ctx.futex_word, 1));
     uint32_t exit_code = 0;
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
     TEST_ASSERT_EQUAL_INT(0, exit_code);
@@ -188,7 +198,6 @@ static void test_futex_timeout(void)
     TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, futex_timeout_worker, (void *)&futex_word, 1, 1024));
     uint32_t exit_code = 0;
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
-    TEST_PRINTF("futex_timeout: thread exit_code=%u", exit_code);
     TEST_ASSERT_EQUAL_INT(ETIMEDOUT, exit_code);
 }
 
@@ -196,9 +205,11 @@ static void test_timer_one_shot(void)
 {
     uint32_t timer_id = 0;
     TEST_ASSERT_EQUAL_INT(0, noza_timer_create(&timer_id));
+    uint64_t before_ns = monotonic_ns();
     TEST_ASSERT_EQUAL_INT(0, noza_timer_arm(timer_id, 20000, 0));
-    TEST_ASSERT_EQUAL_INT(0, noza_timer_wait(timer_id, 50000));
-    TEST_ASSERT_EQUAL_INT(ETIMEDOUT, noza_timer_wait(timer_id, 5000));
+    TEST_ASSERT_EQUAL_INT(0, noza_timer_wait(timer_id, -1));
+    uint64_t after_ns = monotonic_ns();
+    TEST_ASSERT_TRUE(after_ns - before_ns >= 20000ULL * 1000ULL);
     TEST_ASSERT_EQUAL_INT(0, noza_timer_delete(timer_id));
 }
 
@@ -222,6 +233,43 @@ static void test_timer_cancel(void)
     TEST_ASSERT_EQUAL_INT(0, noza_timer_cancel(timer_id));
     TEST_ASSERT_EQUAL_INT(ETIMEDOUT, noza_timer_wait(timer_id, 10000));
     TEST_ASSERT_EQUAL_INT(0, noza_timer_delete(timer_id));
+}
+
+static void test_clock_monotonic(void)
+{
+    uint64_t start_ns = monotonic_ns();
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(5, NULL));
+    uint64_t end_ns = monotonic_ns();
+    TEST_ASSERT_TRUE(end_ns > start_ns);
+}
+
+typedef struct {
+    volatile uint32_t futex_word;
+    uint32_t pending_mask;
+    int wait_result;
+} signal_ctx_t;
+
+static int signal_wait_thread(void *param, uint32_t pid)
+{
+    signal_ctx_t *ctx = (signal_ctx_t *)param;
+    ctx->wait_result = noza_futex_wait((uint32_t *)&ctx->futex_word, 0, -1);
+    ctx->pending_mask = noza_signal_take();
+    return ctx->wait_result;
+}
+
+static void test_signal_interrupts_futex(void)
+{
+    signal_ctx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+
+    uint32_t th;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&th, signal_wait_thread, &ctx, 1, 1024));
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_sleep_ms(5, NULL));
+    TEST_ASSERT_EQUAL_INT(0, noza_signal_send(th, SIGUSR1));
+    uint32_t exit_code = 0;
+    TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
+    TEST_ASSERT_EQUAL_INT(EINTR, exit_code);
+    TEST_ASSERT_NOT_EQUAL(0, ctx.pending_mask & (1u << (SIGUSR1 - 1)));
 }
 
 // test message passing
@@ -529,6 +577,8 @@ static int test_all(int argc, char **argv)
     RUN_TEST(test_timer_one_shot);
     RUN_TEST(test_timer_periodic);
     RUN_TEST(test_timer_cancel);
+    RUN_TEST(test_clock_monotonic);
+    RUN_TEST(test_signal_interrupts_futex);
     RUN_TEST(test_noza_message);
     RUN_TEST(test_noza_mutex);
     RUN_TEST(test_noza_hardfault);

@@ -13,13 +13,16 @@
 .equ NSC_CALL,						9
 .equ NSC_NB_RECV,					10
 .equ NSC_NB_CALL,					11
-.equ NSC_FUTEX_WAIT,				12
-.equ NSC_FUTEX_WAKE,				13
-.equ NSC_TIMER_CREATE,				14
-.equ NSC_TIMER_DELETE,				15
-.equ NSC_TIMER_ARM,				16
-.equ NSC_TIMER_CANCEL,			17
-.equ NSC_TIMER_WAIT,				18
+.equ NSC_FUTEX_WAIT,               12
+.equ NSC_FUTEX_WAKE,               13
+.equ NSC_TIMER_CREATE,             14
+.equ NSC_TIMER_DELETE,             15
+.equ NSC_TIMER_ARM,                16
+.equ NSC_TIMER_CANCEL,             17
+.equ NSC_TIMER_WAIT,               18
+.equ NSC_CLOCK_GETTIME,            19
+.equ NSC_SIGNAL_SEND,              20
+.equ NSC_SIGNAL_TAKE,              21
 
 .type noza_thread_join, %function
 .global noza_thread_join
@@ -214,6 +217,39 @@ noza_timer_wait:
 	movs r0, #NSC_TIMER_WAIT
 	svc #0
 	pop {r4-r7, pc}
+
+.type noza_clock_gettime, %function
+.global noza_clock_gettime
+noza_clock_gettime:
+	push {r4-r7, lr}
+	mov r4, r1
+	mov r1, r0
+	movs r0, #NSC_CLOCK_GETTIME
+	svc #0
+	mov r5, r0
+	cmp r4, #0
+	beq noza_clock_gettime_end
+	stmia r4!, {r1, r2}
+noza_clock_gettime_end:
+	mov r0, r5
+	pop {r4-r7, pc}
+
+.type noza_signal_send, %function
+.global noza_signal_send
+noza_signal_send:
+	push {r4-r7, lr}
+	mov r2, r1
+	mov r1, r0
+	movs r0, #NSC_SIGNAL_SEND
+	svc #0
+	pop {r4-r7, pc}
+
+.type noza_signal_take, %function
+.global noza_signal_take
+noza_signal_take:
+	movs r0, #NSC_SIGNAL_TAKE
+	svc #0
+	bx lr
 
 .type noza_thread_create_primitive, %function
 .global noza_thread_create_primitive
