@@ -28,19 +28,28 @@ RP2040 的 Pico SDK 會拉入 newlib 版本的 `malloc/free/printf/open` 等符�
 - 若完全停用 newlib，需自行提供啟動碼、`__aeabi_*` runtime 及 syscall stub，並重新調整 Pico SDK 的 link 過程。本專案暫時維持「平台層 newlib + process 層 Noza libc」的分層方式，以便同時享有硬體支援與 process 隔離。
 
 # System Calls
-* `noza_thread_join(uint32_t thread_id)`: Waits for the specified thread to terminate before continuing. 
-* `noza_thread_sleep(uint32_t ms)`: Puts the current thread to sleep for the specified number of milliseconds. 
-* `noza_thread_create(void (*entry)(void *), void *param, uint32_t priority)`: Creates a new thread with the given entry function, parameter, and priority. 
-* `noza_thread_change_priority(uint32_t thread_id, uint32_t priority)`: Changes the priority of the specified thread. 
-* `noza_thread_terminate()`: Terminates the current thread.
-* 'noza_thread_self(uint32_t *id)': Get running thread ID
-* `noza_recv(noza_msg_t *msg)`: Receives a message from another process, blocking until a message is received. 
-* `noza_reply(noza_msg_t *msg)`: Replies to a message received from another process. 
-* `noza_call(noza_msg_t *msg)`: Sends a message to another process and waits for a reply, blocking until the reply is received. 
-* `noza_nonblock_call(uint32_t pid, noza_msg_t *msg)`: Sends a message to another process without waiting for a reply, returning immediately. 
-* `noza_nonblock_recv(uint32_t pid, noza_msg_t *msg)`: Receives a message from another process without blocking, returning immediately.
+The user-space `noza_*` libc wraps all kernel entry points, so higher-level runtimes (POSIX pthread/Lua/console) can stick to one API surface. The current syscall families are:
 
-All these functions make use of the `noza_syscall` function, which is a thin wrapper around the actual system call mechanism. This function takes four arguments (r0, r1, r2, r3) and passes them to the kernel. Each system call has a unique identifier, such as `NSC_YIELD`, `NSC_THREAD_JOIN`, etc., which is used as the first argument to `noza_syscall`. The other arguments depend on the specific system call being made.
+**Thread & Scheduling**
+- `noza_thread_sleep_us/ms()` yield the CPU while arming a wake timer (supports timeouts and remaining time reporting).
+- `noza_thread_create()` / `_with_stack()` start a new kernel thread; `_with_stack` accepts caller-supplied stack storage for runtimes that pre-allocate stacks.
+- `noza_thread_join()`, `noza_thread_detach()`, `noza_thread_kill()`, `noza_thread_change_priority()`, `noza_thread_self()` and `noza_thread_terminate()` cover lifecycle management.
+- `noza_futex_wait()` / `noza_futex_wake()` expose the generic wait-queue primitive so pthread mutex/condvar/spinlock implementations can block without busy loops.
+
+**IPC**
+- `noza_call()`, `noza_reply()`, `noza_recv()` implement the synchronous RPC path used by services; non-blocking versions (`noza_nonblock_call/recv`) are available for polling-style servers.
+
+**Timers, clocks, signals**
+- `noza_timer_create/arm/wait/cancel/delete()` manage per-process timer handles that use the shared kernel timer wheel.  Both one-shot and periodic timers are supported via `NOZA_TIMER_FLAG_PERIODIC`.
+- `noza_clock_gettime()` currently exposes `NOZA_CLOCK_MONOTONIC` and `NOZA_CLOCK_REALTIME`, returning a 64-bit fixed-point timestamp.
+- `noza_signal_send()`/`noza_signal_take()` provide a lightweight per-thread signal bitmap used by pthread cancellation and by the unit tests to simulate async events.
+- `noza_get_stack_space()` reports the remaining stack bytes of the current thread, useful for debug shells.
+
+**Process management**
+- `noza_process_exec()` / `_with_stack()` spawn a new process (user-mode thread tree) and optionally join for its exit code.
+- `noza_process_exec_detached()` / `_with_stack()` start background console commands or services without blocking the caller.
+
+These functions all funnel through the internal `noza_syscall(r0,r1,r2,r3)` trampoline, which tags each call with an `NSC_*` identifier before entering the kernel. Higher-level APIs never touch registers directly—use the libc wrappers so argument packing stays in sync with the microkernel.
 
 # Build
 To build the Noza microkernel project using the pico_sdk and cmake, follow the steps below. These instructions assume that you have already cloned the project from GitHub to your local machine.
