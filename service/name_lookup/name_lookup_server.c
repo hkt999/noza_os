@@ -234,8 +234,6 @@ static int do_name_server(void *param, uint32_t pid)
     (void)param;
     (void)pid;
 
-    noza_thread_bind_vid(NAME_SERVER_VID);
-
     // setup node manager
     node_mgr_init(&node_mgr);
     map_init(&map, &node_mgr);
@@ -275,6 +273,6 @@ static uint8_t name_server_stack[1024];
 void __attribute__((constructor(101))) name_server_init(void *param, uint32_t pid)
 {
     // TODO: move the external declaraction into a header file
-    extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
-	noza_add_service(do_name_server, name_server_stack, sizeof(name_server_stack)); // TODO: add stack size
+    extern void noza_add_service_with_vid(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size, uint32_t reserved_vid);
+	noza_add_service_with_vid(do_name_server, name_server_stack, sizeof(name_server_stack), NAME_SERVER_VID);
 }

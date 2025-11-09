@@ -25,9 +25,8 @@
 #define NSC_CLOCK_GETTIME               19
 #define NSC_SIGNAL_SEND                 20
 #define NSC_SIGNAL_TAKE                 21
-#define NSC_THREAD_BIND_VID             22
 
-#define NSC_NUM_SYSCALLS                23
+#define NSC_NUM_SYSCALLS                22
 
 // timer flags
 #define NOZA_TIMER_FLAG_PERIODIC        0x01

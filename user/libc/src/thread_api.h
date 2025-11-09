@@ -5,8 +5,10 @@
 #include "type/hashslot.h"
 
 #define SERVICE_PRIORITY	0
+#define NOZA_VID_AUTO    0xFFFFFFFFu
 
 typedef struct thread_record_s {
+	uint32_t reserved_vid; // must stay first: kernel reads this directly
 	int (*user_entry)(void *param, uint32_t tid);
 	void *user_param;
 	uint32_t *stack_ptr;

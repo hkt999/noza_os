@@ -30,7 +30,7 @@ RP2040 的 Pico SDK 會拉入 newlib 版本的 `malloc/free/printf/open` 等符�
 - 若完全停用 newlib，需自行提供啟動碼、`__aeabi_*` runtime 及 syscall stub，並重新調整 Pico SDK 的 link 過程。本專案暫時維持「平台層 newlib + process 層 Noza libc」的分層方式，以便同時享有硬體支援與 process 隔離。
 
 ## Service Naming Workflow
-1. **Boot:** `name_server_init()` 透過新的 `noza_thread_bind_vid(NAME_SERVER_VID)` 系統呼叫鎖定 VID 0，並以 1KB 專用堆疊啟動守護程式，使 lookup 服務不會與其他 daemon 奪取號碼。  
+1. **Boot:** `name_server_init()` 以 `noza_add_service_with_vid(..., NAME_SERVER_VID)` 註冊，kernel 會讓第一個服務 thread 直接占用 VID 0，並以 1KB 專用堆疊啟動守護程式，避免其他 daemon 搶走保留號碼。  
 2. **Register:** 任何使用 IPC 的服務（memory、sync、VFS …）在進入主迴圈前呼叫 `name_lookup_register(service_name, &service_id)`。第一次會獲得持久 ID，之後重啟可帶著既有 ID 更新 VID，避免客戶端需要硬編新版 PID。  
 3. **Resolve:** 使用者態／其他服務改用 `name_lookup_resolve()` 或 `name_lookup_resolve_id()` 取得即時 VID，配合 `noza_call()` 投遞訊息。client 偵測到 RPC 失敗時只要重新 resolve，不必維護全域變數。  
 4. **Unregister (optional):** 守護程式在停用或崩潰前可以 `name_lookup_unregister(service_id)`，Name Server 會留住 `service_id` 但標記 VID 為 0，確保下一次註冊能沿用同一代號。

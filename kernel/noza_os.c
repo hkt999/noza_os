@@ -45,6 +45,7 @@
 #define NOZA_WAIT_FOREVER       ((int64_t)-1)
 #define NOZA_FUTEX_SLOT_COUNT   64
 #define NOZA_MAX_TIMERS         32
+#define NOZA_VID_AUTO           0xFFFFFFFFu
 
 inline static uint8_t hash32to8(uint32_t value) {
     uint8_t byte1 = (value >> 24) & 0xFF; // High byte
@@ -167,7 +168,6 @@ const char *syscall_to_str(uint32_t callid)
         [NSC_THREAD_JOIN] = "NSC_THREAD_JOIN",
         [NSC_THREAD_DETACH] = "NSC_THREAD_DETACH",
         [NSC_THREAD_TERMINATE] = "NSC_THREAD_TERMINATE",
-        [NSC_THREAD_BIND_VID] = "NSC_THREAD_BIND_VID",
         [NSC_THREAD_SELF] = "NSC_THREAD_SELF",
         [NSC_RECV] = "NSC_RECV",
         [NSC_REPLY] = "NSC_REPLY",
@@ -307,6 +307,7 @@ static uint32_t noza_timer_seq;
 static int64_t noza_realtime_offset_us;
 static volatile uint32_t futex_wake_counter;
 static volatile uint32_t futex_last_wake_count;
+static bool reserved_vid0_assigned;
 inline static uint32_t _thread_get_pid(thread_t *th)
 {
     return (th - (thread_t *)&noza_os.thread[0]);
@@ -333,7 +334,7 @@ inline static int vid_to_pid(uint32_t vid)
 
 static void     noza_os_add_thread(thread_list_t *list, thread_t *thread);
 static void     noza_os_remove_thread(thread_list_t *list, thread_t *thread);
-static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t pri);
+static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t pri, uint32_t reserved_vid);
 static void     noza_os_scheduler();
 
 #if NOZA_OS_NUM_CORES > 1
@@ -636,7 +637,7 @@ extern void noza_root_task(); // ini syslib.c
 static void noza_run()
 {
     uint32_t th;
-    noza_os_thread_create(&th, noza_root_task, NULL, 0); // create the first task (pid:0) 
+    noza_os_thread_create(&th, noza_root_task, NULL, 0, NOZA_VID_AUTO); // create the first task
     // TODO: set th as detach, after creating the first user process, just exit
     noza_os_scheduler(); // start os scheduler and never return
 }
@@ -1222,7 +1223,7 @@ static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void
         thread_get_vid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
-static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t priority)
+static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t priority, uint32_t reserved_vid)
 {
     // sanity check
     if (priority > NOZA_OS_PRIORITY_LIMIT) {
@@ -1239,6 +1240,21 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
     th->signal_mask = 0;
     noza_os_add_thread(&noza_os.ready[priority], th);
     noza_make_app_context(th, entry, param);
+
+    if (reserved_vid != NOZA_VID_AUTO) {
+        bool assigned = false;
+        if (reserved_vid == 0 && !reserved_vid0_assigned) {
+            assigned = true;
+            reserved_vid0_assigned = true;
+        } else if (reserved_vid != 0 && get_thread_by_vid(reserved_vid) == NULL) {
+            assigned = true;
+        }
+
+        if (assigned) {
+            noza_os_remove_vid(th);
+            noza_os_insert_vid_with_value(th, reserved_vid);
+        }
+    }
 
     *pth = thread_get_vid(th);
     return 0; // success
@@ -1387,11 +1403,17 @@ static void syscall_thread_kill(thread_t *running)
 
 static void syscall_thread_create(thread_t *running)
 {
+    uint32_t reserved_vid = NOZA_VID_AUTO;
+    if (running->trap.r2 != 0) {
+        reserved_vid = *((uint32_t *)running->trap.r2);
+    }
+
     uint32_t th, ret_value = noza_os_thread_create(
         &th,
         (void (*)(void *))running->trap.r1,
         (void *)running->trap.r2,
-        running->trap.r3); 
+        running->trap.r3,
+        reserved_vid);
     noza_os_set_return_value2(running, ret_value, th);
 }
 
@@ -1479,29 +1501,6 @@ static void syscall_thread_change_priority(thread_t *running)
         noza_os_add_thread(&noza_os.ready[target->info.priority], target);
         noza_os_set_return_value1(running, 0);
     }
-}
-
-static void syscall_thread_bind_vid(thread_t *running)
-{
-    uint32_t requested_vid = running->trap.r1;
-    if (requested_vid >= 65536) {
-        noza_os_set_return_value1(running, EINVAL);
-        return;
-    }
-
-    if (thread_get_vid(running) == requested_vid) {
-        noza_os_set_return_value1(running, 0);
-        return;
-    }
-
-    if (get_thread_by_vid(requested_vid) != NULL) {
-        noza_os_set_return_value1(running, EEXIST);
-        return;
-    }
-
-    noza_os_remove_vid(running);
-    noza_os_insert_vid_with_value(running, requested_vid);
-    noza_os_set_return_value1(running, 0);
 }
 
 static void syscall_thread_terminate(thread_t *running)
@@ -1830,7 +1829,6 @@ static syscall_func_t syscall_func[] = {
     [NSC_THREAD_JOIN] = syscall_thread_join,
     [NSC_THREAD_DETACH] = syscall_thread_detach,
     [NSC_THREAD_TERMINATE] = syscall_thread_terminate,
-    [NSC_THREAD_BIND_VID] = syscall_thread_bind_vid,
 
     // messages and ports
     [NSC_RECV] = syscall_recv,

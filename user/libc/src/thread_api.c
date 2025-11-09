@@ -11,6 +11,12 @@
 extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
 
 static hashslot_t THREAD_RECORD_HASH;
+static uint32_t g_next_reserved_vid = NOZA_VID_AUTO;
+
+void noza_thread_request_reserved_vid(uint32_t vid)
+{
+	g_next_reserved_vid = vid;
+}
 thread_record_t *get_thread_record(uint32_t tid)
 {
     return (thread_record_t *)mapping_get_value(&THREAD_RECORD_HASH, tid);
@@ -116,6 +122,8 @@ int noza_thread_create_with_stack(uint32_t *pth, int (*entry)(void *, uint32_t t
 	thread_record->need_free_stack = auto_free_stack;
 	thread_record->errno = 0;
     thread_record->process = me->process;
+	thread_record->reserved_vid = g_next_reserved_vid;
+	g_next_reserved_vid = NOZA_VID_AUTO;
 
 	// setup register for system call
 	info.r0 = NSC_THREAD_CREATE;

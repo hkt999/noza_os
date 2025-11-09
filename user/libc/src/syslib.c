@@ -8,6 +8,8 @@
 #include "proc_api.h"
 #include "thread_api.h"
 
+extern void noza_thread_request_reserved_vid(uint32_t vid);
+
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK		1
 
@@ -43,11 +45,12 @@ typedef struct service_entry {
 	int (*entry)(void *param, uint32_t pid);
 	void *stack;
 	uint32_t stack_size;
+	uint32_t reserved_vid;
 } service_entry_t;
 
 static service_entry_t service_entry[NOZA_MAX_SERVICES];
 static int service_count = 0;
-void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size) {
+void noza_add_service_with_vid(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size, uint32_t reserved_vid) {
     if (service_count >= NOZA_MAX_SERVICES) {
         printf("fatal: noza_add_service: too many services\n");
 		return;
@@ -55,7 +58,13 @@ void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint
     service_entry[service_count].entry = entry;
 	service_entry[service_count].stack = stack;
 	service_entry[service_count].stack_size = stack_size;
+	service_entry[service_count].reserved_vid = reserved_vid;
 	service_count++;
+}
+
+void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size)
+{
+	noza_add_service_with_vid(entry, stack, stack_size, NOZA_VID_AUTO);
 }
 
 #define SERVICE_PRIORITY    0
@@ -65,6 +74,7 @@ int service_main(int argc, char *argv[])
 	if (service_count > 0) {
 		for (int i = 0; i < service_count; i++) {
 			uint32_t th;
+			noza_thread_request_reserved_vid(service_entry[i].reserved_vid);
 			noza_thread_create_with_stack(&th, service_entry[i].entry, NULL, SERVICE_PRIORITY,
 				service_entry[i].stack, service_entry[i].stack_size, NO_AUTO_FREE_STACK);
 		}
