@@ -31,55 +31,11 @@ option(NOZA_PROCESS_USE_TLSF "use TLSF for per-process heap allocator" OFF)
 option(NOZAOS_LUA "build lua interpreter" OFF)
 
 # tensorflow lite micro
-option(NOZAOS_TFLM "build tensorflow lite micro" OFF)
-option(NOZAOS_TFLM_HELLO_WORLD "build tensorflow lite micro hello world" OFF)
-option(NOZAOS_TFLM_MAGIC_WAND "build tensorflow lite micro magic wand" OFF)
-option(NOZAOS_TFLM_PERSON_DETECTION "build tensorflow lite micro person detection" OFF)
-option(NOZAOS_TFLM_MICRO_SPEECH "build tensorflow lite micro micro speech" OFF)
-
 option(NOZAOS_DRIVER_WS2812 "build ws2812 LED controll driver" OFF)
 
 if (NOZAOS_UNITTEST_POSIX)
 	message(STATUS "NOZAOS_UNITTEST_POSIX need NOZAOS_POSIX")
 	set(NOZAOS_POSIX ON cache bool "Automatically set because of NOZAOS_UNITTEST_POSIX" force )
-endif()
-
-if (NOZAOS_TFLM_HELLO_WORLD AND NOT NOZAOS_TFLM)
-	message(STATUS "NOZAOS_TFLM_HELLO_WORLD need NOZAOS_TFLM")
-	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_HELLO_WORLD" force )
-endif()
-
-if (NOZAOS_TFLM_MAGIC_WAND AND NOT NOZAOS_TFLM)
-	message(STATUS "NOZAOS_TFLM_MAGIC_WAND need NOZAOS_TFLM")
-	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_MAGIC_WAND" force )
-endif()
-
-if (NOZAOS_TFLM_PERSON_DETECTION AND NOT NOZAOS_TFLM)
-	message(STATUS "NOZAOS_TFLM_PERSON_DETECTION need NOZAOS_TFLM")
-	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_PERSON_DETECTION" force )
-endif()
-
-if (NOZAOS_TFLM_MICRO_SPEECH AND NOT NOZAOS_TFLM)
-	message(STATUS "NOZAOS_TFLM_MICRO_SPEECH need NOZAOS_TFLM")
-	set(NOZAOS_TFLM ON cache bool "Automatically set because of NOZAOS_TFLM_MICRO_SPEECH" force )
-endif()
-
-set(TFLM_OPTIONS 
-    ${NOZAOS_TFLM_HELLO_WORLD}
-    ${NOZAOS_TFLM_MAGIC_WAND}
-    ${NOZAOS_TFLM_PERSON_DETECTION}
-    ${NOZAOS_TFLM_MICRO_SPEECH}
-)
-
-set(TFLM_DEMO_COUNT 0)
-foreach(OPT IN LISTS TFLM_OPTIONS)
-    if(OPT)
-        math(EXPR TFLM_DEMO_COUNT "${TFLM_DEMO_COUNT} + 1")
-    endif()
-endforeach()
-
-if(TFLM_DEMO_COUNT GREATER 1)
-    message(FATAL_ERROR "*** Only one tensorflow lite micro demo can be built ***")
 endif()
 
 
@@ -146,27 +102,6 @@ if (NOZAOS_LUA)
 	add_subdirectory(3rd_party/lua_port)
 endif()
 
-if (NOZAOS_TFLM)
-	set(NOZAOS_TFLM_LIB "tflm_cmsis")
-	add_subdirectory(3rd_party/tflm-cmsis)
-endif()
-
-if (NOZAOS_TFLM_HELLO_WORLD)
-	set(NOZAOS_TFLM_HELLO_LIB "hello_world")
-endif()
-
-if (NOZAOS_TFLM_MAGIC_WAND)
-	set(NOZAOS_TFLM_MAGIC_WAND_LIB "magic_wand")
-endif()
-
-if (NOZAOS_TFLM_MICRO_SPEECH)
-	set(NOZAOS_TFLM_MICRO_SPEECH_LIB "micro_speech")
-endif()
-
-if (NOZAOS_TFLM_PERSON_DETECTION)
-	set(NOZAOS_TFLM_MAGIC_WAND_LIB "person_detection")
-endif()
-
 # add sub module built
 
 # the noza kernel and user space application
@@ -228,26 +163,6 @@ if (NOZAOS_LUA)
 	list(APPEND NOZA_SOURCES 3rd_party/lua_port/lua_noza.c)
 endif()
 
-if (NOZAOS_TFLM)
-	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/tflm_port.c)
-endif()
-
-if (NOZAOS_TFLM_HELLO_WORLD)
-	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_hello_world.c)
-endif()
-
-if (NOZAOS_TFLM_MAGIC_WAND)
-	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_magic_wand.c)
-endif()
-
-if (NOZAOS_TFLM_MICRO_SPEECH)
-	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_micro_speech.c)
-endif()
-
-if (NOZAOS_TFLM_PERSON_DETECTION)
-	list(APPEND NOZA_SOURCES 3rd_party/tflm_port/noza_person_detection.c)
-endif()
-
 if (NOZAOS_DRIVER_WS2812)
 	list(APPEND NOZA_SOURCES drivers/ws2812/ws2812.c)
 	list(APPEND NOZA_SOURCES drivers/ws2812/example.c)
@@ -305,26 +220,6 @@ set(
 # Libraries
 if (NOZAOS_LUA)
 	list(APPEND NOZA_LIBS ${NOZAOS_LUA_LIB})
-endif()
-
-if (NOZAOS_TFLM_HELLO_WORLD)
-	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_HELLO_LIB})
-endif()
-
-if (NOZAOS_TFLM_MAGIC_WAND)
-	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_MAGIC_WAND_LIB})
-endif()
-
-if (NOZAOS_TFLM_MICRO_SPEECH)
-	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_MICRO_SPEECH_LIB})
-endif()
-
-if (NOZAOS_TFLM_PERSON_DETECTION)
-	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_PERSON_DETECTION_LIB})
-endif()
-
-if (NOZAOS_TFLM)
-	list(APPEND NOZA_LIBS ${NOZAOS_TFLM_LIB})
 endif()
 
 if (NOZAOS_DRIVER_WS2812)
