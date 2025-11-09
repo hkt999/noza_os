@@ -1,8 +1,10 @@
 #pragma once
 
-#define HISTORY_SIZE  10
+#define HISTORY_SIZE     10
+#define HISTORY_LINE_MAX 80
+
 typedef struct {
-	char *commands[HISTORY_SIZE];
+	char commands[HISTORY_SIZE][HISTORY_LINE_MAX];
 	int count;
 	int iter;
 } history_t;

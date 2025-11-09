@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -213,14 +214,14 @@ void test_pthread_attr_init_and_destroy(void) {
 void test_pthread_attr_set_and_get_detachstate(void) {
     nz_pthread_attr_t attr;
     int detachstate = 1;
-    TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
-
-    TEST_ASSERT_EQUAL_INT(0, pthread_attr_setdetachstate(&attr, detachstate));
-    detachstate = 0; 
-    TEST_ASSERT_EQUAL_INT(0, pthread_attr_getdetachstate(&attr, &detachstate));
-    TEST_ASSERT_EQUAL_INT(1, detachstate);
-
-    TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+    for (int i = 0; i < 1024; i++) {
+        TEST_ASSERT_EQUAL_INT(0, pthread_attr_init(&attr));
+        TEST_ASSERT_EQUAL_INT(0, pthread_attr_setdetachstate(&attr, detachstate));
+        detachstate = 0; 
+        TEST_ASSERT_EQUAL_INT(0, pthread_attr_getdetachstate(&attr, &detachstate));
+        TEST_ASSERT_EQUAL_INT(1, detachstate);
+        TEST_ASSERT_EQUAL_INT(0, pthread_attr_destroy(&attr));
+    }
 }
 
 void test_pthread_attr_set_and_get_stacksize(void) {
@@ -531,29 +532,71 @@ static void test_pthread_spinlock() {
     TEST_ASSERT_EQUAL_INT(0, pthread_spin_destroy(&spinlock));
 }
 
+static int should_run(int argc, char **argv, const char *name)
+{
+    if (argc <= 1) {
+        return 1;
+    }
+    for (int i = 1; i < argc; i++) {
+        if ((strcmp(argv[i], "all") == 0) || (strcmp(argv[i], name) == 0)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int test_posix(int argc, char **argv)
 {
+    if ((argc > 1) && (strcmp(argv[1], "--list") == 0)) {
+        static const char *tests[] = {
+            "test_pthread_create_join",
+            "test_pthread_yield",
+            "test_pthread_detach",
+            "test_pthread_kill",
+            "test_heavy_loading",
+            "test_pthread_mutex",
+            "test_pthread_cond",
+            "test_semaphore",
+            "test_pthread_attr_init_and_destroy",
+            "test_pthread_attr_set_and_get_detachstate",
+            "test_pthread_attr_set_and_get_stacksize",
+            "test_pthread_attr_set_and_get_stackaddr",
+            "test_pthread_attr_set_and_get_stack",
+            "test_pthread_attr_set_and_get_guardsize",
+            "test_pthread_attr_set_and_get_schedparam",
+            "test_pthread_attr_set_and_get_schedpolicy",
+            "test_pthread_attr_set_and_get_inheristsched",
+            "test_pthread_attr_set_and_get_scope",
+            "test_pthread_spinlock",
+        };
+        printf("available tests:\n");
+        for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
+            printf("  %s\n", tests[i]);
+        }
+        return 0;
+    }
+
     UNITY_BEGIN();
     TEST_MESSAGE("test posix unit-test suite start, please wait...");
-    RUN_TEST(test_pthread_create_join);
-    RUN_TEST(test_pthread_yield);
-    RUN_TEST(test_pthread_detach);
-    RUN_TEST(test_pthread_kill);
-    RUN_TEST(test_heavy_loading);
-    RUN_TEST(test_pthread_mutex);
-    RUN_TEST(test_pthread_cond);
-    RUN_TEST(test_semaphore);
-    RUN_TEST(test_pthread_attr_init_and_destroy);
-    RUN_TEST(test_pthread_attr_set_and_get_detachstate);
-    RUN_TEST(test_pthread_attr_set_and_get_stacksize);
-    RUN_TEST(test_pthread_attr_set_and_get_stackaddr);
-    RUN_TEST(test_pthread_attr_set_and_get_stack);
-    RUN_TEST(test_pthread_attr_set_and_get_guardsize);
-    RUN_TEST(test_pthread_attr_set_and_get_schedparam);
-    RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
-    RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
-    RUN_TEST(test_pthread_attr_set_and_get_scope);
-    RUN_TEST(test_pthread_spinlock);
+    if (should_run(argc, argv, "test_pthread_create_join")) RUN_TEST(test_pthread_create_join);
+    if (should_run(argc, argv, "test_pthread_yield")) RUN_TEST(test_pthread_yield);
+    if (should_run(argc, argv, "test_pthread_detach")) RUN_TEST(test_pthread_detach);
+    if (should_run(argc, argv, "test_pthread_kill")) RUN_TEST(test_pthread_kill);
+    if (should_run(argc, argv, "test_heavy_loading")) RUN_TEST(test_heavy_loading);
+    if (should_run(argc, argv, "test_pthread_mutex")) RUN_TEST(test_pthread_mutex);
+    if (should_run(argc, argv, "test_pthread_cond")) RUN_TEST(test_pthread_cond);
+    if (should_run(argc, argv, "test_semaphore")) RUN_TEST(test_semaphore);
+    if (should_run(argc, argv, "test_pthread_attr_init_and_destroy")) RUN_TEST(test_pthread_attr_init_and_destroy);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_detachstate")) RUN_TEST(test_pthread_attr_set_and_get_detachstate);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_stacksize")) RUN_TEST(test_pthread_attr_set_and_get_stacksize);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_stackaddr")) RUN_TEST(test_pthread_attr_set_and_get_stackaddr);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_stack")) RUN_TEST(test_pthread_attr_set_and_get_stack);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_guardsize")) RUN_TEST(test_pthread_attr_set_and_get_guardsize);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_schedparam")) RUN_TEST(test_pthread_attr_set_and_get_schedparam);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_schedpolicy")) RUN_TEST(test_pthread_attr_set_and_get_schedpolicy);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_inheristsched")) RUN_TEST(test_pthread_attr_set_and_get_inheristsched);
+    if (should_run(argc, argv, "test_pthread_attr_set_and_get_scope")) RUN_TEST(test_pthread_attr_set_and_get_scope);
+    if (should_run(argc, argv, "test_pthread_spinlock")) RUN_TEST(test_pthread_spinlock);
     UNITY_END();
     return 0;
 }
@@ -561,6 +604,5 @@ static int test_posix(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_posix_unittest()
 {
-    console_add_command("posix_unittest", test_posix, "nozaos and lib, posix unit-test suite", 2048);
+    console_add_command("posix_unittest", test_posix, "nozaos and lib, posix unit-test suite", 4096);
 }
-

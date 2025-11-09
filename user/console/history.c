@@ -1,6 +1,7 @@
 #include <string.h>
+#include <stdio.h>
+#include <string.h>
 #include "history.h"
-#include "nz_stdlib.h"
 
 void history_init(history_t *h)
 {
@@ -12,7 +13,7 @@ void history_init(history_t *h)
 void history_new_line(history_t *h)
 {
 	if (h->count==0) {
-		h->commands[0] = strdup("");
+		h->commands[0][0] = '\0';
 		h->count++;
 	} else {
 		if (h->commands[h->count-1][0] == 0) {
@@ -23,14 +24,14 @@ void history_new_line(history_t *h)
 			if (h->count >= HISTORY_SIZE-1) {
 				int i;
 				// full, scroll history, free the oldest
-				free(h->commands[0]);
 				for (i=0; i<HISTORY_SIZE-1; i++) {
-					h->commands[i] = h->commands[i+1];
+					memcpy(h->commands[i], h->commands[i+1], HISTORY_LINE_MAX);
 				}
-				h->commands[i] = strdup("");
+				memset(h->commands[i], 0, HISTORY_LINE_MAX);
 			} else {
 				// not full, just push empty line to the top
-				h->commands[h->count++] = strdup("");
+				h->commands[h->count][0] = '\0';
+				h->count++;
 			}
 		}
 	}
@@ -39,13 +40,14 @@ void history_new_line(history_t *h)
 void history_save(history_t *h, char *p)
 {
 	if (h->count == 0) {
-		h->commands[0] = strdup(p);
+		strncpy(h->commands[0], p, HISTORY_LINE_MAX - 1);
+		h->commands[0][HISTORY_LINE_MAX-1] = '\0';
 		h->count++;
 		return;
 	}
 	if (h->iter < h->count) {
-		free(h->commands[h->iter]);
-		h->commands[h->iter] = strdup(p);
+		strncpy(h->commands[h->iter], p, HISTORY_LINE_MAX - 1);
+		h->commands[h->iter][HISTORY_LINE_MAX-1] = '\0';
 	}
 }
 

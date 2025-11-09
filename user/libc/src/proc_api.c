@@ -136,7 +136,7 @@ int noza_process_crt0(void *param, uint32_t tid)
 	return ret;
 }
 
-int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
+static int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid, uint32_t stack_size)
 {
 	*tid = 0;
 	process_record_t *process = alloc_process_record();
@@ -153,7 +153,10 @@ int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
 		return ENOMEM;
 	}
 	env_copy(process->env, argc, argv);
-	int create_ret = noza_thread_create(tid, noza_process_crt0, (void *)process, 0, 1024); // TODO: consider the stack size
+	if (stack_size == 0) {
+		stack_size = NOZA_THREAD_DEFAULT_STACK_SIZE;
+	}
+	int create_ret = noza_thread_create(tid, noza_process_crt0, (void *)process, 0, stack_size);
 	if (create_ret != 0) {
 		printf("noza_process_exec: thread_create ret=%d\n", create_ret);
 		free_process_record(process);
@@ -163,24 +166,41 @@ int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid)
 	return 0;
 }
 
-int noza_process_exec_detached(main_t entry, int argc, char *argv[])
+int noza_process_exec_detached_with_stack(main_t entry, int argc, char *argv[], uint32_t stack_size)
 {
 	uint32_t tid;
-	return _noza_process_exec(entry, argc, argv, &tid);
+	return _noza_process_exec(entry, argc, argv, &tid, stack_size);
 }
 
-int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code)
+int noza_process_exec_detached(main_t entry, int argc, char *argv[])
+{
+	return noza_process_exec_detached_with_stack(entry, argc, argv, 0);
+}
+
+int noza_process_exec_with_stack(main_t entry, int argc, char *argv[], int *exit_code, uint32_t stack_size)
 {
 	uint32_t tid;
-	*exit_code = 0;
-	if (_noza_process_exec(entry, argc, argv, &tid) == 0) {
-		if (noza_thread_join(tid, (uint32_t *)exit_code) != 0) {
+	uint32_t join_code = 0;
+	uint32_t *join_dst = &join_code;
+
+	if (exit_code) {
+		*exit_code = 0;
+		join_dst = (uint32_t *)exit_code;
+	}
+
+	if (_noza_process_exec(entry, argc, argv, &tid, stack_size) == 0) {
+		if (noza_thread_join(tid, join_dst) != 0) {
 			return ENOMEM;
 		}
 		return 0;
 	}
 
 	return ENOMEM;
+}
+
+int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code)
+{
+	return noza_process_exec_with_stack(entry, argc, argv, exit_code, 0);
 }
 
 process_record_t *noza_process_self() // TODO: return process is instead of process_t

@@ -153,15 +153,23 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 			} else  {
 				while (rc->name && rc->main_func) {
 					if (strncmp(rc->name, argv[0], 32) == 0) {
-						if (strcmp(argv[argc-1], "&") == 0) {
-							argc--;
-							argv[argc] = NULL;
-							noza_process_exec_detached(rc->main_func, argc, argv);
-						} else {
-							noza_process_exec(rc->main_func, argc, argv, NULL);
+							uint32_t stack_size = rc->stack_size;
+							if (strcmp(argv[argc-1], "&") == 0) {
+								argc--;
+								argv[argc] = NULL;
+								int ret = noza_process_exec_detached_with_stack(rc->main_func, argc, argv, stack_size);
+								if (ret != 0) {
+									printf("%s: launch failed (%d)\n", rc->name, ret);
+								}
+							} else {
+								int exit_code = 0;
+								int ret = noza_process_exec_with_stack(rc->main_func, argc, argv, &exit_code, stack_size);
+								if (ret != 0) {
+									printf("%s: exec failed (%d)\n", rc->name, ret);
+								}
+							}
+							break;
 						}
-						break;
-					}
 					rc++;
 				}
 				if (rc->name == NULL)
