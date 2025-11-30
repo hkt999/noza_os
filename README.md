@@ -29,7 +29,6 @@ RP2040 的 Pico SDK 會拉入 newlib 版本的 `malloc/free/printf/open` 等符�
 - **平台層**仍使用 Pico SDK/newlib，確保 USB/UART、硬體驅動與啟動碼可以順利連結與執行。
 - **Process 層**提供自有的 `noza_*` API（例如 `noza_process_exec`、`noza_call`、未來的 `noza_open/noza_read/...`）來透過 IPC 與服務互動，並使用 per-process heap allocator（`noza_process_malloc`/`noza_process_free`）。這些名稱刻意避開標準 `malloc/open` 以免和 newlib 符號互相踩踏。
 - **Name server** 永遠綁定在 VID 0，所有服務上線時需透過 `name_lookup_register()` 將「名稱 → service_id → VID」對映註冊，客戶端則以 `name_lookup_resolve()` 或 `name_lookup_resolve_id()` 取得最新 VID，無須維護全域 PID。
-- **Name server** 永遠綁定在 VID 0，所有服務上線時需透過 `name_lookup_register()` 將「名稱 → service_id → VID」對映註冊，客戶端則以 `name_lookup_resolve()` 或 `name_lookup_resolve_id()` 取得最新 VID，無須維護全域 PID。
 - 預設 per-process heap 採用 `tinyalloc`，也可以在 CMake 開啟 `-DNOZA_PROCESS_USE_TLSF=ON` 切換到 TLSF（Two-Level Segregated Fit） allocator，以獲得較穩定的配置延遲。兩種 allocator 都共享相同 API，僅影響記憶體管理策略。
 - RP2040 只有 32 顆硬體 spinlock，Noza 會在 process 真正被建立時才動態 claim 一顆，再於 process 結束後釋放；保持 `NOZA_MAX_PROCESSES` 在合理範圍（預設 16）即可避免早期耗盡 spinlock 造成開機卡住。
 - Application 若需要 POSIX 風格名稱，可以在自己的 header 中選擇 `#define open noza_open` 等別名，但預設請直接使用 `noza_*` 版本，確保呼叫會走到 Noza 的服務層而不是 Pico SDK 的預設 stub。
@@ -68,47 +67,10 @@ The user-space `noza_*` libc wraps all kernel entry points, so higher-level runt
 These functions all funnel through the internal `noza_syscall(r0,r1,r2,r3)` trampoline, which tags each call with an `NSC_*` identifier before entering the kernel. Higher-level APIs never touch registers directly—use the libc wrappers so argument packing stays in sync with the microkernel.
 
 # Build
-To build the Noza microkernel project using the pico_sdk and cmake, follow the steps below. These instructions assume that you have already cloned the project from GitHub to your local machine.
-- To build the Noza microkernel project using the pico_sdk and cmake, follow the steps below. These instructions assume that you have already cloned the project from GitHub to your local machine. 
-1. **Install dependencies** : Ensure that you have the following software installed on your system:
-- CMake (version 3.12 or later)
-- GCC (with ARM cross-compilation support)
-- GNU Make
-2. **Set up the Raspberry Pi Pico SDK** : If you haven't already set up the Raspberry Pi Pico SDK (pico_sdk), follow the official guide for your operating system
-3. **Clone the Noza repository** : If you haven't already cloned the Noza microkernel project from GitHub, do so now by running the following command:
-```bash
-git clone https://github.com/hkt999/noza_os.git
-``` 
-4. **Navigate to the project directory** : Change to the Noza project directory:
-
-```bash
-cd noza_os
-``` 
-5. **Create a build directory** : Make a new directory to store the build files:
-
-```bash
-mkdir build
-``` 
-6. **Navigate to the build directory** : Change to the build directory:
-
-```bash
-cd build
-``` 
-7. **Generate build files** : Run CMake to generate the build files, specifying the path to the pico_sdk:
-
-```php
-cmake -DPICO_SDK_PATH=<path_to_pico_sdk> ..
-```
-
-Replace `<path_to_pico_sdk>` with the actual path to your pico_sdk directory. 
-8. **Build the project** : Compile the Noza microkernel by running:
-
-```go
-make
-``` 
-9. **Upload the binary to your Raspberry Pi Pico** : Follow the Raspberry Pi Pico documentation to upload the generated binary (e.g., `noza.uf2`) to your Raspberry Pi Pico.
-
-After completing these steps, you should have successfully built and uploaded the Noza microkernel to your Raspberry Pi Pico.
+- 設好 Pico SDK 路徑（`export PICO_SDK_PATH=...`）。
+- 一次性 configure：`cmake -S . -B build -DPICO_SDK_PATH=$PICO_SDK_PATH -DNOZAOS_UNITTEST=ON -DNOZAOS_POSIX=ON`
+- 重建：`cmake --build build -j$(sysctl -n hw.ncpu)`
+- 韌體：`build/noza.uf2`，以 `picotool load` 燒錄。預設 stdio 走 UART0 (GPIO0/1, 115200)。
 
 # Future works
 1. POSIX Style API
