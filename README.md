@@ -8,6 +8,12 @@ The design of Noza is partly inspired by the limitations of some real-time opera
 * Thread management: Noza supports preemptive multithread for SMP core, APIs including thread creation, termination, and synchronization through system calls, enabling efficient multi-threading.
 * Inter-process communication (IPC): Noza facilitates communication between threads using message passing, ensuring seamless and synchronized execution of tasks.
 
+## IRQ subsystem (RP2040)
+- Kernel delivers HW IRQs to a user-space IRQ service (reserved VID = `IRQ_SERVER_VID`, default 65000). The service re-lays events via `noza_call` so clients can subscribe/unsubscribe per IRQ ID.
+- `NOZA_OS_ENABLE_IRQ` is ON; `platform_irq_init` wires UART0 by default. Add more IDs as needed.
+- Console now subscribes to UART0 IRQ and becomes IRQ-driven for RX;若服務不可用會自動回退舊的 50ms 輪詢。
+- Client helpers: `irq_service_subscribe/unsubscribe` (see `service/irq/irq_client.c`). Events use `noza_irq_event_t`.
+
 # Multicore Scheduling Notes
 Noza currently targets dual-core RP2040/RP2350-class MCUs, where ARM Cortex-M cores lack a hardware Inter-Processor Interrupt (IPI) controller. We therefore reuse the RP2040 multicore FIFO as a lightweight software IPI: core A pushes a single 32-bit token, core B's SIO interrupt handler drains the FIFO and sets `PendSV` to enter the scheduler immediately. This approach is officially supported by the Pico SDK, keeps latency low (tens of nanoseconds when the FIFO is not full), and avoids dedicating scarce hardware spinlocks. We evaluated using spinlock-triggered IRQs or SEV/WFE mailboxes, but FIFO offered the best mix of simplicity, deterministic wakeups, and compatibility with existing SDK tooling. Spinlock-based IPIs remain an option if future workloads demand a FIFO dedicated to user-space IPC, yet FIFO signaling is the default because it requires no extra housekeeping and integrates directly with the current scheduling infrastructure.
 

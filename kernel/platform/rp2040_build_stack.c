@@ -101,4 +101,14 @@ void platform_core_dump(void *_stack_ptr, uint32_t pid)
     printf("r4  %08x   r5 %08x  r6 %08x  r7   %08x\n", us->r4, us->r5, us->r6, us->r7);
     printf("r8  %08x   r9 %08x r10 %08x  r11  %08x\n", us->r8, us->r9, us->r10, us->r11);
     printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n\n", is->r12, is->lr, is->pc, is->xpsr);
+    platform_fault_snapshot_t snapshot;
+    if (platform_get_fault_snapshot(&snapshot)) {
+        printf("hardfault frame (psp=%08x):\n", snapshot.sp);
+        printf("r0  %08x   r1 %08x  r2 %08x  r3   %08x\n",
+            snapshot.regs[0], snapshot.regs[1], snapshot.regs[2], snapshot.regs[3]);
+        printf("r12 %08x   lr %08x  pc %08x  xpsr %08x\n",
+            snapshot.regs[4], snapshot.regs[5], snapshot.regs[6], snapshot.regs[7]);
+        printf("cfsr %08x  hfsr %08x  mmfar %08x  bfar %08x\n\n",
+            snapshot.cfsr, snapshot.hfsr, snapshot.mmfar, snapshot.bfar);
+    }
 }

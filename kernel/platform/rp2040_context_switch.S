@@ -34,6 +34,9 @@
 .global isr_hardfault
 isr_hardfault:
     save_context
+    mrs r1, psp
+    mov r0, r1
+    bl platform_fault_capture
     movs r0, #255 // hardfault
     bl noza_os_trap_info
     restore_context

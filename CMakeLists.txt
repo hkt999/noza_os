@@ -73,9 +73,9 @@ if(NOT PICO_SDK_PATH OR NOT EXISTS "${PICO_SDK_PATH}")
 endif()
 set(PICO_SDK_PATH ${PICO_SDK_PATH} CACHE PATH "Path to the Raspberry Pi Pico SDK" FORCE)
 
-# ensure USB stdio is enabled by default so `cmake ..; cmake --build .`
-# produces a firmware image that enumerates as a USB CDC device
-set(PICO_STDIO_USB ON CACHE BOOL "Enable stdio over USB" FORCE)
+# route stdio to UART by default
+set(PICO_STDIO_USB OFF CACHE BOOL "Enable stdio over USB" FORCE)
+set(PICO_STDIO_UART ON CACHE BOOL "Enable stdio over UART" FORCE)
 
 # pull in Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -131,8 +131,10 @@ set(
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
 	service/sync/sync_client.c
+	service/irq/irq_client.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
+	service/irq/irq_service.c
 	type/dblist.c
 	type/hashslot.c
 	3rd_party/tinyalloc_port/tinyalloc.c
@@ -234,7 +236,8 @@ target_link_libraries(
 )
 
 pico_add_extra_outputs(noza)
-pico_enable_stdio_usb(noza 1)
+pico_enable_stdio_usb(noza 0)
+pico_enable_stdio_uart(noza 1)
 
 if (NOZA_PROCESS_USE_TLSF)
 	target_compile_definitions(noza PRIVATE NOZA_PROCESS_USE_TLSF=1)

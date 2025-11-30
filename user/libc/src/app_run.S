@@ -8,8 +8,22 @@ app_run:
     // r0: the pointer to the boot info structure
     // r1: thread_id
 
-    // r2 -> func_entry, r3 -> func_param, r4 -> stack_base, r5 -> stack_size
-    ldmia r0!, {r2, r3, r4, r5, r7}
+    // thread_record_t layout:
+    // [0] reserved_vid (unused here)
+    // [1] user_entry
+    // [2] user_param
+    // [3] stack_ptr (base)
+    // [4] stack_size
+    // [5] priority
+    // [6] need_free_stack
+    // [7] thread_data ...
+
+    // load fields explicitly so reserved_vid at offset 0 is skipped
+    ldr     r2, [r0, #4]    // user_entry
+    ldr     r3, [r0, #8]    // user_param
+    ldr     r4, [r0, #12]   // stack_base (stack_ptr)
+    ldr     r5, [r0, #16]   // stack_size
+    ldr     r7, [r0, #24]   // priority (kept for parity with old code)
     mov r6, r4          // r6 = stack_base
     add r4, r4, r5      // r3 = stack_base + stack_size --> new stack base
     mov r0, sp          // r0 = old stack pointer

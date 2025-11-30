@@ -9,10 +9,19 @@
 #include "platform.h"
 #include "posix/bits/signum.h"
 #include "posix/errno.h"
+#if NOZA_OS_ENABLE_IRQ
+#include "hardware/sync.h"
+#include "../include/noza_irq_defs.h"
+#include "hardware/structs/scb.h"
+#endif
 
 //#define DEBUG
 //#define FUTEX_DEBUG
 //#define TIMER_DEBUG
+
+#ifndef ENABLE_KERNEL_LOG
+#define ENABLE_KERNEL_LOG 0
+#endif
 
 //////////////////////////////////////////////////////////////
 //
@@ -66,7 +75,7 @@ inline static void HALT()
 static char buffer[128];
 void kernel_log(const char *fmt, ...)
 {
-    #if 0
+#if ENABLE_KERNEL_LOG
     va_list args;
 
     va_start(args, fmt);
@@ -74,7 +83,7 @@ void kernel_log(const char *fmt, ...)
     va_end(args);
 
     printf("log: %s", buffer);
-    #endif
+#endif
 }
 
 #ifdef FUTEX_DEBUG
@@ -234,6 +243,15 @@ typedef struct {
     noza_wait_queue_t   queue;
 } noza_futex_slot_t;
 
+#if NOZA_OS_ENABLE_IRQ
+typedef struct {
+    noza_irq_event_t    event;
+    uint32_t            owner_vid;
+    uint8_t             queued;
+    uint8_t             inflight;
+} irq_binding_t;
+#endif
+
 typedef struct {
     uint32_t    priority:8;
     uint32_t    state:8;
@@ -308,6 +326,17 @@ static int64_t noza_realtime_offset_us;
 static volatile uint32_t futex_wake_counter;
 static volatile uint32_t futex_last_wake_count;
 static bool reserved_vid0_assigned;
+#if NOZA_OS_ENABLE_IRQ
+static irq_binding_t irq_bindings[NOZA_RP2040_IRQ_COUNT];
+static volatile uint32_t irq_pending_bitmap;
+static uint32_t irq_debug_samples;
+
+static void irq_bindings_init(void);
+static bool irq_try_consume_event(thread_t *running);
+static bool irq_try_handle_reply(thread_t *running);
+static void irq_deliver_if_waiting(uint32_t irq_id);
+void noza_irq_handle_from_isr(uint32_t irq_id);
+#endif
 inline static uint32_t _thread_get_pid(thread_t *th)
 {
     return (th - (thread_t *)&noza_os.thread[0]);
@@ -336,6 +365,9 @@ static void     noza_os_add_thread(thread_list_t *list, thread_t *thread);
 static void     noza_os_remove_thread(thread_list_t *list, thread_t *thread);
 static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t pri, uint32_t reserved_vid);
 static void     noza_os_scheduler();
+static void     noza_os_change_state(thread_t *th, thread_list_t *from, thread_list_t *to);
+static void     noza_os_set_return_value1(thread_t *th, uint32_t r0);
+static void     noza_os_set_return_value4(thread_t *th, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
 
 #if NOZA_OS_NUM_CORES > 1
 #define noza_os_lock_init()     platform_os_lock_init()
@@ -346,6 +378,141 @@ static void     noza_os_scheduler();
 #define noza_os_lock(core)      (void)0
 #define noza_os_unlock(core)    (void)0
 #endif
+
+#if NOZA_OS_ENABLE_IRQ
+
+static inline uint32_t irq_sender_vid_inline(uint32_t irq_id)
+{
+    return NOZA_IRQ_SENDER_ID(irq_id);
+}
+
+static void irq_bindings_init(void)
+{
+    for (uint32_t i = 0; i < NOZA_RP2040_IRQ_COUNT; i++) {
+        irq_bindings[i].owner_vid = IRQ_SERVER_VID;
+        irq_bindings[i].queued = 0;
+        irq_bindings[i].inflight = 0;
+        irq_bindings[i].event.irq_id = i;
+        irq_bindings[i].event.timestamp_us = 0;
+        irq_bindings[i].event.status = 0;
+        irq_bindings[i].event.reserved = 0;
+    }
+    irq_pending_bitmap = 0;
+}
+
+static inline void irq_prepare_user_message(thread_t *target, irq_binding_t *binding)
+{
+    noza_os_set_return_value4(target, 0, irq_sender_vid_inline(binding->event.irq_id),
+        (uint32_t)&binding->event, sizeof(binding->event));
+    target->info.port_state = PORT_WAIT_LISTEN;
+}
+
+static void irq_deliver_if_waiting(uint32_t irq_id)
+{
+    irq_binding_t *binding = &irq_bindings[irq_id];
+    if (!binding->queued || binding->inflight)
+        return;
+    thread_t *target = get_thread_by_vid(binding->owner_vid);
+    if (target == NULL) {
+        kernel_log("[irq] deliver irq %u but owner vid %u missing\n", irq_id, binding->owner_vid);
+        return;
+    }
+    if (target->info.state != THREAD_WAITING_MSG || target->info.port_state != PORT_READY) {
+        kernel_log("[irq] deliver irq %u owner vid %u state=%u port=%u\n",
+            irq_id, binding->owner_vid, target->info.state, target->info.port_state);
+        return;
+    }
+
+    binding->queued = 0;
+    binding->inflight = 1;
+    irq_prepare_user_message(target, binding);
+    noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);
+}
+
+static int32_t irq_fetch_next_pending(void)
+{
+    uint32_t flags = save_and_disable_interrupts();
+    uint32_t pending = irq_pending_bitmap;
+    if (pending == 0) {
+        restore_interrupts(flags);
+        return -1;
+    }
+    uint32_t irq_id = __builtin_ctz(pending);
+    irq_pending_bitmap &= ~(1u << irq_id);
+    restore_interrupts(flags);
+    return (int32_t)irq_id;
+}
+
+static void irq_process_pending(void)
+{
+    for (;;) {
+        int32_t irq_id = irq_fetch_next_pending();
+        if (irq_id < 0)
+            break;
+        irq_deliver_if_waiting((uint32_t)irq_id);
+    }
+}
+
+static bool irq_try_consume_event(thread_t *running)
+{
+    if (thread_get_vid(running) != IRQ_SERVER_VID)
+        return false;
+    for (uint32_t i = 0; i < NOZA_RP2040_IRQ_COUNT; i++) {
+        irq_binding_t *binding = &irq_bindings[i];
+        if (!binding->queued || binding->inflight)
+            continue;
+        binding->queued = 0;
+        binding->inflight = 1;
+        irq_prepare_user_message(running, binding);
+        return true;
+    }
+    return false;
+}
+
+static bool irq_try_handle_reply(thread_t *running)
+{
+    kernel_trap_info_t *trap = &running->trap;
+    uint32_t target_vid = trap->r1;
+    if (!NOZA_IRQ_IS_KERNEL_VID(target_vid))
+        return false;
+    uint32_t irq_id = NOZA_IRQ_SENDER_TO_ID(target_vid);
+    if (irq_id >= NOZA_RP2040_IRQ_COUNT)
+        return false;
+
+    irq_binding_t *binding = &irq_bindings[irq_id];
+    binding->inflight = 0;
+    binding->event.status = 0;
+    platform_irq_unmask(irq_id);
+    noza_os_set_return_value1(running, 0);
+    if (binding->queued) {
+        irq_deliver_if_waiting(irq_id);
+    }
+    return true;
+}
+
+void noza_irq_handle_from_isr(uint32_t irq_id)
+{
+    if (irq_id >= NOZA_RP2040_IRQ_COUNT)
+        return;
+    irq_binding_t *binding = &irq_bindings[irq_id];
+    if (binding->owner_vid == 0)
+        return;
+    platform_irq_mask(irq_id);
+    binding->event.irq_id = irq_id;
+    binding->event.timestamp_us = (uint32_t)platform_get_absolute_time_us();
+    binding->event.status = (binding->queued || binding->inflight) ? NOZA_IRQ_STATUS_OVERFLOW : 0;
+    binding->event.reserved = 0;
+    binding->queued = 1;
+    irq_pending_bitmap |= (1u << irq_id);
+    if (irq_debug_samples < 8) {
+        kernel_log("[irq] isr irq=%u owner=%u queued=%u inflight=%u\n",
+            irq_id, binding->owner_vid, binding->queued, binding->inflight);
+        irq_debug_samples++;
+    }
+    scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS;
+}
+
+#endif // NOZA_OS_ENABLE_IRQ
 
 #if defined(DEBUG)
 inline static void dump_threads()
@@ -627,6 +794,12 @@ static void noza_init()
     noza_os.vid_map[NOZA_OS_TASK_LIMIT-1].next = NULL;
     noza_os.free_vid_map = &noza_os.vid_map[0];
 
+#if NOZA_OS_ENABLE_IRQ
+    irq_bindings_init();
+    platform_irq_init();
+    kernel_log("[boot] irq subsystem ready\n");
+#endif
+
     // init all running thread to NULL
     for (int i=0; i<NOZA_OS_NUM_CORES; i++) {
         noza_make_idle_context(i);
@@ -638,6 +811,7 @@ static void noza_run()
 {
     uint32_t th;
     noza_os_thread_create(&th, noza_root_task, NULL, 0, NOZA_VID_AUTO); // create the first task
+    kernel_log("[boot] root task vid=%u created\n", th);
     // TODO: set th as detach, after creating the first user process, just exit
     noza_os_scheduler(); // start os scheduler and never return
 }
@@ -1549,11 +1723,21 @@ static void syscall_thread_terminate(thread_t *running)
 
 static void syscall_recv(thread_t *running)
 {
+#if NOZA_OS_ENABLE_IRQ
+    if (irq_try_consume_event(running)) {
+        return;
+    }
+#endif
     noza_os_recv(running);
 }
 
 static void syscall_reply(thread_t *running)
 {
+#if NOZA_OS_ENABLE_IRQ
+    if (irq_try_handle_reply(running)) {
+        return;
+    }
+#endif
     kernel_trap_info_t *running_trap = &running->trap;
     noza_os_reply(running, running_trap->r1, (void *)running_trap->r2, running_trap->r3);
 }
@@ -1947,6 +2131,9 @@ extern uint32_t *noza_os_resume_thread(uint32_t *stack);
 inline static void GO_RUN(int core, thread_t *running)
 {
     NOZAOS_PID[core] = thread_get_vid(running); // setup the shared variable
+#if NOZA_OS_ENABLE_IRQ
+    irq_process_pending();
+#endif
     noza_os_unlock(core);
     running->stack_ptr = noza_os_resume_thread(running->stack_ptr);
     noza_os_lock(core); 
@@ -2020,6 +2207,9 @@ static void noza_os_scheduler()
     for (;;) {
         int64_t now = platform_get_absolute_time_us();
         noza_timer_tick(now);
+#if NOZA_OS_ENABLE_IRQ
+        irq_process_pending();
+#endif
         thread_t *running = pick_ready_thread();
         if (running) {
             // a ready thread is picked

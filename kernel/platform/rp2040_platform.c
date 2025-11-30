@@ -2,6 +2,7 @@
 #include "../noza_config.h"
 #include "../platform.h"
 #include "pico/stdlib.h"
+#include "pico/stdio_uart.h"
 #include "hardware/irq.h"
 #if NOZA_OS_NUM_CORES > 1
 #include "pico/multicore.h"
@@ -11,14 +12,21 @@
 #include "hardware/regs/m0plus.h"
 #include "hardware/sync.h"
 #include <stdio.h>
-#include "pico/stdlib.h"
 #include "hardware/regs/rosc.h"
 #include "hardware/regs/addressmap.h"
 #include <stdbool.h>
+#include <string.h>
+#if NOZA_OS_ENABLE_IRQ
+#include "../../include/noza_irq_defs.h"
+extern void noza_irq_handle_from_isr(uint32_t irq_id);
+static void rp2040_common_irq_handler(void);
+#endif
+
+static volatile platform_fault_snapshot_t last_fault_snapshot;
 
 void platform_io_init()
 {
-    stdio_init_all();
+    stdio_uart_init_full(uart0, 115200, PICO_DEFAULT_UART_TX_PIN, PICO_DEFAULT_UART_RX_PIN);
     // set the SVC interrupt priority
     hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR2_OFFSET), M0PLUS_SHPR2_BITS); // setup as priority 3 (2 bits)
     // set the PENDSV interrupt priority
@@ -139,6 +147,34 @@ void platform_panic(const char *msg, ...)
     va_end(args);
 }
 
+void platform_fault_capture(uint32_t *psp)
+{
+    if (psp == NULL) {
+        return;
+    }
+    last_fault_snapshot.valid = 1;
+    for (int i = 0; i < 8; i++) {
+        last_fault_snapshot.regs[i] = psp[i];
+    }
+    last_fault_snapshot.sp = (uint32_t)psp;
+    // Cortex-M0+ (RP2040) does not expose fault status registers like CFSR/HFSR/MMFAR/BFAR
+    last_fault_snapshot.cfsr = 0;
+    last_fault_snapshot.hfsr = 0;
+    last_fault_snapshot.mmfar = 0;
+    last_fault_snapshot.bfar = 0;
+}
+
+bool platform_get_fault_snapshot(platform_fault_snapshot_t *out)
+{
+    if (!last_fault_snapshot.valid) {
+        return false;
+    }
+    if (out) {
+        memcpy(out, (const void *)&last_fault_snapshot, sizeof(platform_fault_snapshot_t));
+    }
+    return true;
+}
+
 static uint32_t        interrupt_state[NOZA_OS_NUM_CORES];  // array of interrupt states for each core
 static int             spinlock_num_count;                  // count of spinlocks
 static volatile noza_spin_lock_t     *spinlock;                     // pointer to spinlock count
@@ -172,3 +208,50 @@ uint32_t platform_get_random(void)
 
     return random;
 }
+
+void platform_irq_init()
+{
+#if NOZA_OS_ENABLE_IRQ
+    irq_set_exclusive_handler(UART0_IRQ, rp2040_common_irq_handler);
+    irq_set_enabled(UART0_IRQ, true);
+#endif
+}
+
+void platform_irq_mask(uint32_t irq_id)
+{
+#if NOZA_OS_ENABLE_IRQ
+    if (irq_id >= NOZA_RP2040_IRQ_COUNT) {
+        return;
+    }
+    irq_set_enabled(irq_id, false);
+#else
+    (void)irq_id;
+#endif
+}
+
+void platform_irq_unmask(uint32_t irq_id)
+{
+#if NOZA_OS_ENABLE_IRQ
+    if (irq_id >= NOZA_RP2040_IRQ_COUNT) {
+        return;
+    }
+    irq_set_enabled(irq_id, true);
+#else
+    (void)irq_id;
+#endif
+}
+
+#if NOZA_OS_ENABLE_IRQ
+static void rp2040_common_irq_handler(void)
+{
+    uint32_t vector = scb_hw->icsr & M0PLUS_ICSR_VECTACTIVE_BITS;
+    if (vector < 16) {
+        return;
+    }
+    uint32_t irq_id = vector - 16;
+    if (irq_id >= NOZA_RP2040_IRQ_COUNT) {
+        return;
+    }
+    noza_irq_handle_from_isr(irq_id);
+}
+#endif

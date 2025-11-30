@@ -2,6 +2,8 @@
 #include <ctype.h>
 #include <stdio.h>
 #include "pico/stdio.h"
+#include "noza_irq_defs.h"
+#include "service/irq/irq_client.h"
 
 #include "cmd_line.h"
 #include "noza_console.h"
@@ -185,14 +187,41 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 
 static noza_console_t noza_console;
 int console_start()
-{ 
+{
 	noza_console_init(&noza_console, "noza> ", &cmd_table.builtin_cmds[0]);
-	for (;;) {
-		int ch = noza_console.cmd.driver.getc();
-		if (ch < 0)
-			noza_thread_sleep_ms(50, NULL);
-		else {
-			cmd_line_putc(&noza_console.cmd, ch);
+
+	int ret = irq_service_subscribe(NOZA_IRQ_UART0);
+	if (ret != 0) {
+		// fallback: keep old polling behavior
+		for (;;) {
+			int ch = noza_console.cmd.driver.getc();
+			if (ch < 0)
+				noza_thread_sleep_ms(50, NULL);
+			else {
+				cmd_line_putc(&noza_console.cmd, ch);
+			}
+		}
+	} else {
+		noza_msg_t msg;
+		for (;;) {
+			if (noza_recv(&msg) != 0) {
+				continue;
+			}
+			if (msg.ptr && msg.size == sizeof(noza_irq_event_t)) {
+				noza_irq_event_t evt = *(noza_irq_event_t *)msg.ptr;
+				noza_reply(&msg); // unmask
+				if (evt.irq_id == NOZA_IRQ_UART0) {
+					for (;;) {
+						int ch = noza_console.cmd.driver.getc();
+						if (ch < 0) {
+							break;
+						}
+						cmd_line_putc(&noza_console.cmd, ch);
+					}
+				}
+			} else {
+				noza_reply(&msg);
+			}
 		}
 	}
 	return 0;
