@@ -7,6 +7,7 @@
 #define KEY_LF          13  
 #define KEY_ESC         27
 #define KEY_BACKSPACE   8
+#define KEY_BACKSPACE2  127
 #define KEY_PAGEUP      53
 #define KEY_PAGEDOWN    54
 #define KEY_UP          65
@@ -94,6 +95,7 @@ static void state_stand_by(cmd_line_t *edit, int c)
             break;
 
         case KEY_BACKSPACE:
+        case KEY_BACKSPACE2:
         case -1:
             cmd_line_key_backspace(edit);
             break;
