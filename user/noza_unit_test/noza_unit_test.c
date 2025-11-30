@@ -9,6 +9,9 @@
 #include "posix/errno.h"
 #include <service/name_lookup/name_lookup_client.h>
 #include <service/sync/sync_client.h>
+#include <fcntl.h>
+#include "noza_fs.h"
+#include "noza_fs.h"
 
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
@@ -199,6 +202,92 @@ static void test_futex_timeout(void)
     uint32_t exit_code = 0;
     TEST_ASSERT_EQUAL_INT(0, noza_thread_join(th, &exit_code));
     TEST_ASSERT_EQUAL_INT(ETIMEDOUT, exit_code);
+}
+
+static void test_fs_chmod_chown(void)
+{
+    const char *path = "/own.txt";
+    noza_unlink(path);
+    int fd = noza_open(path, O_CREAT | O_RDWR, 0644);
+    TEST_ASSERT_TRUE(fd >= 0);
+    noza_fs_attr_t st;
+    TEST_ASSERT_EQUAL_INT(0, noza_fstat(fd, &st));
+    TEST_ASSERT_EQUAL_INT(0, noza_chmod(path, 0700));
+    TEST_ASSERT_EQUAL_INT(0, noza_chown(path, st.uid, st.gid));
+    TEST_ASSERT_EQUAL_INT(0, noza_close(fd));
+    noza_unlink(path);
+}
+
+static void test_fs_seek_relative(void)
+{
+    const char *path = "/seek.txt";
+    noza_unlink(path);
+    int fd = noza_open(path, O_CREAT | O_RDWR, 0644);
+    TEST_ASSERT_TRUE(fd >= 0);
+    const char *data = "abcdef";
+    TEST_ASSERT_EQUAL_INT((int)strlen(data), noza_write(fd, data, (uint32_t)strlen(data)));
+    TEST_ASSERT_EQUAL_INT((int)strlen(data), noza_lseek(fd, -3, SEEK_END));
+    char buf[4] = {0};
+    TEST_ASSERT_EQUAL_INT(3, noza_read(fd, buf, sizeof(buf)-1));
+    TEST_ASSERT_EQUAL_STRING("def", buf);
+    noza_close(fd);
+    noza_unlink(path);
+}
+
+static void test_fs_read_write_and_seek(void)
+{
+    const char *path = "/rw.txt";
+    TEST_ASSERT_EQUAL_INT(0, noza_unlink(path)); // ignore failure
+    int fd = noza_open(path, O_CREAT | O_RDWR, 0644);
+    TEST_ASSERT_TRUE(fd >= 0);
+    const char *data = "hello vfs";
+    TEST_ASSERT_EQUAL_INT((int)strlen(data), noza_write(fd, data, (uint32_t)strlen(data)));
+    TEST_ASSERT_EQUAL_INT((int)strlen(data), noza_lseek(fd, 0, SEEK_SET));
+    char buf[16] = {0};
+    TEST_ASSERT_EQUAL_INT((int)strlen(data), noza_read(fd, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_STRING_LEN(data, buf, strlen(data));
+    TEST_ASSERT_EQUAL_INT(0, noza_close(fd));
+}
+
+static void test_fs_dir_and_unlink(void)
+{
+    const char *dir = "/tmpdir";
+    noza_unlink("/tmpdir/file");
+    noza_unlink(dir);
+    TEST_ASSERT_EQUAL_INT(0, noza_mkdir(dir, 0755));
+    int fd = noza_open("/tmpdir/file", O_CREAT | O_RDWR, 0644);
+    TEST_ASSERT_TRUE(fd >= 0);
+    TEST_ASSERT_EQUAL_INT(0, noza_close(fd));
+    int dirfd = noza_opendir(dir);
+    TEST_ASSERT_TRUE(dirfd >= 0);
+    noza_fs_dirent_t ent;
+    int at_end = 0;
+    int seen = 0;
+    while (noza_readdir(dirfd, &ent, &at_end) == 0 && !at_end) {
+        if (strcmp(ent.name, "file") == 0) {
+            seen = 1;
+        }
+    }
+    TEST_ASSERT_EQUAL_INT(0, noza_closedir(dirfd));
+    TEST_ASSERT_TRUE(seen);
+    TEST_ASSERT_EQUAL_INT(0, noza_unlink("/tmpdir/file"));
+    TEST_ASSERT_EQUAL_INT(0, noza_unlink(dir));
+}
+
+static void test_fs_umask_and_perms(void)
+{
+    uint32_t old = noza_umask(0022);
+    (void)old;
+    const char *path = "/perm.txt";
+    noza_unlink(path);
+    int fd = noza_open(path, O_CREAT | O_RDWR, 0777);
+    TEST_ASSERT_TRUE(fd >= 0);
+    noza_fs_attr_t st;
+    TEST_ASSERT_EQUAL_INT(0, noza_fstat(fd, &st));
+    // mode should be 0777 & ~0022 = 0755
+    TEST_ASSERT_EQUAL_UINT32((NOZA_FS_MODE_IFREG | 0755), st.mode);
+    noza_close(fd);
+    noza_unlink(path);
 }
 
 static void test_timer_one_shot(void)
@@ -589,6 +678,11 @@ static int test_all(int argc, char **argv)
     RUN_TEST(test_noza_hardfault);
     RUN_TEST(test_noza_lookup);
     RUN_TEST(test_noza_spinlock);
+    RUN_TEST(test_fs_read_write_and_seek);
+    RUN_TEST(test_fs_seek_relative);
+    RUN_TEST(test_fs_dir_and_unlink);
+    RUN_TEST(test_fs_umask_and_perms);
+    RUN_TEST(test_fs_chmod_chown);
     UNITY_END();
     return 0;
 }

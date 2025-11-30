@@ -2,19 +2,15 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
+#include "noza_ipc.h"
+#include "noza_fs.h"
 #include "spinlock.h"
 
 typedef struct {
     uint32_t    high;
     uint32_t    low;
 } noza_time64_t;
-
-// Noza IPC
-typedef struct {
-    uint32_t    to_vid;
-    void        *ptr;
-    uint32_t    size;
-} noza_msg_t;
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK	1
@@ -51,6 +47,25 @@ int     noza_timer_wait(uint32_t timer_id, int32_t timeout_us);
 int     noza_clock_gettime(uint32_t clock_id, noza_time64_t *timestamp);
 int     noza_signal_send(uint32_t tid, uint32_t signum);
 uint32_t noza_signal_take(void);
+
+// File system (IPC to fs service)
+int     noza_open(const char *path, int flags, int mode);
+int     noza_close(int fd);
+int     noza_read(int fd, void *buf, uint32_t len);
+int     noza_write(int fd, const void *buf, uint32_t len);
+int64_t noza_lseek(int fd, int64_t offset, int whence);
+int     noza_stat(const char *path, noza_fs_attr_t *st);
+int     noza_fstat(int fd, noza_fs_attr_t *st);
+int     noza_mkdir(const char *path, uint32_t mode);
+int     noza_unlink(const char *path);
+int     noza_chdir(const char *path);
+char   *noza_getcwd(char *buf, size_t size);
+uint32_t noza_umask(uint32_t new_mask);
+int     noza_chmod(const char *path, uint32_t mode);
+int     noza_chown(const char *path, uint32_t uid, uint32_t gid);
+int     noza_opendir(const char *path);
+int     noza_closedir(int dir_fd);
+int     noza_readdir(int dir_fd, noza_fs_dirent_t *ent, int *at_end);
 
 // user level call
 int noza_set_errno(int errno);

@@ -7,6 +7,7 @@
 #include "noza_config.h"
 #include "syscall.h"
 #include "platform.h"
+#include "../include/noza_ipc.h"
 #include "posix/bits/signum.h"
 #include "posix/errno.h"
 #if NOZA_OS_ENABLE_IRQ
@@ -265,7 +266,14 @@ typedef struct {
     } pid;
     uint32_t   size;
     void       *ptr;
+    noza_identity_t identity;
 } noza_os_message_t;
+
+static const noza_identity_t k_default_identity = {
+    .uid = NOZA_DEFAULT_UID,
+    .gid = NOZA_DEFAULT_GID,
+    .umask = NOZA_DEFAULT_UMASK,
+};
 
 // define a structure for thread management
 // thread control block (TCB)
@@ -280,7 +288,9 @@ typedef struct thread_s {
     kernel_trap_info_t  trap;                // kernel trap information
     noza_os_port_t      port;                // port information
     noza_os_message_t   message;             // message passing mechanism for the thread
-    thread_t            *join_th;             // thread waiting to join this thread
+    noza_msg_t          *pending_recv_msg;   // user-space msg buffer for pending recv
+    noza_identity_t     identity;            // credentials for permission checks
+    thread_t            *join_th;            // thread waiting to join this thread
     noza_wait_queue_t   *waiting_queue;      // wait queue currently blocked on
     uint32_t            signal_pending;      // pending signal bits
     uint32_t            signal_mask;         // masked signals
@@ -368,6 +378,8 @@ static void     noza_os_scheduler();
 static void     noza_os_change_state(thread_t *th, thread_list_t *from, thread_list_t *to);
 static void     noza_os_set_return_value1(thread_t *th, uint32_t r0);
 static void     noza_os_set_return_value4(thread_t *th, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
+static inline void noza_ipc_write_user_message(thread_t *target, uint32_t sender_vid,
+    void *ptr, uint32_t size, const noza_identity_t *identity);
 
 #if NOZA_OS_NUM_CORES > 1
 #define noza_os_lock_init()     platform_os_lock_init()
@@ -402,8 +414,10 @@ static void irq_bindings_init(void)
 
 static inline void irq_prepare_user_message(thread_t *target, irq_binding_t *binding)
 {
-    noza_os_set_return_value4(target, 0, irq_sender_vid_inline(binding->event.irq_id),
-        (uint32_t)&binding->event, sizeof(binding->event));
+    uint32_t sender_vid = irq_sender_vid_inline(binding->event.irq_id);
+    noza_ipc_write_user_message(target, sender_vid, &binding->event,
+        sizeof(binding->event), &k_default_identity);
+    noza_os_set_return_value4(target, 0, sender_vid, (uint32_t)&binding->event, sizeof(binding->event));
     target->info.port_state = PORT_WAIT_LISTEN;
 }
 
@@ -626,6 +640,29 @@ inline static void noza_os_set_return_value4(thread_t *th, uint32_t r0, uint32_t
     th->trap.state = SYSCALL_OUTPUT;
 }
 
+inline static void noza_thread_set_identity(thread_t *th, thread_t *parent)
+{
+    th->identity = parent ? parent->identity : k_default_identity;
+}
+
+inline static void noza_ipc_snapshot_identity(noza_os_message_t *message, const noza_identity_t *identity)
+{
+    message->identity = identity ? *identity : k_default_identity;
+}
+
+inline static void noza_ipc_write_user_message(thread_t *target, uint32_t sender_vid,
+    void *ptr, uint32_t size, const noza_identity_t *identity)
+{
+    if (target->pending_recv_msg == NULL) {
+        return;
+    }
+    target->pending_recv_msg->to_vid = sender_vid;
+    target->pending_recv_msg->ptr = ptr;
+    target->pending_recv_msg->size = size;
+    target->pending_recv_msg->identity = identity ? *identity : k_default_identity;
+    target->pending_recv_msg = NULL;
+}
+
 inline static void noza_os_change_state(thread_t *th, thread_list_t *from, thread_list_t *to)
 {
     noza_os_remove_thread(from, th);
@@ -654,7 +691,9 @@ static void noza_os_send(thread_t *running, thread_t *target, void *msg, uint32_
         return;
     }
 
-    running->message.pid.target = thread_get_vid(target); 
+    noza_ipc_snapshot_identity(&running->message, &running->identity);
+    uint32_t sender_vid = thread_get_vid(running);
+    running->message.pid.target = thread_get_vid(target);
     running->message.ptr = msg;
     running->message.size = size;
     switch (target->info.port_state) {
@@ -668,7 +707,8 @@ static void noza_os_send(thread_t *running, thread_t *target, void *msg, uint32_
                 kernel_panic("unexpected: target thread (pid:%ld) is not in the waiting list\n", thread_get_vid(target));
             }
             noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);  // move target from wait list to ready list
-            noza_os_set_return_value4(target, 0, thread_get_vid(running), (uint32_t) msg, size); // 0 --> success
+            noza_ipc_write_user_message(target, sender_vid, msg, size, &running->message.identity);
+            noza_os_set_return_value4(target, 0, sender_vid, (uint32_t)msg, size); // 0 --> success
             target->info.port_state = PORT_WAIT_LISTEN; 
             break;
 
@@ -690,10 +730,13 @@ static void noza_os_nonblock_send(thread_t *running, thread_t *target, void *msg
     }
 }
 
-static void noza_os_recv(thread_t *running)
+static void noza_os_recv(thread_t *running, noza_msg_t *msg)
 {
+    running->pending_recv_msg = msg;
     if (running->port.pending_list.count > 0) {
         thread_t *source = running->port.pending_list.head->value; // get the first node in pending_list
+        noza_ipc_write_user_message(running, thread_get_vid(source), source->message.ptr,
+            source->message.size, &source->message.identity);
         noza_os_set_return_value4(running, 0, thread_get_vid(source), (uint32_t)source->message.ptr, source->message.size); // receive successfully
         noza_os_change_state(source, &running->port.pending_list, &running->port.reply_list); // move from pending list to reply list
     } else {
@@ -704,11 +747,12 @@ static void noza_os_recv(thread_t *running)
     }
 }
 
-static void noza_os_nonblock_recv(thread_t *running)
+static void noza_os_nonblock_recv(thread_t *running, noza_msg_t *msg)
 {
     if (running->port.pending_list.count > 0) {
-        noza_os_recv(running);
+        noza_os_recv(running, msg);
     } else {
+        running->pending_recv_msg = NULL;
         noza_os_set_return_value1(running, EAGAIN);
     }
 }
@@ -888,6 +932,9 @@ inline static thread_t *noza_thread_alloc()
     th->trap.state = SYSCALL_DONE;
     th->signal_pending = 0;
     th->signal_mask = 0;
+    th->pending_recv_msg = NULL;
+    th->identity = k_default_identity;
+    th->message.identity = k_default_identity;
     noza_os_insert_vid(th);
     return th;
 }
@@ -906,6 +953,7 @@ static void noza_thread_clear_messages(thread_t *th)
         noza_os_set_return_value1(reply, EAGAIN);
         noza_os_change_state(reply, &th->port.reply_list, &noza_os.ready[reply->info.priority]);
     }
+    th->pending_recv_msg = NULL;
 }
 
 // insert one object to tail and return the head
@@ -1084,6 +1132,7 @@ static inline void noza_signal_interrupt_thread(thread_t *target)
         break;
     case THREAD_WAITING_MSG:
         noza_os_change_state(target, &noza_os.wait, &noza_os.ready[target->info.priority]);
+        target->pending_recv_msg = NULL;
         noza_os_set_return_value1(target, EINTR);
         break;
     case THREAD_SLEEP:
@@ -1408,6 +1457,8 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
     if (th == NULL) {
         return EAGAIN;
     }
+    noza_thread_set_identity(th, noza_os_get_running_thread());
+    th->message.identity = th->identity;
     th->info.priority = priority;
     th->flags = 0x0;
     th->signal_pending = 0;
@@ -1723,12 +1774,14 @@ static void syscall_thread_terminate(thread_t *running)
 
 static void syscall_recv(thread_t *running)
 {
+    noza_msg_t *msg = (noza_msg_t *)running->trap.r1;
+    running->pending_recv_msg = msg;
 #if NOZA_OS_ENABLE_IRQ
     if (irq_try_consume_event(running)) {
         return;
     }
 #endif
-    noza_os_recv(running);
+    noza_os_recv(running, msg);
 }
 
 static void syscall_reply(thread_t *running)
@@ -1768,7 +1821,7 @@ static void syscall_nbcall(thread_t *running)
 
 static void syscall_nbrecv(thread_t *running)
 {
-    noza_os_nonblock_recv(running);
+    noza_os_nonblock_recv(running, (noza_msg_t *)running->trap.r1);
 }
 
 static void syscall_futex_wait(thread_t *running)

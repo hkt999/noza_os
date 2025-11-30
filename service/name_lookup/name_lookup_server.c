@@ -12,7 +12,7 @@ typedef struct {
 } node_mgr_t;
 
 static value_node_t *node_alloc(void *p) {
-    value_node_t *r;
+    value_node_t *r = NULL;
     node_mgr_t *m = (node_mgr_t *)p;
     if (m->free_head) {
         r = m->free_head;
@@ -118,18 +118,28 @@ static int validate_name(const char *name)
     return 1;
 }
 
+static service_binding_t *binding_by_name(const char *name)
+{
+    if (!validate_name(name)) {
+        return NULL;
+    }
+    for (int i = 0; i < NOZA_MAX_SERVICE; i++) {
+        if (service_table[i].in_use && strncmp(service_table[i].name, name, MAX_NAME_LEN) == 0) {
+            return &service_table[i];
+        }
+    }
+    return NULL;
+}
+
 static int handle_register(name_msg_t *name_msg, uint32_t caller_vid, simap_t *map)
 {
     if (!validate_name(name_msg->name)) {
         return NAME_LOOKUP_ERR_INVALID;
     }
 
-    int stored_id;
-    if (simap_get_value(map, name_msg->name, &stored_id) == 0) {
-        service_binding_t *binding = binding_by_id((uint32_t)stored_id);
-        if (binding == NULL) {
-            return NAME_LOOKUP_ERR_INVALID;
-        }
+    // Update existing entry by name
+    service_binding_t *binding = binding_by_name(name_msg->name);
+    if (binding) {
         if (name_msg->service_id != 0 && name_msg->service_id != binding->service_id) {
             return NAME_LOOKUP_ERR_DUPLICATE;
         }
@@ -142,7 +152,7 @@ static int handle_register(name_msg_t *name_msg, uint32_t caller_vid, simap_t *m
         return NAME_LOOKUP_ERR_DUPLICATE;
     }
 
-    service_binding_t *binding = binding_alloc();
+    binding = binding_alloc();
     if (binding == NULL) {
         return NAME_LOOKUP_ERR_CAPACITY;
     }
@@ -161,14 +171,8 @@ static int handle_register(name_msg_t *name_msg, uint32_t caller_vid, simap_t *m
     strncpy(binding->name, name_msg->name, MAX_NAME_LEN);
     binding->name[MAX_NAME_LEN] = '\0';
 
-    int ret = simap_set_value(map, binding->name, (int)binding->service_id);
-    if (ret != 0) {
-        binding_release(binding);
-        if (ret == EBUSY) {
-            return NAME_LOOKUP_ERR_DUPLICATE;
-        }
-        return NAME_LOOKUP_ERR_CAPACITY;
-    }
+    // Best-effort map insert; fall back to linear scan on resolve
+    (void)simap_set_value(map, binding->name, (int)binding->service_id);
 
     return NAME_LOOKUP_OK;
 }
@@ -179,12 +183,7 @@ static int handle_resolve_name(name_msg_t *name_msg, simap_t *map)
         return NAME_LOOKUP_ERR_INVALID;
     }
 
-    int stored_id;
-    if (simap_get_value(map, name_msg->name, &stored_id) != 0) {
-        return NAME_LOOKUP_ERR_NOT_FOUND;
-    }
-
-    service_binding_t *binding = binding_by_id((uint32_t)stored_id);
+    service_binding_t *binding = binding_by_name(name_msg->name);
     if (binding == NULL) {
         return NAME_LOOKUP_ERR_NOT_FOUND;
     }
@@ -241,6 +240,11 @@ static int do_name_server(void *param, uint32_t pid)
     for (;;) {
         if (noza_recv(&msg) == 0) {
             name_msg_t *name_msg = (name_msg_t *)msg.ptr;
+            if (msg.size < sizeof(name_msg_t)) {
+                name_msg->code = NAME_LOOKUP_ERR_INVALID;
+                noza_reply(&msg);
+                continue;
+            }
             switch (name_msg->cmd) {
                 case NAME_LOOKUP_REGISTER:
                     name_msg->code = handle_register(name_msg, msg.to_vid, &map);

@@ -9,8 +9,9 @@
 #include "noza_console.h"
 #include "nozaos.h"
 #include "nz_stdlib.h"
+#include "noza_fs.h"
 
-#define MAX_BUILTIN_CMDS  16
+#define MAX_BUILTIN_CMDS  32
 typedef struct {
     int count;
     builtin_cmd_t builtin_cmds[MAX_BUILTIN_CMDS];
@@ -119,20 +120,6 @@ static void parse_input_command(char *cmdbuf, int *argc, char **argv, int max_ar
 	}
 }
 
-typedef struct {
-	int argc;
-	char **argv;
-	int (*main_func)(int argc, char **argv);
-} run_t;
-
-#if 0
-static int run_entry(void *param, uint32_t pid)
-{
-	run_t *run = (run_t *)param;
-	return run->main_func(run->argc, run->argv);
-}
-#endif
-
 #define MAX_ARGV  12
 static void noza_console_process_command(char *cmd_str, void *user_data)
 {
@@ -151,6 +138,60 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 				while (rc->name && rc->main_func) {
 					printf("%s - %s\n", rc->name, rc->help_msg);
 					rc++;
+				}
+			} else if (strncmp(argv[0], "ls", 32) == 0) {
+				const char *path = (argc > 1) ? argv[1] : ".";
+				int dir = noza_opendir(path);
+				if (dir < 0) {
+					printf("ls: cannot open %s\n", path);
+				} else {
+					noza_fs_dirent_t ent;
+					int at_end = 0;
+					while (noza_readdir(dir, &ent, &at_end) == 0 && !at_end) {
+						printf("%s\n", ent.name);
+					}
+					noza_closedir(dir);
+				}
+			} else if (strncmp(argv[0], "cat", 32) == 0) {
+				if (argc < 2) {
+					printf("cat: missing file\n");
+				} else {
+					int fd = noza_open(argv[1], 0, 0);
+					if (fd < 0) {
+						printf("cat: cannot open %s\n", argv[1]);
+					} else {
+						char buf[128];
+						int r;
+						while ((r = noza_read(fd, buf, sizeof(buf))) > 0) {
+							fwrite(buf, 1, r, stdout);
+						}
+						noza_close(fd);
+					}
+				}
+			} else if (strncmp(argv[0], "mkdir", 32) == 0) {
+				if (argc < 2) {
+					printf("mkdir: missing path\n");
+				} else if (noza_mkdir(argv[1], 0755) != 0) {
+					printf("mkdir: failed %s\n", argv[1]);
+				}
+			} else if (strncmp(argv[0], "rm", 32) == 0) {
+				if (argc < 2) {
+					printf("rm: missing path\n");
+				} else if (noza_unlink(argv[1]) != 0) {
+					printf("rm: failed %s\n", argv[1]);
+				}
+			} else if (strncmp(argv[0], "cd", 32) == 0) {
+				if (argc < 2) {
+					printf("cd: missing path\n");
+				} else if (noza_chdir(argv[1]) != 0) {
+					printf("cd: failed %s\n", argv[1]);
+				}
+			} else if (strncmp(argv[0], "pwd", 32) == 0) {
+				char buf[NOZA_FS_MAX_PATH];
+				if (noza_getcwd(buf, sizeof(buf))) {
+					printf("%s\n", buf);
+				} else {
+					printf("pwd: failed\n");
 				}
 			} else  {
 				while (rc->name && rc->main_func) {

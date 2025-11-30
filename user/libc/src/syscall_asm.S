@@ -94,6 +94,7 @@ noza_thread_terminate:
 noza_recv:
 	push {r4-r7, lr}
 	mov r4, r0 // save the original r0 to r4 --> noza_msg_t pointer
+	mov r1, r0 // pass msg pointer to kernel
 	movs r0, #NSC_RECV 		// set r0 to the value of NSC_RECV
 	svc #0             		// perform a supervisor call (SVC) with immediate value 0
 	mov r5, r0 // save return value
@@ -138,6 +139,7 @@ noza_nonblock_call:
 noza_nonblock_recv:
 	push {r4-r7, lr}
 	mov r4, r0				// save r0 to r4
+	mov r1, r0              // pass msg pointer to kernel
 	movs r0, #NSC_NB_RECV	// set r0 to the value of NSC_NB_RECV
 	svc #0 					// system call, return value in r0
 	stmia r4!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, save to memory

@@ -45,4 +45,5 @@ target_include_directories(
     PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/../..
 	${CMAKE_CURRENT_LIST_DIR}/../../user/libc/include
+	${CMAKE_CURRENT_LIST_DIR}/../../include
 )
