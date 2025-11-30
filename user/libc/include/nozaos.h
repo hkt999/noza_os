@@ -68,7 +68,7 @@ int     noza_closedir(int dir_fd);
 int     noza_readdir(int dir_fd, noza_fs_dirent_t *ent, int *at_end);
 
 // user level call
-int noza_set_errno(int errno);
+int noza_set_errno(int err);
 int noza_get_errno();
 
 // process

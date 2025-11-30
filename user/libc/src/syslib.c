@@ -112,7 +112,7 @@ int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms) {
 	return ret;
 }
 
-int noza_set_errno(int errno) {
+int noza_set_errno(int err) {
 	uint32_t pid;
 	if (noza_thread_self(&pid) == 0) {
 		thread_record_t *record = get_thread_record(pid);
@@ -120,7 +120,7 @@ int noza_set_errno(int errno) {
 			printf("fatal: noza_set_errno: pid %ld not found\n", pid);
 			return -1; // TODO: return errno
 		}
-		record->errno = errno;
+		record->errno = err;
 		return 0;
 	}
 

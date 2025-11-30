@@ -121,6 +121,7 @@ set(
 	user/libc/src/setjmp.S
 	user/libc/src/spinlock.c
 	user/libc/src/nz_stdlib.c
+	user/libc/src/syscall_io.c
 
 	# services
 	service/name_lookup/name_lookup_server.c
