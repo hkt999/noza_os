@@ -9,60 +9,74 @@
 #include "posix/errno.h"
 #include "printk.h"
 
-static cmd_line_t console_cmd;
-static char line_buf[BUFLEN];
-static volatile int line_ready;
-static volatile int line_len;
-static int irq_enabled;
-static noza_msg_t pending_read_msg;
-static console_msg_t *pending_read_cmsg;
+typedef struct uart_state {
+    cmd_line_t uart_cmd;
+    char line_buf[BUFLEN];
+    volatile int line_ready;
+    volatile int line_len;
+    int irq_enabled;
+    noza_msg_t pending_read_msg;
+    console_msg_t *pending_read_cmsg;
+} uart_state_t;
+
+static uart_state_t g_uart_state;
 
 static void process_command(char *cmd_str, void *user_data)
 {
-    (void)user_data;
-    strncpy(line_buf, cmd_str, sizeof(line_buf) - 1);
-    line_buf[sizeof(line_buf) - 1] = 0;
-    line_len = strlen(line_buf);
-    line_ready = 1;
+    uart_state_t *state = (uart_state_t *)user_data;
+    if (state == NULL) {
+        return;
+    }
+    strncpy(state->line_buf, cmd_str, sizeof(state->line_buf) - 1);
+    state->line_buf[sizeof(state->line_buf) - 1] = 0;
+    state->line_len = (int)strlen(state->line_buf);
+    state->line_ready = 1;
 }
 
-static void handle_irq_input(void)
+static void handle_irq_input(uart_state_t *state)
 {
+    if (state == NULL) {
+        return;
+    }
     for (;;) {
-        int ch = console_cmd.driver.getc();
+        int ch = state->uart_cmd.driver.getc();
         if (ch < 0) {
             break;
         }
-        cmd_line_putc(&console_cmd, ch);
+        cmd_line_putc(&state->uart_cmd, ch);
     }
 }
 
-static void reply_pending_line_if_ready(void)
+static void reply_pending_line_if_ready(uart_state_t *state)
 {
-    if (!line_ready || pending_read_cmsg == NULL) {
+    if (state == NULL) {
         return;
     }
-    uint32_t copy_len = (line_len < (int)pending_read_cmsg->len) ? (uint32_t)line_len : pending_read_cmsg->len;
-    memcpy(pending_read_cmsg->buf, line_buf, copy_len);
-    pending_read_cmsg->len = copy_len;
-    pending_read_cmsg->code = 0;
-    noza_reply(&pending_read_msg);
-    pending_read_cmsg = NULL;
-    pending_read_msg.ptr = NULL;
-    line_ready = 0;
-    line_len = 0;
+    if (!state->line_ready || state->pending_read_cmsg == NULL) {
+        return;
+    }
+    uint32_t copy_len = (state->line_len < (int)state->pending_read_cmsg->len) ? (uint32_t)state->line_len : state->pending_read_cmsg->len;
+    memcpy(state->pending_read_cmsg->buf, state->line_buf, copy_len);
+    state->pending_read_cmsg->len = copy_len;
+    state->pending_read_cmsg->code = 0;
+    noza_reply(&state->pending_read_msg);
+    state->pending_read_cmsg = NULL;
+    state->pending_read_msg.ptr = NULL;
+    state->line_ready = 0;
+    state->line_len = 0;
 }
 
-int console_service_start(void *param, uint32_t pid)
+int uart_service_start(void *param, uint32_t pid)
 {
     (void)param;
     (void)pid;
+    memset(&g_uart_state, 0, sizeof(g_uart_state));
 
     // init cmd line
     char_driver_t driver;
     extern void noza_char_init(char_driver_t *driver);
     noza_char_init(&driver);
-    cmd_line_init(&console_cmd, &driver, process_command, NULL);
+    cmd_line_init(&g_uart_state.uart_cmd, &driver, process_command, &g_uart_state);
 
     uint32_t service_id = 0;
     int reg_ret = name_lookup_register(NOZA_CONSOLE_SERVICE_NAME, &service_id);
@@ -71,7 +85,7 @@ int console_service_start(void *param, uint32_t pid)
     }
 
     // UART RX IRQ temporarily disabled; use polling mode.
-    irq_enabled = 0;
+    g_uart_state.irq_enabled = 0;
 
     noza_msg_t msg;
     for (;;) {
@@ -82,8 +96,8 @@ int console_service_start(void *param, uint32_t pid)
             noza_irq_event_t evt = *(noza_irq_event_t *)msg.ptr;
             noza_reply(&msg); // unmask IRQ quickly
             if (evt.irq_id == NOZA_IRQ_UART0) {
-                handle_irq_input();
-                reply_pending_line_if_ready();
+                handle_irq_input(&g_uart_state);
+                reply_pending_line_if_ready(&g_uart_state);
             }
             continue;
         }
@@ -102,42 +116,42 @@ int console_service_start(void *param, uint32_t pid)
                 }
                 case CONSOLE_CMD_READLINE: {
                     // if a line is already ready, serve it immediately
-                    if (line_ready) {
-                        uint32_t copy_len = (line_len < cmsg->len) ? line_len : cmsg->len;
-                        memcpy(cmsg->buf, line_buf, copy_len);
+                    if (g_uart_state.line_ready) {
+                        uint32_t copy_len = (g_uart_state.line_len < cmsg->len) ? (uint32_t)g_uart_state.line_len : cmsg->len;
+                        memcpy(cmsg->buf, g_uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
-                        line_ready = 0;
-                        line_len = 0;
+                        g_uart_state.line_ready = 0;
+                        g_uart_state.line_len = 0;
                         noza_reply(&msg);
                         break;
                     }
 
-                    if (!irq_enabled) {
-                        line_ready = 0;
-                        line_len = 0;
-                        while (!line_ready) {
-                            handle_irq_input();
+                    if (!g_uart_state.irq_enabled) {
+                        g_uart_state.line_ready = 0;
+                        g_uart_state.line_len = 0;
+                        while (!g_uart_state.line_ready) {
+                            handle_irq_input(&g_uart_state);
                             noza_thread_sleep_ms(1, NULL);
                         }
-                        uint32_t copy_len = (line_len < cmsg->len) ? line_len : cmsg->len;
-                        memcpy(cmsg->buf, line_buf, copy_len);
+                        uint32_t copy_len = (g_uart_state.line_len < cmsg->len) ? (uint32_t)g_uart_state.line_len : cmsg->len;
+                        memcpy(cmsg->buf, g_uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
                         noza_reply(&msg);
                         break;
                     }
 
-                    if (pending_read_cmsg != NULL) {
+                    if (g_uart_state.pending_read_cmsg != NULL) {
                         cmsg->code = EBUSY;
                         noza_reply(&msg);
                         break;
                     }
 
-                    line_ready = 0;
-                    line_len = 0;
-                    pending_read_msg = msg;
-                    pending_read_cmsg = cmsg;
+                    g_uart_state.line_ready = 0;
+                    g_uart_state.line_len = 0;
+                    g_uart_state.pending_read_msg = msg;
+                    g_uart_state.pending_read_cmsg = cmsg;
                     // prompt is handled by callers via console_write; no reply until line arrives
                     break;
                 }
@@ -153,9 +167,9 @@ int console_service_start(void *param, uint32_t pid)
     return 0;
 }
 
-static uint8_t console_service_stack[1024];
-void __attribute__((constructor(103))) console_service_init(void *param, uint32_t pid)
+static uint8_t uart_service_stack[1024];
+void __attribute__((constructor(103))) uart_service_init(void *param, uint32_t pid)
 {
     extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
-    noza_add_service(console_service_start, console_service_stack, sizeof(console_service_stack));
+    noza_add_service(uart_service_start, uart_service_stack, sizeof(uart_service_stack));
 }

@@ -2,6 +2,7 @@
 #include "posix/errno.h"
 #include "service/fs/devfs.h"
 #include "drivers/uart/uart_io_client.h"
+#include "noza_uart.h"
 #include "noza_fs.h"
 #include "printk.h"
 
@@ -31,10 +32,7 @@ static int uart_dev_write(void *dev_handle, const void *buf, uint32_t len, uint3
         *out_len = 0;
         return 0;
     }
-    int rc = console_write((const char *)buf, len);
-    if (rc != 0) {
-        return rc;
-    }
+    noza_uart_write((const char *)buf, len);
     *out_len = len;
     return 0;
 }

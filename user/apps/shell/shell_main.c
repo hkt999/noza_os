@@ -1,4 +1,7 @@
 #include <string.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <fcntl.h>
 #include "nozaos.h"
 #include "noza_console_api.h"
 #include "service/name_lookup/name_lookup_client.h"
@@ -8,6 +11,57 @@
 
 #define SHELL_PROMPT "noza> "
 #define SHELL_BANNER "\nNOZA OS v0.01\n"
+
+static int shell_tty_fd = -1;
+
+static int shell_open_tty(void)
+{
+    if (shell_tty_fd >= 0) {
+        return 0;
+    }
+    int fd = noza_open("/dev/ttyS0", O_RDWR, 0666);
+    if (fd < 0) {
+        return -1;
+    }
+    shell_tty_fd = fd;
+    return 0;
+}
+
+static void app_write(const char *buf, size_t len)
+{
+    if (buf == NULL || len == 0) {
+        return;
+    }
+    if (shell_open_tty() == 0) {
+        size_t offset = 0;
+        while (offset < len) {
+            int w = noza_write(shell_tty_fd, buf + offset, (uint32_t)(len - offset));
+            if (w <= 0) {
+                shell_tty_fd = -1;
+                break; // error, fall through to error notice
+            }
+            offset += (size_t)w;
+        }
+        if (offset == len) {
+            return;
+        }
+    }
+    console_write("error on write, fallback\n", 26);
+}
+
+static void app_printf(const char *fmt, ...)
+{
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n <= 0) {
+        return;
+    }
+    size_t len = (n < (int)sizeof(buf)) ? (size_t)n : sizeof(buf) - 1;
+    app_write(buf, len);
+}
 
 static int shell_main(void *param, uint32_t pid)
 {
@@ -20,14 +74,14 @@ static int shell_main(void *param, uint32_t pid)
         printk("shell: name register failed (%d)\n", reg_ret);
     }
 
-    console_write(SHELL_BANNER, strlen(SHELL_BANNER));
+    app_printf("%s", SHELL_BANNER);
     char line[128];
     for (;;) {
-        console_write(SHELL_PROMPT, strlen(SHELL_PROMPT));
+        app_printf("%s", SHELL_PROMPT);
         uint32_t len = 0;
         int ret = console_readline(line, sizeof(line), &len);
         if (ret != 0) {
-            console_write("console offline\n", 16);
+            app_printf("console offline\n");
             noza_thread_sleep_ms(500, NULL);
             continue;
         }
@@ -45,54 +99,50 @@ static int shell_main(void *param, uint32_t pid)
             const char *path = argv[1] ? argv[1] : ".";
             int dir = noza_opendir(path);
             if (dir < 0) {
-                console_write("ls: cannot open\n", 17);
+                app_printf("ls: cannot open\n");
             } else {
                 noza_fs_dirent_t ent;
                 int at_end = 0;
                 while (noza_readdir(dir, &ent, &at_end) == 0 && !at_end) {
-                    console_write(ent.name, strlen(ent.name));
-                    console_write("\n", 1);
+                    app_write(ent.name, strlen(ent.name));
+                    app_printf("\n");
                 }
                 noza_closedir(dir);
             }
         } else if (strcmp(argv[0], "cat") == 0 && argv[1]) {
             int fd = noza_open(argv[1], 0, 0);
             if (fd < 0) {
-                console_write("cat: cannot open\n", 18);
+                app_printf("cat: cannot open\n");
             } else {
                 char buf[128];
                 int r;
                 while ((r = noza_read(fd, buf, sizeof(buf))) > 0) {
-                    console_write(buf, r);
+                    app_write(buf, (size_t)r);
                 }
                 noza_close(fd);
             }
         } else if (strcmp(argv[0], "mkdir") == 0 && argv[1]) {
             if (noza_mkdir(argv[1], 0755) != 0) {
-                console_write("mkdir failed\n", 13);
+                app_printf("mkdir failed\n");
             }
         } else if (strcmp(argv[0], "rm") == 0 && argv[1]) {
             if (noza_unlink(argv[1]) != 0) {
-                console_write("rm failed\n", 10);
+                app_printf("rm failed\n");
             }
         } else if (strcmp(argv[0], "pwd") == 0) {
             char buf[NOZA_FS_MAX_PATH];
             if (noza_getcwd(buf, sizeof(buf))) {
-                console_write(buf, strlen(buf));
-                console_write("\n", 1);
+                app_write(buf, strlen(buf));
+                app_printf("\n");
             }
         } else if (strcmp(argv[0], "cd") == 0 && argv[1]) {
             if (noza_chdir(argv[1]) != 0) {
-                console_write("cd failed\n", 10);
+                app_printf("cd failed\n");
             }
         } else if (strcmp(argv[0], "help") == 0 || strcmp(argv[0], "list") == 0) {
-            console_write(
-                "commands: ls [path], cat <file>, mkdir <path>, rm <path>, cd <path>, pwd\n",
-                76);
+            app_printf("commands: ls [path], cat <file>, mkdir <path>, rm <path>, cd <path>, pwd\n");
         } else {
-            console_write("command not found: ", 20);
-            console_write(argv[0], strlen(argv[0]));
-            console_write("\n", 1);
+            app_printf("command not found: %s\n", argv[0]);
         }
     }
     return 0;

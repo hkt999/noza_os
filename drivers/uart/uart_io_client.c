@@ -1,8 +1,8 @@
+#include <string.h>
 #include "noza_console_api.h"
 #include "service/name_lookup/name_lookup_client.h"
 #include "nozaos.h"
 #include "posix/errno.h"
-#include <string.h>
 
 static uint32_t console_service_id;
 static uint32_t console_vid;
