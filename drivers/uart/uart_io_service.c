@@ -19,8 +19,6 @@ typedef struct uart_state {
     console_msg_t *pending_read_cmsg;
 } uart_state_t;
 
-static uart_state_t g_uart_state;
-
 static void process_command(char *cmd_str, void *user_data)
 {
     uart_state_t *state = (uart_state_t *)user_data;
@@ -70,13 +68,13 @@ int uart_service_start(void *param, uint32_t pid)
 {
     (void)param;
     (void)pid;
-    memset(&g_uart_state, 0, sizeof(g_uart_state));
+    uart_state_t uart_state = {0};
 
     // init cmd line
     char_driver_t driver;
     extern void noza_char_init(char_driver_t *driver);
     noza_char_init(&driver);
-    cmd_line_init(&g_uart_state.uart_cmd, &driver, process_command, &g_uart_state);
+    cmd_line_init(&uart_state.uart_cmd, &driver, process_command, &uart_state);
 
     uint32_t service_id = 0;
     int reg_ret = name_lookup_register(NOZA_CONSOLE_SERVICE_NAME, &service_id);
@@ -85,7 +83,7 @@ int uart_service_start(void *param, uint32_t pid)
     }
 
     // UART RX IRQ temporarily disabled; use polling mode.
-    g_uart_state.irq_enabled = 0;
+    uart_state.irq_enabled = 0;
 
     noza_msg_t msg;
     for (;;) {
@@ -96,8 +94,8 @@ int uart_service_start(void *param, uint32_t pid)
             noza_irq_event_t evt = *(noza_irq_event_t *)msg.ptr;
             noza_reply(&msg); // unmask IRQ quickly
             if (evt.irq_id == NOZA_IRQ_UART0) {
-                handle_irq_input(&g_uart_state);
-                reply_pending_line_if_ready(&g_uart_state);
+                handle_irq_input(&uart_state);
+                reply_pending_line_if_ready(&uart_state);
             }
             continue;
         }
@@ -116,42 +114,42 @@ int uart_service_start(void *param, uint32_t pid)
                 }
                 case CONSOLE_CMD_READLINE: {
                     // if a line is already ready, serve it immediately
-                    if (g_uart_state.line_ready) {
-                        uint32_t copy_len = (g_uart_state.line_len < cmsg->len) ? (uint32_t)g_uart_state.line_len : cmsg->len;
-                        memcpy(cmsg->buf, g_uart_state.line_buf, copy_len);
+                    if (uart_state.line_ready) {
+                        uint32_t copy_len = (uart_state.line_len < cmsg->len) ? (uint32_t)uart_state.line_len : cmsg->len;
+                        memcpy(cmsg->buf, uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
-                        g_uart_state.line_ready = 0;
-                        g_uart_state.line_len = 0;
+                        uart_state.line_ready = 0;
+                        uart_state.line_len = 0;
                         noza_reply(&msg);
                         break;
                     }
 
-                    if (!g_uart_state.irq_enabled) {
-                        g_uart_state.line_ready = 0;
-                        g_uart_state.line_len = 0;
-                        while (!g_uart_state.line_ready) {
-                            handle_irq_input(&g_uart_state);
+                    if (!uart_state.irq_enabled) {
+                        uart_state.line_ready = 0;
+                        uart_state.line_len = 0;
+                        while (!uart_state.line_ready) {
+                            handle_irq_input(&uart_state);
                             noza_thread_sleep_ms(1, NULL);
                         }
-                        uint32_t copy_len = (g_uart_state.line_len < cmsg->len) ? (uint32_t)g_uart_state.line_len : cmsg->len;
-                        memcpy(cmsg->buf, g_uart_state.line_buf, copy_len);
+                        uint32_t copy_len = (uart_state.line_len < cmsg->len) ? (uint32_t)uart_state.line_len : cmsg->len;
+                        memcpy(cmsg->buf, uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
                         noza_reply(&msg);
                         break;
                     }
 
-                    if (g_uart_state.pending_read_cmsg != NULL) {
+                    if (uart_state.pending_read_cmsg != NULL) {
                         cmsg->code = EBUSY;
                         noza_reply(&msg);
                         break;
                     }
 
-                    g_uart_state.line_ready = 0;
-                    g_uart_state.line_len = 0;
-                    g_uart_state.pending_read_msg = msg;
-                    g_uart_state.pending_read_cmsg = cmsg;
+                    uart_state.line_ready = 0;
+                    uart_state.line_len = 0;
+                    uart_state.pending_read_msg = msg;
+                    uart_state.pending_read_cmsg = cmsg;
                     // prompt is handled by callers via console_write; no reply until line arrives
                     break;
                 }
@@ -167,7 +165,7 @@ int uart_service_start(void *param, uint32_t pid)
     return 0;
 }
 
-static uint8_t uart_service_stack[1024];
+static uint8_t uart_service_stack[1024 + sizeof(uart_state_t)];
 void __attribute__((constructor(103))) uart_service_init(void *param, uint32_t pid)
 {
     extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);

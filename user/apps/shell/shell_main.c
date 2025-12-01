@@ -7,7 +7,6 @@
 #include "noza_fs.h"
 #include "nozaos.h"
 #include "noza_console_api.h"
-#include "service/name_lookup/name_lookup_client.h"
 #include "drivers/uart/uart_io_client.h"
 #include "printk.h"
 
@@ -65,16 +64,10 @@ static void app_printf(const char *fmt, ...)
     app_write(buf, len);
 }
 
-static int shell_main(void *param, uint32_t pid)
+int shell_main(int argc, char **argv)
 {
-    (void)param;
-    (void)pid;
-
-    uint32_t shell_id = 0;
-    int reg_ret = name_lookup_register("shell", &shell_id);
-    if (reg_ret != NAME_LOOKUP_OK) {
-        printk("shell: name register failed (%d)\n", reg_ret);
-    }
+    (void)argc;
+    (void)argv;
 
     app_printf("%s", SHELL_BANNER);
     char line[128];
@@ -147,11 +140,4 @@ static int shell_main(void *param, uint32_t pid)
         }
     }
     return 0;
-}
-
-static uint8_t shell_stack[2048];
-void __attribute__((constructor(120))) shell_init(void *param, uint32_t pid)
-{
-    extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
-    noza_add_service(shell_main, shell_stack, sizeof(shell_stack));
 }
