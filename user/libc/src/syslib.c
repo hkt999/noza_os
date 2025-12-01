@@ -142,6 +142,10 @@ int noza_errno() {
 	return -1;
 }
 
+int noza_get_errno() {
+	return noza_errno();
+}
+
 int noza_thread_self(uint32_t *pid) {
 	extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
 	uint32_t sp;

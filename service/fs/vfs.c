@@ -345,6 +345,33 @@ static int vfs_walk_components(vfs_node_t *start, const char *path, bool want_pa
     return 0;
 }
 
+// Normalize path in-place: collapse repeated slashes and strip trailing slash (except root).
+static void vfs_normalize_path(char *path)
+{
+    if (path == NULL) {
+        return;
+    }
+    char *src = path;
+    char *dst = path;
+    char prev = '\0';
+    while (*src != '\0') {
+        if (*src == '/' && prev == '/') {
+            src++;
+            continue;
+        }
+        *dst++ = *src;
+        prev = *src;
+        src++;
+    }
+    *dst = '\0';
+    // remove trailing slash unless root
+    size_t len = strnlen(path, NOZA_FS_MAX_PATH);
+    while (len > 1 && path[len - 1] == '/') {
+        path[len - 1] = '\0';
+        len--;
+    }
+}
+
 static int vfs_resolve(vfs_client_t *client, const char *path, bool want_parent,
     vfs_node_t **out_node, vfs_node_t **out_parent, char *leaf, size_t leaf_len)
 {
@@ -363,12 +390,13 @@ static int vfs_resolve(vfs_client_t *client, const char *path, bool want_parent,
                 return ENAMETOOLONG;
             }
         } else {
-        int n = snprintf(full, sizeof(full), "%s/%s", client->cwd, path);
-        if (n < 0 || n >= (int)sizeof(full)) {
-            return ENAMETOOLONG;
+            int n = snprintf(full, sizeof(full), "%s/%s", client->cwd, path);
+            if (n < 0 || n >= (int)sizeof(full)) {
+                return ENAMETOOLONG;
+            }
         }
     }
-    }
+    vfs_normalize_path(full);
 
     const char *rest = NULL;
     vfs_mount_t *mnt = vfs_match_mount(full, &rest);
@@ -437,11 +465,20 @@ int vfs_set_cwd(vfs_client_t *client, const char *path)
             }
         }
     } else {
-        int n = snprintf(new_cwd, sizeof(new_cwd), "%s/%s", client->cwd, path);
-        if (n < 0 || n >= (int)sizeof(new_cwd)) {
-            return ENAMETOOLONG;
+        if (client->cwd[0] == '/' && client->cwd[1] == '\0') {
+            int n = snprintf(new_cwd, sizeof(new_cwd), "/%s", path);
+            if (n < 0 || n >= (int)sizeof(new_cwd)) {
+                return ENAMETOOLONG;
+            }
+        } else {
+            int n = snprintf(new_cwd, sizeof(new_cwd), "%s/%s", client->cwd, path);
+            if (n < 0 || n >= (int)sizeof(new_cwd)) {
+                return ENAMETOOLONG;
+            }
         }
     }
+
+    vfs_normalize_path(new_cwd);
     strncpy(client->cwd, new_cwd, sizeof(client->cwd) - 1);
     client->cwd[sizeof(client->cwd) - 1] = '\0';
     client->cwd_node = target;

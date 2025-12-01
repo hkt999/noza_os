@@ -198,6 +198,7 @@ int noza_chdir(const char *path)
         return -1;
     }
     if (fs_call(&req, &resp) != 0) {
+        printk("[fs_client] chdir send fail path=%s errno=%d\n", req.path.path, noza_get_errno());
         return -1;
     }
     return 0;
