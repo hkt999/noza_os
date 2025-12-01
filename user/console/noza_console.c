@@ -1,14 +1,17 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "noza_irq_defs.h"
 #include "service/irq/irq_client.h"
 
 #include "cmd_line.h"
 #include "noza_console.h"
 #include "nozaos.h"
-#include "nz_stdlib.h"
 #include "noza_fs.h"
+#include "nz_stdlib.h"
 #include "noza_uart.h"
 #include "printk.h"
 
@@ -142,54 +145,53 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 				}
 			} else if (strncmp(argv[0], "ls", 32) == 0) {
 				const char *path = (argc > 1) ? argv[1] : ".";
-				int dir = noza_opendir(path);
-				if (dir < 0) {
+				DIR *dir = opendir(path);
+				if (dir == NULL) {
 					printk("ls: cannot open %s\n", path);
 				} else {
-					noza_fs_dirent_t ent;
-					int at_end = 0;
-					while (noza_readdir(dir, &ent, &at_end) == 0 && !at_end) {
-						printk("%s\n", ent.name);
+					struct dirent *ent;
+					while ((ent = readdir(dir)) != NULL) {
+						printk("%s\n", ent->d_name);
 					}
-					noza_closedir(dir);
+					closedir(dir);
 				}
 			} else if (strncmp(argv[0], "cat", 32) == 0) {
 				if (argc < 2) {
 					printk("cat: missing file\n");
 				} else {
-					int fd = noza_open(argv[1], 0, 0);
+					int fd = open(argv[1], O_RDONLY, 0);
 					if (fd < 0) {
 						printk("cat: cannot open %s\n", argv[1]);
 					} else {
 						char buf[128];
 						int r;
-						while ((r = noza_read(fd, buf, sizeof(buf))) > 0) {
+						while ((r = read(fd, buf, sizeof(buf))) > 0) {
 							fwrite(buf, 1, r, stdout);
 						}
-						noza_close(fd);
+						close(fd);
 					}
 				}
 			} else if (strncmp(argv[0], "mkdir", 32) == 0) {
 				if (argc < 2) {
 					printk("mkdir: missing path\n");
-				} else if (noza_mkdir(argv[1], 0755) != 0) {
+				} else if (mkdir(argv[1], 0755) != 0) {
 					printk("mkdir: failed %s\n", argv[1]);
 				}
 			} else if (strncmp(argv[0], "rm", 32) == 0) {
 				if (argc < 2) {
 					printk("rm: missing path\n");
-				} else if (noza_unlink(argv[1]) != 0) {
+				} else if (unlink(argv[1]) != 0) {
 					printk("rm: failed %s\n", argv[1]);
 				}
 			} else if (strncmp(argv[0], "cd", 32) == 0) {
 				if (argc < 2) {
 					printk("cd: missing path\n");
-				} else if (noza_chdir(argv[1]) != 0) {
+				} else if (chdir(argv[1]) != 0) {
 					printk("cd: failed %s\n", argv[1]);
 				}
 			} else if (strncmp(argv[0], "pwd", 32) == 0) {
 				char buf[NOZA_FS_MAX_PATH];
-				if (noza_getcwd(buf, sizeof(buf))) {
+				if (getcwd(buf, sizeof(buf))) {
 					printk("%s\n", buf);
 				} else {
 					printk("pwd: failed\n");

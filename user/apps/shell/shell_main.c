@@ -2,11 +2,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <unistd.h>
+#include "noza_fs.h"
 #include "nozaos.h"
 #include "noza_console_api.h"
 #include "service/name_lookup/name_lookup_client.h"
 #include "drivers/uart/uart_io_client.h"
-#include "noza_fs.h"
 #include "printk.h"
 
 #define SHELL_PROMPT "noza> "
@@ -19,7 +21,7 @@ static int shell_open_tty(void)
     if (shell_tty_fd >= 0) {
         return 0;
     }
-    int fd = noza_open("/dev/ttyS0", O_RDWR, 0666);
+    int fd = open("/dev/ttyS0", O_RDWR, 0666);
     if (fd < 0) {
         return -1;
     }
@@ -35,7 +37,7 @@ static void app_write(const char *buf, size_t len)
     if (shell_open_tty() == 0) {
         size_t offset = 0;
         while (offset < len) {
-            int w = noza_write(shell_tty_fd, buf + offset, (uint32_t)(len - offset));
+            int w = write(shell_tty_fd, buf + offset, (uint32_t)(len - offset));
             if (w <= 0) {
                 shell_tty_fd = -1;
                 break; // error, fall through to error notice
@@ -97,46 +99,45 @@ static int shell_main(void *param, uint32_t pid)
         }
         if (strcmp(argv[0], "ls") == 0) {
             const char *path = argv[1] ? argv[1] : ".";
-            int dir = noza_opendir(path);
-            if (dir < 0) {
+            DIR *dir = opendir(path);
+            if (dir == NULL) {
                 app_printf("ls: cannot open\n");
             } else {
-                noza_fs_dirent_t ent;
-                int at_end = 0;
-                while (noza_readdir(dir, &ent, &at_end) == 0 && !at_end) {
-                    app_write(ent.name, strlen(ent.name));
+                struct dirent *ent;
+                while ((ent = readdir(dir)) != NULL) {
+                    app_write(ent->d_name, strlen(ent->d_name));
                     app_printf("\n");
                 }
-                noza_closedir(dir);
+                closedir(dir);
             }
         } else if (strcmp(argv[0], "cat") == 0 && argv[1]) {
-            int fd = noza_open(argv[1], 0, 0);
+            int fd = open(argv[1], O_RDONLY, 0);
             if (fd < 0) {
                 app_printf("cat: cannot open\n");
             } else {
                 char buf[128];
                 int r;
-                while ((r = noza_read(fd, buf, sizeof(buf))) > 0) {
+                while ((r = read(fd, buf, sizeof(buf))) > 0) {
                     app_write(buf, (size_t)r);
                 }
-                noza_close(fd);
+                close(fd);
             }
         } else if (strcmp(argv[0], "mkdir") == 0 && argv[1]) {
-            if (noza_mkdir(argv[1], 0755) != 0) {
+            if (mkdir(argv[1], 0755) != 0) {
                 app_printf("mkdir failed\n");
             }
         } else if (strcmp(argv[0], "rm") == 0 && argv[1]) {
-            if (noza_unlink(argv[1]) != 0) {
+            if (unlink(argv[1]) != 0) {
                 app_printf("rm failed\n");
             }
         } else if (strcmp(argv[0], "pwd") == 0) {
             char buf[NOZA_FS_MAX_PATH];
-            if (noza_getcwd(buf, sizeof(buf))) {
+            if (getcwd(buf, sizeof(buf))) {
                 app_write(buf, strlen(buf));
                 app_printf("\n");
             }
         } else if (strcmp(argv[0], "cd") == 0 && argv[1]) {
-            if (noza_chdir(argv[1]) != 0) {
+            if (chdir(argv[1]) != 0) {
                 app_printf("cd failed\n");
             }
         } else if (strcmp(argv[0], "help") == 0 || strcmp(argv[0], "list") == 0) {

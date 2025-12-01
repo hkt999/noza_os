@@ -143,7 +143,6 @@ set(
 	service/fs/ramfs.c
 	service/fs/vfs.c
 	service/fs/devfs.c
-	user/libc/src/fs_client.c
 	service/irq/irq_client.c
 	service/vfs/rootfs.c
 	service/vfs/romfs.c

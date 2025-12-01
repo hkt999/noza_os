@@ -27,11 +27,11 @@ To support higher-level APIs (POSIX, pthread, etc.) without bloating the microke
 # Process Libc & Naming
 RP2040 的 Pico SDK 會拉入 newlib 版本的 `malloc/free/printf/open` 等符號，硬體驅動也依賴這套 libc，因此 Noza 目前採雙層設計：
 - **平台層**仍使用 Pico SDK/newlib，確保 USB/UART、硬體驅動與啟動碼可以順利連結與執行。
-- **Process 層**提供自有的 `noza_*` API（例如 `noza_process_exec`、`noza_call`、未來的 `noza_open/noza_read/...`）來透過 IPC 與服務互動，並使用 per-process heap allocator（`noza_process_malloc`/`noza_process_free`）。這些名稱刻意避開標準 `malloc/open` 以免和 newlib 符號互相踩踏。
+- **Process 層**提供自有的 `noza_*` API（例如 `noza_process_exec`、`noza_call`）來透過 IPC 與服務互動，並使用 per-process heap allocator（`noza_process_malloc`/`noza_process_free`）。I/O 走標準的 `_open/_read/_write` 覆寫 newlib stub。
 - **Name server** 永遠綁定在 VID 0，所有服務上線時需透過 `name_lookup_register()` 將「名稱 → service_id → VID」對映註冊，客戶端則以 `name_lookup_resolve()` 或 `name_lookup_resolve_id()` 取得最新 VID，無須維護全域 PID。
 - 預設 per-process heap 採用 `tinyalloc`，也可以在 CMake 開啟 `-DNOZA_PROCESS_USE_TLSF=ON` 切換到 TLSF（Two-Level Segregated Fit） allocator，以獲得較穩定的配置延遲。兩種 allocator 都共享相同 API，僅影響記憶體管理策略。
 - RP2040 只有 32 顆硬體 spinlock，Noza 會在 process 真正被建立時才動態 claim 一顆，再於 process 結束後釋放；保持 `NOZA_MAX_PROCESSES` 在合理範圍（預設 16）即可避免早期耗盡 spinlock 造成開機卡住。
-- Application 若需要 POSIX 風格名稱，可以在自己的 header 中選擇 `#define open noza_open` 等別名，但預設請直接使用 `noza_*` 版本，確保呼叫會走到 Noza 的服務層而不是 Pico SDK 的預設 stub。
+- Application 使用 POSIX 風格名稱（`open/read/write` 等），這些符號已由 Noza 覆寫 newlib stub 轉向 FS 服務 IPC。
 - 若完全停用 newlib，需自行提供啟動碼、`__aeabi_*` runtime 及 syscall stub，並重新調整 Pico SDK 的 link 過程。本專案暫時維持「平台層 newlib + process 層 Noza libc」的分層方式，以便同時享有硬體支援與 process 隔離。
 
 ## Service Naming Workflow
