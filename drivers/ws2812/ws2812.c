@@ -1,6 +1,6 @@
 #include "ws2812.h"
 #include "ws2812.pio.h"
-#include <stdio.h>
+#include "printk.h"
 
 static void ws2812_initialize(ws2812_t *m, uint32_t pin, uint32_t length, PIO pio, uint32_t sm, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4)
 {
@@ -10,7 +10,7 @@ static void ws2812_initialize(ws2812_t *m, uint32_t pin, uint32_t length, PIO pi
 	m->sm = sm;
 	if (length > MAX_LENGTH) {
 		length = MAX_LENGTH;
-		printf("ws2812: length is too long, set to %d\n", length);
+		printk("ws2812: length is too long, set to %d\n", length);
 	}
 	m->bytes[0] = b1;
 	m->bytes[1] = b2;
@@ -120,4 +120,3 @@ void ws2812_show(ws2812_t *m)
 		pio_sm_put_blocking(m->pio, m->sm, m->data[i]);
 	}
 }
-

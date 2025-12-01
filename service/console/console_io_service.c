@@ -1,5 +1,4 @@
 #include <string.h>
-#include <stdio.h>
 #include "nozaos.h"
 #include "noza_console_api.h"
 #include "cmd_line.h"
@@ -8,6 +7,7 @@
 #include "service/irq/irq_client.h"
 #include "noza_irq_defs.h"
 #include "posix/errno.h"
+#include "printk.h"
 
 static cmd_line_t console_cmd;
 static char line_buf[BUFLEN];
@@ -67,13 +67,11 @@ int console_service_start(void *param, uint32_t pid)
     uint32_t service_id = 0;
     int reg_ret = name_lookup_register(NOZA_CONSOLE_SERVICE_NAME, &service_id);
     if (reg_ret != NAME_LOOKUP_OK) {
-        printf("console.io: name register failed (%d)\n", reg_ret);
+        printk("console.io: name register failed (%d)\n", reg_ret);
     }
 
-    irq_enabled = (irq_service_subscribe(NOZA_IRQ_UART0) == 0);
-    if (!irq_enabled) {
-        printf("console.io: irq subscribe failed, fallback to polling\n");
-    }
+    // UART RX IRQ temporarily disabled; use polling mode.
+    irq_enabled = 0;
 
     noza_msg_t msg;
     for (;;) {

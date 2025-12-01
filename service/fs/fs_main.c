@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <string.h>
 #include "nozaos.h"
 #include "posix/errno.h"
@@ -7,6 +6,7 @@
 #include "fs_dispatch.h"
 #include "vfs.h"
 #include "ramfs.h"
+#include "printk.h"
 
 static int handle_fs_call(noza_msg_t *msg)
 {
@@ -42,7 +42,7 @@ static int fs_main(void *param, uint32_t pid)
     uint32_t service_id = 0;
     int reg_ret = name_lookup_register(NOZA_FS_SERVICE_NAME, &service_id);
     if (reg_ret != NAME_LOOKUP_OK) {
-        printf("fs: name register failed (%d)\n", reg_ret);
+        printk("fs: name register failed (%d)\n", reg_ret);
     }
 
     vfs_init();

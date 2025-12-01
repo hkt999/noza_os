@@ -7,6 +7,7 @@
 #include "kernel/noza_config.h"
 #include "posix/errno.h"
 #include "proc_api.h"
+#include "printk.h"
 
 extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
 
@@ -38,7 +39,7 @@ void noza_thread_exit(uint32_t exit_code) {
 	noza_thread_self(&pid);
 	thread_record_t *thread_record = get_thread_record(pid);
 	if (thread_record == NULL) {
-		printf("fatal: noza_thread_exit: pid %ld not found\n", pid);
+		printk("fatal: noza_thread_exit: pid %ld not found\n", pid);
 		return;
 	}
 	longjmp(thread_record->jmp_buf, exit_code);
@@ -79,11 +80,11 @@ uint32_t free_resource(uint32_t tid, uint32_t code)
 {
 	thread_record_t *thread_record = get_thread_record(tid);
 	if (thread_record == NULL) {
-		printf("fatal: free_stack: pid %ld not found\n", tid);
+		printk("fatal: free_stack: pid %ld not found\n", tid);
 		return code;
 	}
 	if (thread_record->stack_ptr == NULL) {
-		printf("fatal: free_stack: pid %ld stack_ptr is NULL\n", tid);
+		printk("fatal: free_stack: pid %ld stack_ptr is NULL\n", tid);
 		return code;
 	}
     if (((process_record_t *)(thread_record->process))->main_thread == tid) {

@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define STREQ(s1, s2)	(strcmp(s1, s2) == 0)
-//#define DBG(...)		printf("ELF: " __VA_ARGS__)
+//#define DBG(...)		printk("ELF: " __VA_ARGS__)
 #define DBG(...)
 
 typedef struct {

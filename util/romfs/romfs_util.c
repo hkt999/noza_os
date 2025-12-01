@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "printk.h"
 
 typedef struct tree_s tree_t;
 
@@ -87,7 +88,7 @@ void write_file_binary(char *root_dir, char *filename, FILE *outfile)
 	sprintf(in_name, "%s/%s", root_dir, filename);
 	FILE *infile = fopen(in_name, "rb");
 	if (infile == NULL) {
-		printf("error: cannot open file for input (%s)\n", in_name);
+		printk("error: cannot open file for input (%s)\n", in_name);
 		exit(1);
 	}
 
@@ -163,7 +164,7 @@ size_t get_file_size(const char *path)
 
 	FILE *infile = fopen(path, "rb");
 	if (infile == NULL) {
-		printf("error: file not found (%s)\n", path);
+		printk("error: file not found (%s)\n", path);
 		exit(1);
 	}
 	fseek(infile, 0, SEEK_END);
@@ -181,7 +182,7 @@ void create_tree(tree_t *tree, char *dir)
     struct stat statbuf;
 
     if((dp = opendir(dir)) == NULL) {
-        printf("cannot open directory: %s\n", dir);
+        printk("cannot open directory: %s\n", dir);
         return;
     }
     while((entry = readdir(dp)) != NULL) {
@@ -207,7 +208,7 @@ void create_tree(tree_t *tree, char *dir)
 void print_indent(int indent) 
 {
 	for (int i=0; i<indent; i++) {
-		printf("    ");
+		printk("    ");
 	}
 }
 
@@ -215,7 +216,7 @@ void serialize(char *root_dir, tree_t *tree, const char *outname)
 {
 	FILE *outfile = fopen(outname, "wb");
 	if (outfile == NULL) {
-		printf("error, cannot create file [%s]\n", outname);
+		printk("error, cannot create file [%s]\n", outname);
 		exit(1);
 	}
 
@@ -227,22 +228,22 @@ void romfs_validate_dir(uint8_t *p, uint32_t offset, int indent)
 {
 	read_dir_t *root = (read_dir_t *)(p+offset);
 	for (int j=0; j<indent; j++) {
-		printf("   ");
+		printk("   ");
 	}
-	printf("num_dir: %d  ", root->dir_count);
-	printf("num_file: %d\n", root->file_count);
+	printk("num_dir: %d  ", root->dir_count);
+	printk("num_file: %d\n", root->file_count);
 	for (int i=0; i < (root->dir_count + root->file_count); i++) {
 		for (int j=0; j<indent; j++) {
-			printf("   ");
+			printk("   ");
 		}
 		if (i < root->dir_count) 
-			printf("dir ");
+			printk("dir ");
 		else 
-			printf("file ");
+			printk("file ");
 
-		printf("name offset: %d\n", root->item[i].name_offset);
-		printf("	-> [%s]\n", (p + root->item[i].name_offset));
-		printf("data offset: %d\n", root->item[i].data_offset);
+		printk("name offset: %d\n", root->item[i].name_offset);
+		printk("	-> [%s]\n", (p + root->item[i].name_offset));
+		printk("data offset: %d\n", root->item[i].data_offset);
 		if (i < root->dir_count) {
 			romfs_validate_dir(p, root->item[i].data_offset, indent++);
 		}
@@ -252,14 +253,14 @@ void romfs_validate_dir(uint8_t *p, uint32_t offset, int indent)
 void romfs_validate(uint8_t *p)
 {
 	romfs_validate_dir(p, 0, 0);
-	printf("OK\n");
+	printk("OK\n");
 }
 
 void romfs_validate_file(const char *bin_name)
 {
 	FILE *infile = fopen(bin_name, "rb");
 	if (infile == NULL) {
-		printf("error, cannot open file [%s]\n", bin_name);
+		printk("error, cannot open file [%s]\n", bin_name);
 		exit(1);
 	}
 	fseek(infile, 0, SEEK_END);
@@ -267,24 +268,24 @@ void romfs_validate_file(const char *bin_name)
 	fseek(infile, 0, SEEK_SET);
 	uint8_t *p = (uint8_t *)malloc(size);
 	if (p == NULL) {
-		printf("error: cannot allocate memory (size=%zu)\n", size);
+		printk("error: cannot allocate memory (size=%zu)\n", size);
 		exit(1);
 	}
 	if (fread(p, 1, size, infile) != size) {
-		printf("error: read [%s]\n", bin_name);
+		printk("error: read [%s]\n", bin_name);
 		exit(1);
 	}
 	fclose(infile);
 
 	romfs_validate(p);
-	printf("Validated !\n");
+	printk("Validated !\n");
 
 }
 
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-		printf("usage: %s [directory name]\n", argv[0]);
+		printk("usage: %s [directory name]\n", argv[0]);
 		exit(1);
 	}
 
@@ -295,4 +296,3 @@ int main(int argc, char **argv)
 	serialize(argv[1], &tree, "output.bin");
 	romfs_validate_file("output.bin");
 }
-

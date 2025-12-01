@@ -1,10 +1,10 @@
-#include <stdio.h>
 #include <string.h>
 #include "nozaos.h"
 #include "noza_console_api.h"
 #include "service/name_lookup/name_lookup_client.h"
 #include "service/console/console_io_client.h"
 #include "noza_fs.h"
+#include "printk.h"
 
 #define SHELL_PROMPT "noza> "
 #define SHELL_BANNER "\nNOZA OS v0.01\n"
@@ -17,7 +17,7 @@ static int shell_main(void *param, uint32_t pid)
     uint32_t shell_id = 0;
     int reg_ret = name_lookup_register("shell", &shell_id);
     if (reg_ret != NAME_LOOKUP_OK) {
-        printf("shell: name register failed (%d)\n", reg_ret);
+        printk("shell: name register failed (%d)\n", reg_ret);
     }
 
     console_write(SHELL_BANNER, strlen(SHELL_BANNER));

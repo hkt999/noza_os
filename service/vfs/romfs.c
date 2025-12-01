@@ -2,8 +2,8 @@
 #include "romfs.h"
 #include "setbit.h"
 #include <fcntl.h>
-#include <stdio.h>
 #include <string.h>
+#include "printk.h"
 
 #define MAX_NUM_ROMFS   4
 #define MAX_NUM_FILES   32
@@ -95,7 +95,7 @@ static int romfd_open(vfs_t *vfs, const char *path, int oflag, int omode)
             // file found, setup the file descriptor structure
             int fd = find_first_set_bit(romfs->fd_bits);
             if (fd >= MAX_NUM_FILES) {
-                printf("exceed max number of files (%d)\n", fd);
+                printk("exceed max number of files (%d)\n", fd);
                 return -1;
             }
             set_bit(&romfs->fd_bits, fd);
@@ -169,7 +169,7 @@ static int romfd_stat(vfs_t *vfs, const char *path, struct sys_stat *buf)
     strtok_noreplace_t sn;
     sn.last_token_end = NULL;
 
-    printf("romfd_open path=[%s] romfs->bin=%p\n", path, romfs->bin);
+    printk("romfd_open path=[%s] romfs->bin=%p\n", path, romfs->bin);
     // parse the path
     const char *name = strtok_noreplace(&sn, path, "/");
     while (sn.last_token_end != NULL) {
@@ -191,7 +191,7 @@ void romfs_init(vfs_t *vfs, uint8_t *p, size_t sz)
 {
     int index = find_first_zero_bit(ROMFS_BITS);
     if (index >= MAX_NUM_ROMFS) {
-        printf("fatal error ! not enough romfs\n");
+        printk("fatal error ! not enough romfs\n");
         // TODO: error handling
         return;
     }

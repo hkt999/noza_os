@@ -73,7 +73,7 @@ if(NOT PICO_SDK_PATH OR NOT EXISTS "${PICO_SDK_PATH}")
 endif()
 set(PICO_SDK_PATH ${PICO_SDK_PATH} CACHE PATH "Path to the Raspberry Pi Pico SDK" FORCE)
 
-# route stdio to UART by default
+# route stdio to UART by default (USB off, UART on for Pico UART0 pins)
 set(PICO_STDIO_USB OFF CACHE BOOL "Enable stdio over USB" FORCE)
 set(PICO_STDIO_UART ON CACHE BOOL "Enable stdio over UART" FORCE)
 
@@ -110,6 +110,8 @@ set(
 	kernel/platform/rp2040_context_switch.S
 	kernel/platform/rp2040_platform.c
 	kernel/platform/rp2040_build_stack.c
+	kernel/printk.c
+	kernel/noza_uart.c
 	kernel/noza_os.c
 
 	# lib and system call for user space application
@@ -193,6 +195,7 @@ endif()
 set(
 	NOZA_INCLUDES
 	${CMAKE_CURRENT_LIST_DIR}
+	${CMAKE_CURRENT_LIST_DIR}/kernel
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${CMAKE_CURRENT_LIST_DIR}/user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/user

@@ -5,6 +5,7 @@
 #include "posix/errno.h"
 #include "noza_fs.h"
 #include "service/name_lookup/name_lookup_client.h"
+#include "printk.h"
 
 static uint32_t g_fs_vid;
 static uint32_t g_fs_service_id;
@@ -41,7 +42,7 @@ static int fs_call(noza_fs_request_t *req, noza_fs_response_t *resp)
         memcpy(resp, req, sizeof(noza_fs_response_t)); // kernel/service wrote response into req buffer
     }
     if (resp->code != 0) {
-        printf("[fs_client] opcode=%u errno=%d\n", orig_opcode, resp->code);
+        printk("[fs_client] opcode=%u errno=%d\n", orig_opcode, resp->code);
         noza_set_errno(resp->code);
         return -1;
     }

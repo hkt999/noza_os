@@ -2,11 +2,17 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include "posix/errno.h"
 #include "ramfs.h"
 #include "vfs.h"
+#include "printk.h"
+
+#ifndef SEEK_SET
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+#endif
 
 typedef struct ramfs_node {
     vfs_node_t vfs;
@@ -44,7 +50,7 @@ static void ramfs_insert_child(ramfs_node_t *dir, ramfs_node_t *node)
     node->sibling = dir->child;
     dir->child = node;
     node->parent = dir;
-    printf("[ramfs] insert %s into %s\n", node->name, dir->name);
+    printk("[ramfs] insert %s into %s\n", node->name, dir->name);
 }
 
 static ramfs_node_t *ramfs_new_node(const char *name, uint32_t mode, uint32_t uid, uint32_t gid, bool is_dir)
@@ -258,13 +264,13 @@ static int ramfs_unlink(vfs_mount_t *mnt, vfs_node_t *dir, const char *name)
             else d->child = c->sibling;
             free(c->data);
             free(c);
-            printf("[ramfs] unlink %s from %s\n", name, d->name);
+            printk("[ramfs] unlink %s from %s\n", name, d->name);
             return 0;
         }
         prev = c;
         c = c->sibling;
     }
-    printf("[ramfs] unlink miss %s under %s\n", name, d->name);
+    printk("[ramfs] unlink miss %s under %s\n", name, d->name);
     return 0; // treat missing as success
 }
 
@@ -290,7 +296,7 @@ static int ramfs_mkdir(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, uint
         return ENOMEM;
     }
     ramfs_insert_child(d, n);
-    printf("[ramfs] mkdir %s under %s mode=%o\n", name, d->name, mode);
+    printk("[ramfs] mkdir %s under %s mode=%o\n", name, d->name, mode);
     return 0;
 }
 
@@ -315,7 +321,7 @@ static int ramfs_create(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, uin
     }
     ramfs_insert_child(d, n);
     *out = &n->vfs;
-    printf("[ramfs] create %s under %s mode=%o\n", name, d->name, mode);
+    printk("[ramfs] create %s under %s mode=%o\n", name, d->name, mode);
     return 0;
 }
 
@@ -382,7 +388,7 @@ static int ramfs_readdir(vfs_mount_t *mnt, vfs_handle_t *handle, noza_fs_dirent_
     if (!child) {
         *at_end = 1;
         memset(ent, 0, sizeof(*ent));
-        printf("[fs] readdir end idx=%d dir=%s\n", idx, dir->name);
+        printk("[fs] readdir end idx=%d dir=%s\n", idx, dir->name);
         return 0;
     }
     ent->inode = (uint32_t)((uintptr_t)child & 0xffffffffu);

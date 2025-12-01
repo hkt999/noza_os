@@ -1,7 +1,7 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include "nozaos.h"
 #include "ws2812.h"
+#include "printk.h"
 
 #define LED_PIN 16
 #define LED_LENGTH 1
@@ -52,7 +52,7 @@ static void gradient_effect(ws2812_t *led_strip) {
     float hue = 0.0f;
     int counter = 100; // 10s
 
-    printf("hue demo started (10s)\n");
+    printk("hue demo started (10s)\n");
     while (counter-->0) {
         cRGB currentColor = HSVtoRGB(hue, SATURATION, BRIGHTNESS);
         uint32_t color = cRGB_to_color(currentColor);
@@ -75,7 +75,7 @@ static void gradient_effect(ws2812_t *led_strip) {
         ws2812_set_pixel(led_strip, ledIndex, color);
         ws2812_show(led_strip);
     }
-    printf("demo finished\n");
+    printk("demo finished\n");
 }
 
 static int test_ws2812(int argc, char **argv)
@@ -84,19 +84,19 @@ static int test_ws2812(int argc, char **argv)
 	ws2812_init2(&led_strip, LED_PIN, LED_LENGTH, pio0, 0, LED_FORMAT_GRB);
 
     // RED
-    printf("red\n");
+    printk("red\n");
     ws2812_fill1(&led_strip, RGB(255, 0, 0));
     ws2812_show(&led_strip);
 	noza_thread_sleep_ms(1000, NULL);
 
     // GREEN
-    printf("green\n");
+    printk("green\n");
     ws2812_fill1(&led_strip, RGB(0, 255, 0));
     ws2812_show(&led_strip);
     noza_thread_sleep_ms(1000, NULL);
 
     // BLUE
-    printf("blue\n");
+    printk("blue\n");
     ws2812_fill1(&led_strip, RGB(0, 0, 255));
     ws2812_show(&led_strip);
 	noza_thread_sleep_ms(1000, NULL);

@@ -8,6 +8,7 @@
 #include "posix/errno.h"
 #include "posix/bits/signum.h"
 #include "kernel/noza_config.h"
+#include "printk.h"
 
 static hashslot_t PROCESS_RECORD_HASH;
 static process_record_t *process_head = NULL;
@@ -108,14 +109,14 @@ int noza_process_crt0(void *param, uint32_t tid)
 	process_record_t *process = (process_record_t *)param;
 	if (noza_thread_self(&tid) != 0) {
 		// unlikely to be here
-		printf("fatal: noza_process_crt0: noza_thread_self failed\n");
+		printk("fatal: noza_process_crt0: noza_thread_self failed\n");
 		return -1;
 
 	}
 	thread_record_t *main_thread = get_thread_record(tid);
 	if (main_thread == NULL) {
 		// unlikely to be here
-		printf("fatal: noza_process_crt0: get_thread_record failed\n");
+		printk("fatal: noza_process_crt0: get_thread_record failed\n");
 		return -1;
 	}
 	process->main_thread = tid;
@@ -141,14 +142,14 @@ static int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *ti
 	*tid = 0;
 	process_record_t *process = alloc_process_record();
 	if (process == NULL) {
-		printf("noza_process_exec: no free process slot (argc=%d)\n", argc);
+		printk("noza_process_exec: no free process slot (argc=%d)\n", argc);
 		return ENOMEM;
 	}
 
 	process->entry = entry;
 	size_t required_env = calc_env_size(argc, argv);
 	if (required_env > sizeof(process->env_buf)) {
-		printf("noza_process_exec: env overflow (need %zu)\n", required_env);
+		printk("noza_process_exec: env overflow (need %zu)\n", required_env);
 		free_process_record(process);
 		return ENOMEM;
 	}
@@ -158,7 +159,7 @@ static int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *ti
 	}
 	int create_ret = noza_thread_create(tid, noza_process_crt0, (void *)process, 0, stack_size);
 	if (create_ret != 0) {
-		printf("noza_process_exec: thread_create ret=%d\n", create_ret);
+		printk("noza_process_exec: thread_create ret=%d\n", create_ret);
 		free_process_record(process);
 		return create_ret;
 	}
@@ -233,7 +234,7 @@ int noza_process_add_thread(process_record_t *process, uint32_t tid)
 		return ret;
 
 	if (process->thread_count >= NOZA_PROC_THREAD_COUNT) {
-		printf("fatal: noza_process_add_thread: too many threads\n");
+		printk("fatal: noza_process_add_thread: too many threads\n");
 		ret = ENOMEM;
 	} else {
 		process->child_thread[process->thread_count++] = tid;

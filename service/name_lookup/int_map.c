@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include "printk.h"
 
 typedef struct value_node {
     int key;
@@ -151,11 +151,11 @@ int main() {
     root = insert_value(root, 10, 100);
     root = insert_value(root, 20, 200);
     root = insert_value(root, 30, 300);
-    printf("%d\n", get_value(root, 10)); // Outputs: 100
-    printf("%d\n", get_value(root, 20)); // Outputs: 200
+    printk("%d\n", get_value(root, 10)); // Outputs: 100
+    printk("%d\n", get_value(root, 20)); // Outputs: 200
 
     root = remove_value(root, 20);
-    printf("%d\n", get_value(root, 20)); // Outputs: -1 (since it's removed)
+    printk("%d\n", get_value(root, 20)); // Outputs: -1 (since it's removed)
 
     return 0;
 }

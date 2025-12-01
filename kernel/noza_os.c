@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #include "noza_config.h"
+#include "printk.h"
 #include "syscall.h"
 #include "platform.h"
 #include "../include/noza_ipc.h"
@@ -69,7 +70,7 @@ inline static uint8_t hash32to8(uint32_t value) {
 
 inline static void HALT()
 {
-    printf("HALT\n");
+    printk("HALT\n");
     for (;;) { }
 }
 
@@ -83,20 +84,20 @@ void kernel_log(const char *fmt, ...)
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
 
-    printf("log: %s", buffer);
+    printk("log: %s", buffer);
 #endif
 }
 
 #ifdef FUTEX_DEBUG
 #define FUTEX_LOG(fmt, ...) \
-    printf("[futex] " fmt "\n", ##__VA_ARGS__)
+    printk("[futex] " fmt "\n", ##__VA_ARGS__)
 #else
 #define FUTEX_LOG(fmt, ...) ((void)0)
 #endif
 
 #ifdef TIMER_DEBUG
 #define TIMER_LOG(fmt, ...) \
-    printf("[timer] " fmt "\n", ##__VA_ARGS__)
+    printk("[timer] " fmt "\n", ##__VA_ARGS__)
 #else
 #define TIMER_LOG(fmt, ...) ((void)0)
 #endif
@@ -109,7 +110,7 @@ void kernel_panic(const char *fmt, ...)
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
 
-    printf("kernel panic: %s", buffer);
+    printk("kernel panic: %s", buffer);
     HALT();
 }
 
@@ -1385,14 +1386,14 @@ static void noza_os_add_thread_by_expired_time(thread_list_t *list, thread_t *th
     // check the order of this list
     node = list->head;
     if (node) {
-        printf("now=%" PRId64 "\n", platform_get_absolute_time_us());
-        printf("** head diff = %" PRId64 "\n", ((thread_t *)node->value)->expired_time - platform_get_absolute_time_us());
+        printk("now=%" PRId64 "\n", platform_get_absolute_time_us());
+        printk("** head diff = %" PRId64 "\n", ((thread_t *)node->value)->expired_time - platform_get_absolute_time_us());
         cdl_node_t *tail = node->prev;
         while (node != tail) {
             if (((thread_t *)node->value)->expired_time > ((thread_t *)node->next->value)->expired_time) {
                 kernel_panic("fatal error: noza_os_add_thread_by_expired_time: list is not sorted\n");
             }
-            //printf("expired_time=%" PRId64 ", %" PRId64 "\n", ((thread_t *)node->value)->expired_time, ((thread_t *)node->next->value)->expired_time);
+            //printk("expired_time=%" PRId64 ", %" PRId64 "\n", ((thread_t *)node->value)->expired_time, ((thread_t *)node->next->value)->expired_time);
             node = node->next;
         }
     }
@@ -2309,7 +2310,7 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
     // and trap into kernel later
 #ifdef FUTEX_DEBUG
     if (r0 == NSC_FUTEX_WAIT || r0 == NSC_FUTEX_WAKE) {
-        printf("[futex] trap callid=%u\n", r0);
+        printk("[futex] trap callid=%u\n", r0);
     }
 #endif
     thread_t *th = noza_os_get_running_thread();

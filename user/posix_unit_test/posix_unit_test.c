@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -13,6 +12,7 @@
 #define UNITY_INCLUDE_CONFIG_H
 #include "unity.h"
 #include "posix/noza_posix_wrapper.h"
+#include "printk.h"
 
 static void *test_task(void *param)
 {
@@ -569,9 +569,9 @@ static int test_posix(int argc, char **argv)
             "test_pthread_attr_set_and_get_scope",
             "test_pthread_spinlock",
         };
-        printf("available tests:\n");
+        printk("available tests:\n");
         for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
-            printf("  %s\n", tests[i]);
+            printk("  %s\n", tests[i]);
         }
         return 0;
     }

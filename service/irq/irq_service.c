@@ -1,9 +1,9 @@
-#include <stdio.h>
 #include <string.h>
 #include "nozaos.h"
 #include "posix/errno.h"
 #include "service/name_lookup/name_lookup_client.h"
 #include "noza_irq_defs.h"
+#include "printk.h"
 
 static uint32_t subscriber_vid[NOZA_RP2040_IRQ_COUNT];
 
@@ -76,7 +76,7 @@ static int do_irq_service(void *param, uint32_t pid)
     uint32_t service_id = 0;
     int reg_ret = name_lookup_register(NOZA_IRQ_SERVICE_NAME, &service_id);
     if (reg_ret != NAME_LOOKUP_OK) {
-        printf("irq: name register failed (%d)\n", reg_ret);
+        printk("irq: name register failed (%d)\n", reg_ret);
     }
 
     memset(subscriber_vid, 0, sizeof(subscriber_vid));

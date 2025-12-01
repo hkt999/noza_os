@@ -5,6 +5,7 @@
 #include "cmd_line.h"
 #include "noza_term.h"
 #include "nozaos.h"
+#include "printk.h"
 
 extern void noza_char_init(char_driver_t *driver);
 extern void noza_char_clear(char_driver_t *driver);
@@ -31,7 +32,7 @@ static void noza_term_push_line(char *cmd_str, void *user_data)
 
 char *term_readline(noza_term_t *term, char *line, int max_len)
 {
-	printf("%s", term->prompt);
+	printk("%s", term->prompt);
 	term->line_end = 0;
 	term->line = line;
 	term->max_len = max_len;

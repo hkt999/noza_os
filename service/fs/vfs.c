@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include "posix/errno.h"
 #include "vfs.h"
+#include "printk.h"
 
 #define VFS_R_OK 0x4
 #define VFS_W_OK 0x2
@@ -537,7 +538,7 @@ int vfs_close(vfs_client_t *client, int fd)
     }
     client->files[fd] = NULL;
     if (rc != 0) {
-        printf("[fs] close fd=%d rc=%d\n", fd, rc);
+        printk("[fs] close fd=%d rc=%d\n", fd, rc);
     }
     return rc;
 }
@@ -571,7 +572,7 @@ int vfs_write(vfs_client_t *client, int fd, const void *buf, uint32_t len, uint3
     }
     int rc = h->node->mnt->ops->write(h->node->mnt, h, buf, len, offset, out_len);
     if (rc != 0) {
-        printf("[fs] write fd=%d rc=%d\n", fd, rc);
+        printk("[fs] write fd=%d rc=%d\n", fd, rc);
     }
     return rc;
 }
@@ -769,7 +770,7 @@ int vfs_readdir(vfs_client_t *client, int dir_fd, noza_fs_dirent_t *ent, int *at
     }
     int rc = h->node->mnt->ops->readdir(h->node->mnt, h, ent, at_end);
     if (rc != 0) {
-        printf("[fs] readdir fd=%d rc=%d\n", dir_fd, rc);
+        printk("[fs] readdir fd=%d rc=%d\n", dir_fd, rc);
     }
     return rc;
 }

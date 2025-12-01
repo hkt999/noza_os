@@ -4,6 +4,7 @@
 #include "service/memory/mem_client.h"
 #include "proc_api.h"
 #include "thread_api.h"
+#include "printk.h"
 
 #if NOZA_PROCESS_USE_TLSF
 static const char *process_name(process_record_t *process)
@@ -14,10 +15,10 @@ static const char *process_name(process_record_t *process)
 	return "?";
 }
 #define TLSF_LOG(fmt, ...) \
-	printf("[tlsf] " fmt "\n", ##__VA_ARGS__)
+	printk("[tlsf] " fmt "\n", ##__VA_ARGS__)
 static inline void tlsf_dump_range(process_record_t *process)
 {
-	printf("[tlsf] heap=%p..%p proc=%s\n",
+	printk("[tlsf] heap=%p..%p proc=%s\n",
 		process->heap,
 		(uint8_t *)process->heap + NOZA_PROCESS_HEAP_SIZE,
 		process_name(process));

@@ -1,12 +1,12 @@
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 #include "../name_lookup/name_lookup_client.h"
 #include "sync_serv.h"
 #include "nozaos.h"
 #include "type/dblist.h"
+#include "printk.h"
 
 typedef struct {
 	dblink_item_t link;
@@ -86,7 +86,7 @@ static void mutex_server_acquire(noza_msg_t *msg, sync_info_t *si)
 {
 	mutex_msg_t *mutex_msg = (mutex_msg_t *)msg->ptr;
 	if (si->mutex_head == NULL) {
-		printf("mutex: no more resource\n");
+		printk("mutex: no more resource\n");
 		mutex_msg->code = MUTEX_NOT_ENOUGH_RESOURCE;
 		noza_reply(msg);
 		return;
@@ -101,7 +101,7 @@ static void mutex_server_acquire(noza_msg_t *msg, sync_info_t *si)
 	si->mutex_head->lock = 0;
 	if (si->mutex_head->pending != NULL) {
 		// unlikely, handle the exception
-		printf("mutex: unlikely be here....\n");
+		printk("mutex: unlikely be here....\n");
 	}
 	si->mutex_head = (mutex_item_t *)dblist_remove_head((dblink_item_t *)si->mutex_head); // move head to next
 	noza_reply(msg);
@@ -135,7 +135,7 @@ static void mutex_server_lock(mutex_item_t *working_mutex, noza_msg_t *msg, sync
 		pending_node_t *pm = get_free_pending(si);
 		if (pm == NULL) {
 			mutex_msg->code = MUTEX_NOT_ENOUGH_RESOURCE;
-			printf("mutex: no more free pending slot, just lock and reply\n");
+			printk("mutex: no more free pending slot, just lock and reply\n");
 			noza_reply(msg);
 			return;
 		}
@@ -188,7 +188,7 @@ static void process_mutex(noza_msg_t *msg, sync_info_t *si)
 	// sanity check
 	if (mutex_msg->cmd != MUTEX_ACQUIRE) {
 		if (mutex_msg->mid >= MAX_LOCKS) {
-			printf("mutex invalid id: %d\n", mutex_msg->mid);
+			printk("mutex invalid id: %d\n", mutex_msg->mid);
 			mutex_msg->code = MUTEX_INVALID_ID;
 			noza_reply(msg);
 			return;
@@ -196,7 +196,7 @@ static void process_mutex(noza_msg_t *msg, sync_info_t *si)
 
 		working_mutex = &si->mutex_store[mutex_msg->mid];
 		if (working_mutex->token != mutex_msg->token) {
-			printf("mutex token mismatch service:%d != client:%d\n", working_mutex->token, mutex_msg->token);
+			printk("mutex token mismatch service:%d != client:%d\n", working_mutex->token, mutex_msg->token);
 			mutex_msg->code = MUTEX_INVALID_TOKEN;
 			noza_reply(msg);
 			return;
@@ -236,7 +236,7 @@ static void cond_server_acquire(noza_msg_t *msg, sync_info_t *si)
 {
 	cond_msg_t *cond_msg = (cond_msg_t *)msg->ptr;
 	if (si->cond_head == NULL) {
-		printf("cond: no more resource\n");
+		printk("cond: no more resource\n");
 		cond_msg->code = COND_NOT_ENOUGH_RESOURCE;
 		noza_reply(msg);
 		return;
@@ -251,7 +251,7 @@ static void cond_server_acquire(noza_msg_t *msg, sync_info_t *si)
 	si->cond_head->signaled = 0;
 	if (si->mutex_head->pending != NULL) {
 		// unlikely, handle the exception
-		printf("unlikely be here....\n");
+		printk("unlikely be here....\n");
 	}
 	si->cond_head = (cond_item_t *)dblist_remove_head((dblink_item_t *)si->cond_head); // move head to next
 	noza_reply(msg);
@@ -284,7 +284,7 @@ static void cond_server_wait(cond_item_t *working_cond, noza_msg_t *msg, sync_in
 		noza_reply(msg);
 	} else {
 		if (cond_msg->mid >= MAX_LOCKS) {
-			printf("cond invalid id: %d\n", cond_msg->mid);
+			printk("cond invalid id: %d\n", cond_msg->mid);
 			cond_msg->code = COND_INVALID_ID;
 			noza_reply(msg);
 			return;
@@ -292,7 +292,7 @@ static void cond_server_wait(cond_item_t *working_cond, noza_msg_t *msg, sync_in
 
 		mutex_item_t *working_mutex = &si->mutex_store[cond_msg->mid];
 		if (cond_msg->mtoken != working_mutex->token) {
-			printf("cond invalid mutex token\n");
+			printk("cond invalid mutex token\n");
 			cond_msg->code = COND_INVALID_TOKEN;
 			noza_reply(msg);
 			return;
@@ -303,7 +303,7 @@ static void cond_server_wait(cond_item_t *working_cond, noza_msg_t *msg, sync_in
 		pending_node_t *pm = get_free_pending(si);
 		if (pm == NULL) {
 			cond_msg->code = COND_NOT_ENOUGH_RESOURCE;
-			printf("cond: no more free pending slot, just lock and reply\n");
+			printk("cond: no more free pending slot, just lock and reply\n");
 			noza_reply(msg);
 		} else {
 			si->free_pending_head = (pending_node_t *)dblist_remove_head(
@@ -341,7 +341,7 @@ static void cond_server_signal(cond_item_t *working_cond, noza_msg_t *msg, sync_
 					pending_node_t *pm = get_free_pending(si);
 					if (pm == NULL) {
 						cond_msg->code = COND_NOT_ENOUGH_RESOURCE;
-						printf("cond: no more free pending slot, just reply\n");
+						printk("cond: no more free pending slot, just reply\n");
 						noza_reply(msg);
 						return;
 					}
@@ -354,7 +354,7 @@ static void cond_server_signal(cond_item_t *working_cond, noza_msg_t *msg, sync_
 					noza_reply(&head->noza_msg); // and return success to the picked pending request
 				}
 			} else {
-				printf("cond: user mutex token mismatch\n");
+				printk("cond: user mutex token mismatch\n");
 				cond_msg->code = COND_INVALID_TOKEN;
 				noza_reply(&head->noza_msg); // and return success to the picked pending request
 			}
@@ -376,7 +376,7 @@ static void process_cond(noza_msg_t *msg, sync_info_t *si)
 	if (cond_msg->cmd != COND_ACQUIRE) {
 		// sanity check
 		if (cond_msg->cid >= MAX_CONDS) {
-			printf("ond invalid id: %d\n", cond_msg->cid);
+			printk("ond invalid id: %d\n", cond_msg->cid);
 			cond_msg->code = COND_INVALID_ID;
 			noza_reply(msg);
 			return;
@@ -384,7 +384,7 @@ static void process_cond(noza_msg_t *msg, sync_info_t *si)
 
 		working_cond = &si->cond_store[cond_msg->cid];
 		if (working_cond->ctoken != cond_msg->ctoken) {
-			printf("cond token mismatch service:%d != client:%d\n", working_cond->ctoken, cond_msg->ctoken);
+			printk("cond token mismatch service:%d != client:%d\n", working_cond->ctoken, cond_msg->ctoken);
 			cond_msg->code = MUTEX_INVALID_TOKEN;
 			noza_reply(msg);
 			return;
@@ -423,7 +423,7 @@ static void sem_server_acquire(sem_item_t *working_sem, noza_msg_t *msg, sync_in
 {
 	sem_msg_t *sem_msg = (sem_msg_t *)msg->ptr;
 	if (si->sem_head == NULL) {
-		printf("sem: no more resource\n");
+		printk("sem: no more resource\n");
 		sem_msg->code = SEM_NOT_ENOUGH_RESOURCE;
 		noza_reply(msg);
 		return;
@@ -439,7 +439,7 @@ static void sem_server_acquire(sem_item_t *working_sem, noza_msg_t *msg, sync_in
 	si->sem_head->value = sem_msg->value;
 	if (si->sem_head->pending != NULL) {
 		// unlikely, handle the exception
-		printf("sem: unlikely be here....\n");
+		printk("sem: unlikely be here....\n");
 	}
 	si->sem_head = (sem_item_t *)dblist_remove_head((dblink_item_t *)si->sem_head); // move head to next
 	noza_reply(msg);
@@ -471,7 +471,7 @@ static void sem_server_wait(sem_item_t *working_sem, noza_msg_t *msg, sync_info_
 		noza_reply(msg);
 	} else {
 		if (sem_msg->sid >= MAX_SEMS) {
-			printf("sem invalid id: %d\n", sem_msg->sid);
+			printk("sem invalid id: %d\n", sem_msg->sid);
 			sem_msg->code = SEM_INVALID_ID;
 			noza_reply(msg);
 			return;
@@ -479,7 +479,7 @@ static void sem_server_wait(sem_item_t *working_sem, noza_msg_t *msg, sync_info_
 
 		sem_item_t *working_sem = &si->sem_store[sem_msg->sid];
 		if (sem_msg->stoken != working_sem->stoken) {
-			printf("sem invalid token\n");
+			printk("sem invalid token\n");
 			sem_msg->code = SEM_INVALID_TOKEN;
 			noza_reply(msg);
 			return;
@@ -488,7 +488,7 @@ static void sem_server_wait(sem_item_t *working_sem, noza_msg_t *msg, sync_info_
 		pending_node_t *pm = get_free_pending(si);
 		if (pm == NULL) {
 			sem_msg->code = SEM_NOT_ENOUGH_RESOURCE;
-			printf("sem: no more free pending slot\n");
+			printk("sem: no more free pending slot\n");
 			noza_reply(msg);
 		} else {
 			pm->noza_msg = *msg; // copy message
@@ -541,7 +541,7 @@ static void process_sem(noza_msg_t *msg, sync_info_t *si)
 	if (sem_msg->cmd != SEM_ACQUIRE) {
 		// sanity check
 		if (sem_msg->sid >= MAX_SEMS) {
-			printf("sem invalid id: %d\n", sem_msg->sid);
+			printk("sem invalid id: %d\n", sem_msg->sid);
 			sem_msg->code = SEM_INVALID_ID;
 			noza_reply(msg);
 			return;
@@ -549,7 +549,7 @@ static void process_sem(noza_msg_t *msg, sync_info_t *si)
 
 		working_sem = &si->sem_store[sem_msg->sid];
 		if (working_sem->stoken != sem_msg->stoken) {
-			printf("sem token mismatch service:%d != client:%d\n",
+			printk("sem token mismatch service:%d != client:%d\n",
 				working_sem->stoken, sem_msg->stoken);
 			sem_msg->code = MUTEX_INVALID_TOKEN;
 			noza_reply(msg);
@@ -611,7 +611,7 @@ static int do_synchorization_server(void *param, uint32_t pid)
 	static uint32_t sync_service_id;
 	int lookup_ret = name_lookup_register(NOZA_SYNC_SERVICE_NAME, &sync_service_id);
 	if (lookup_ret != NAME_LOOKUP_OK) {
-		printf("sync: name register failed (%d)\n", lookup_ret);
+		printk("sync: name register failed (%d)\n", lookup_ret);
 	}
 
 	extern uint32_t platform_get_random(void);

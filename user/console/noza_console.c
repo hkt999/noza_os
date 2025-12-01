@@ -1,7 +1,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
-#include "pico/stdio.h"
 #include "noza_irq_defs.h"
 #include "service/irq/irq_client.h"
 
@@ -10,6 +9,8 @@
 #include "nozaos.h"
 #include "nz_stdlib.h"
 #include "noza_fs.h"
+#include "noza_uart.h"
+#include "printk.h"
 
 #define MAX_BUILTIN_CMDS  32
 typedef struct {
@@ -41,14 +42,14 @@ void console_add_command(const char *name, int (*main)(int argc, char **argv), c
 static void noza_char_putc(int c)
 {
     if (c=='\n') {
-        putchar_raw('\r');
+        noza_uart_putc('\r');
     }
-    putchar_raw(c);
+    noza_uart_putc((char)c);
 }
 
 static int noza_char_getc()
 {
-    return getchar_timeout_us(0);
+    return noza_getchar_timeout_us(0);
 }
 
 void noza_char_init(char_driver_t *driver)
@@ -134,31 +135,31 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 		if (argc > 0) {
 			builtin_cmd_t *rc = console->table;
 			if (strncmp(argv[0], "help", 32) == 0) {
-				printf("help - show this message\n");
+				printk("help - show this message\n");
 				while (rc->name && rc->main_func) {
-					printf("%s - %s\n", rc->name, rc->help_msg);
+					printk("%s - %s\n", rc->name, rc->help_msg);
 					rc++;
 				}
 			} else if (strncmp(argv[0], "ls", 32) == 0) {
 				const char *path = (argc > 1) ? argv[1] : ".";
 				int dir = noza_opendir(path);
 				if (dir < 0) {
-					printf("ls: cannot open %s\n", path);
+					printk("ls: cannot open %s\n", path);
 				} else {
 					noza_fs_dirent_t ent;
 					int at_end = 0;
 					while (noza_readdir(dir, &ent, &at_end) == 0 && !at_end) {
-						printf("%s\n", ent.name);
+						printk("%s\n", ent.name);
 					}
 					noza_closedir(dir);
 				}
 			} else if (strncmp(argv[0], "cat", 32) == 0) {
 				if (argc < 2) {
-					printf("cat: missing file\n");
+					printk("cat: missing file\n");
 				} else {
 					int fd = noza_open(argv[1], 0, 0);
 					if (fd < 0) {
-						printf("cat: cannot open %s\n", argv[1]);
+						printk("cat: cannot open %s\n", argv[1]);
 					} else {
 						char buf[128];
 						int r;
@@ -170,28 +171,28 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 				}
 			} else if (strncmp(argv[0], "mkdir", 32) == 0) {
 				if (argc < 2) {
-					printf("mkdir: missing path\n");
+					printk("mkdir: missing path\n");
 				} else if (noza_mkdir(argv[1], 0755) != 0) {
-					printf("mkdir: failed %s\n", argv[1]);
+					printk("mkdir: failed %s\n", argv[1]);
 				}
 			} else if (strncmp(argv[0], "rm", 32) == 0) {
 				if (argc < 2) {
-					printf("rm: missing path\n");
+					printk("rm: missing path\n");
 				} else if (noza_unlink(argv[1]) != 0) {
-					printf("rm: failed %s\n", argv[1]);
+					printk("rm: failed %s\n", argv[1]);
 				}
 			} else if (strncmp(argv[0], "cd", 32) == 0) {
 				if (argc < 2) {
-					printf("cd: missing path\n");
+					printk("cd: missing path\n");
 				} else if (noza_chdir(argv[1]) != 0) {
-					printf("cd: failed %s\n", argv[1]);
+					printk("cd: failed %s\n", argv[1]);
 				}
 			} else if (strncmp(argv[0], "pwd", 32) == 0) {
 				char buf[NOZA_FS_MAX_PATH];
 				if (noza_getcwd(buf, sizeof(buf))) {
-					printf("%s\n", buf);
+					printk("%s\n", buf);
 				} else {
-					printf("pwd: failed\n");
+					printk("pwd: failed\n");
 				}
 			} else  {
 				while (rc->name && rc->main_func) {
@@ -202,13 +203,13 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 								argv[argc] = NULL;
 								int ret = noza_process_exec_detached_with_stack(rc->main_func, argc, argv, stack_size);
 								if (ret != 0) {
-									printf("%s: launch failed (%d)\n", rc->name, ret);
+									printk("%s: launch failed (%d)\n", rc->name, ret);
 								}
 							} else {
 								int exit_code = 0;
 								int ret = noza_process_exec_with_stack(rc->main_func, argc, argv, &exit_code, stack_size);
 								if (ret != 0) {
-									printf("%s: exec failed (%d)\n", rc->name, ret);
+									printk("%s: exec failed (%d)\n", rc->name, ret);
 								}
 							}
 							break;
@@ -216,12 +217,12 @@ static void noza_console_process_command(char *cmd_str, void *user_data)
 					rc++;
 				}
 				if (rc->name == NULL)
-					printf("command not found: %s\n", argv[0]);
+					printk("command not found: %s\n", argv[0]);
 			}
 		}
 		free(buf);
 	}
-	printf("%s", console->prompt);
+	printk("%s", console->prompt);
 }
 
 // global console

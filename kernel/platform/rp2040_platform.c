@@ -2,7 +2,6 @@
 #include "../noza_config.h"
 #include "../platform.h"
 #include "pico/stdlib.h"
-#include "pico/stdio_uart.h"
 #include "hardware/irq.h"
 #if NOZA_OS_NUM_CORES > 1
 #include "pico/multicore.h"
@@ -11,11 +10,11 @@
 #include "hardware/structs/scb.h" 
 #include "hardware/regs/m0plus.h"
 #include "hardware/sync.h"
-#include <stdio.h>
 #include "hardware/regs/rosc.h"
 #include "hardware/regs/addressmap.h"
 #include <stdbool.h>
 #include <string.h>
+#include "noza_uart.h"
 #if NOZA_OS_ENABLE_IRQ
 #include "../../include/noza_irq_defs.h"
 extern void noza_irq_handle_from_isr(uint32_t irq_id);
@@ -26,7 +25,9 @@ static volatile platform_fault_snapshot_t last_fault_snapshot;
 
 void platform_io_init()
 {
-    stdio_uart_init_full(uart0, 115200, PICO_DEFAULT_UART_TX_PIN, PICO_DEFAULT_UART_RX_PIN);
+    noza_uart_init();
+    // quick bring-up marker
+    noza_uart_write("[noza] uart init\n", 17);
     // set the SVC interrupt priority
     hw_set_bits((io_rw_32 *)(PPB_BASE + M0PLUS_SHPR2_OFFSET), M0PLUS_SHPR2_BITS); // setup as priority 3 (2 bits)
     // set the PENDSV interrupt priority

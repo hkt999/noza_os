@@ -7,6 +7,7 @@
 #include "nozaos.h"
 #include "proc_api.h"
 #include "thread_api.h"
+#include "printk.h"
 
 extern void noza_thread_request_reserved_vid(uint32_t vid);
 
@@ -52,7 +53,7 @@ static service_entry_t service_entry[NOZA_MAX_SERVICES];
 static int service_count = 0;
 void noza_add_service_with_vid(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size, uint32_t reserved_vid) {
     if (service_count >= NOZA_MAX_SERVICES) {
-        printf("fatal: noza_add_service: too many services\n");
+        printk("fatal: noza_add_service: too many services\n");
 		return;
     }
     service_entry[service_count].entry = entry;
@@ -117,7 +118,7 @@ int noza_set_errno(int err) {
 	if (noza_thread_self(&pid) == 0) {
 		thread_record_t *record = get_thread_record(pid);
 		if (record == NULL) {
-			printf("fatal: noza_set_errno: pid %ld not found\n", pid);
+			printk("fatal: noza_set_errno: pid %ld not found\n", pid);
 			return -1; // TODO: return errno
 		}
 		record->errno = err;
@@ -132,7 +133,7 @@ int noza_errno() {
 	if (noza_thread_self(&pid) == 0) {
 		thread_record_t *th = get_thread_record(pid);
 		if (th == NULL) {
-			printf("fatal: noza_errno: pid %ld not found\n", pid);
+			printk("fatal: noza_errno: pid %ld not found\n", pid);
 			return -1; // TODO: return errno
 		}
 		return th->errno;

@@ -3,6 +3,7 @@
 #include "posix/errno.h"
 #include "3rd_party/tinyalloc_port/tinyalloc.h"
 #include "../name_lookup/name_lookup_client.h"
+#include "printk.h"
 
 extern char __end__, __StackLimit; // __StackLimit is poorly named, it's actually the end of the heap
 void *heap_end = &__end__;
@@ -21,7 +22,6 @@ void *_sbrk(ptrdiff_t increment)
     return (void *)prev_heap_end;
 }
 
-#include <stdio.h>
 static tinyalloc_t tinyalloc;
 static int do_memory_server(void *param, uint32_t pid)
 {
@@ -36,7 +36,7 @@ static int do_memory_server(void *param, uint32_t pid)
     static uint32_t memory_service_id;
     int lookup_ret = name_lookup_register(NOZA_MEMORY_SERVICE_NAME, &memory_service_id);
     if (lookup_ret != NAME_LOOKUP_OK) {
-        printf("memory: name register failed (%d)\n", lookup_ret);
+        printk("memory: name register failed (%d)\n", lookup_ret);
     }
 
     for (;;) {
