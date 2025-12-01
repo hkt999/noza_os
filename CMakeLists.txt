@@ -134,13 +134,15 @@ set(
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
 	service/sync/sync_client.c
-	service/console/console_io_service.c
-	service/console/console_io_client.c
-	service/shell/shell_main.c
+	drivers/console/console_io_service.c
+	drivers/console/console_io_client.c
+	drivers/console/console_devfs.c
+	user/apps/shell/shell_main.c
 	service/fs/fs_main.c
 	service/fs/fs_dispatch.c
 	service/fs/ramfs.c
 	service/fs/vfs.c
+	service/fs/devfs.c
 	user/libc/src/fs_client.c
 	service/irq/irq_client.c
 	service/vfs/rootfs.c

@@ -19,6 +19,7 @@
 #define NOZA_FS_MODE_IFMT           0170000u
 #define NOZA_FS_MODE_IFREG          0100000u
 #define NOZA_FS_MODE_IFDIR          0040000u
+#define NOZA_FS_MODE_IFCHR          0020000u
 
 typedef enum {
     NOZA_FS_OPEN = 1,

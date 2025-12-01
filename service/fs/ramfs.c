@@ -449,6 +449,9 @@ void ramfs_init(void)
     g_ramfs_root.vfs.parent = &g_ramfs_root.vfs;
     g_ramfs_root.vfs.ctx = NULL;
     vfs_set_root(&RAMFS_OPS, &g_ramfs_root.vfs, NULL);
+
+    // ensure mount points we expect exist (e.g., /dev for devfs)
+    (void)ramfs_mkdir(g_ramfs_root.vfs.mnt, &g_ramfs_root.vfs, "dev", 0755);
 }
 
 const vfs_ops_t *ramfs_ops(void)

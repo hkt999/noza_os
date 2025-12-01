@@ -37,19 +37,27 @@ int console_write(const char *buf, uint32_t len)
     if (ret != 0) {
         return ret;
     }
-    console_msg_t msg = {
-        .cmd = CONSOLE_CMD_WRITE,
-        .len = len > sizeof(msg.buf) ? sizeof(msg.buf) : len,
-        .code = 0
-    };
-    memcpy(msg.buf, buf, msg.len);
-    noza_msg_t m = {.to_vid = vid, .ptr = &msg, .size = sizeof(msg)};
-    ret = noza_call(&m);
-    if (ret != 0) {
-        console_vid = 0;
-        return ret;
+    uint32_t offset = 0;
+    while (offset < len) {
+        console_msg_t msg = {
+            .cmd = CONSOLE_CMD_WRITE,
+            .len = 0,
+            .code = 0
+        };
+        msg.len = (len - offset) > sizeof(msg.buf) ? sizeof(msg.buf) : (len - offset);
+        memcpy(msg.buf, buf + offset, msg.len);
+        noza_msg_t m = {.to_vid = vid, .ptr = &msg, .size = sizeof(msg)};
+        ret = noza_call(&m);
+        if (ret != 0) {
+            console_vid = 0;
+            return ret;
+        }
+        if (msg.code != 0) {
+            return (int)msg.code;
+        }
+        offset += msg.len;
     }
-    return (int)msg.code;
+    return 0;
 }
 
 int console_readline(char *buf, uint32_t max_len, uint32_t *out_len)

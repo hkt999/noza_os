@@ -66,11 +66,12 @@ static int vfs_check_perms(const noza_identity_t *id, const noza_fs_attr_t *attr
 
 static bool path_overlap(const char *a, size_t alen, const char *b, size_t blen)
 {
+    // root should only conflict with another root mount
     if (alen == 1 && a[0] == '/') {
-        return true;
+        return (blen == 1 && b[0] == '/');
     }
     if (blen == 1 && b[0] == '/') {
-        return true;
+        return (alen == 1 && a[0] == '/');
     }
     if (alen <= blen) {
         return strncmp(a, b, alen) == 0 && (b[alen] == '/' || b[alen] == '\0');
