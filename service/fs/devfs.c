@@ -345,6 +345,7 @@ int devfs_register_char(const char *name, uint32_t mode, const devfs_device_ops_
     entry->node.vfs.attr.atime_sec = entry->node.vfs.attr.mtime_sec = entry->node.vfs.attr.ctime_sec = 0;
     entry->node.entry = entry;
     entry->node.kind = DEVFS_NODE_DEVICE;
+    printk("[devfs] registered /dev/%s\n", entry->name);
     return 0;
 }
 
@@ -370,6 +371,7 @@ int devfs_init(void)
         printk("[devfs] mount /dev failed rc=%d\n", rc);
         return rc;
     }
+    printk("[devfs] mounted at /dev\n");
 
     // ensure existing entries are attached to the new mount
     for (size_t i = 0; i < DEVFS_MAX_DEVICES; i++) {

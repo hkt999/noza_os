@@ -157,6 +157,16 @@ int vfs_mount(const char *path, const vfs_ops_t *ops, vfs_node_t *root, void *ct
     if (path[0] != '/') {
         return EINVAL;
     }
+    // reject overlapping mount points
+    for (vfs_mount_t *m = g_mounts; m; m = m->next) {
+        if (path_overlap(m->path, m->path_len, path, len)) {
+            return EEXIST;
+        }
+    }
+    if (path_overlap(g_root_mount.path, g_root_mount.path_len, path, len)) {
+        return EEXIST;
+    }
+
     vfs_mount_t *mnt = NULL;
     static vfs_mount_t mount_pool[VFS_MAX_CLIENTS];
     for (size_t i = 0; i < VFS_MAX_CLIENTS; i++) {
@@ -167,16 +177,6 @@ int vfs_mount(const char *path, const vfs_ops_t *ops, vfs_node_t *root, void *ct
     }
     if (mnt == NULL) {
         return ENOMEM;
-    }
-
-    // reject overlapping mount points
-    for (vfs_mount_t *m = g_mounts; m; m = m->next) {
-        if (path_overlap(m->path, m->path_len, mnt->path, mnt->path_len)) {
-            return EEXIST;
-        }
-    }
-    if (path_overlap(g_root_mount.path, g_root_mount.path_len, mnt->path, mnt->path_len)) {
-        return EEXIST;
     }
 
     memset(mnt, 0, sizeof(*mnt));
@@ -352,14 +352,37 @@ static int vfs_resolve(vfs_client_t *client, const char *path, bool want_parent,
         return EINVAL;
     }
 
+    char full[NOZA_FS_MAX_PATH];
     if (path[0] == '/') {
-        const char *rest = NULL;
-        vfs_mount_t *mnt = vfs_match_mount(path, &rest);
-        vfs_node_t *start = mnt->root;
-        return vfs_walk_components(start, (rest && *rest) ? rest : "", want_parent, out_node, out_parent, leaf, leaf_len);
+        strncpy(full, path, sizeof(full) - 1);
+        full[sizeof(full) - 1] = '\0';
+    } else {
+        if (client->cwd[0] == '/' && client->cwd[1] == '\0') {
+            int n = snprintf(full, sizeof(full), "/%s", path);
+            if (n < 0 || n >= (int)sizeof(full)) {
+                return ENAMETOOLONG;
+            }
+        } else {
+        int n = snprintf(full, sizeof(full), "%s/%s", client->cwd, path);
+        if (n < 0 || n >= (int)sizeof(full)) {
+            return ENAMETOOLONG;
+        }
+    }
     }
 
-    return vfs_walk_components(client->cwd_node, path, want_parent, out_node, out_parent, leaf, leaf_len);
+    const char *rest = NULL;
+    vfs_mount_t *mnt = vfs_match_mount(full, &rest);
+    if (mnt == NULL || mnt->root == NULL) {
+        printk("[fs] resolve mount miss path=%s full=%s\n", path, full);
+        return ENOENT;
+    }
+    vfs_node_t *start = mnt->root;
+    int rc = vfs_walk_components(start, (rest && *rest) ? rest : "", want_parent, out_node, out_parent, leaf, leaf_len);
+    if (rc != 0) {
+        printk("[fs] resolve walk fail path=%s full=%s rc=%d rest=%s\n",
+               path, full, rc, (rest && *rest) ? rest : "");
+    }
+    return rc;
 }
 
 int vfs_get_cwd(vfs_client_t *client, char *buf, size_t buf_len)
@@ -384,7 +407,11 @@ int vfs_set_cwd(vfs_client_t *client, const char *path)
     }
     noza_fs_attr_t attr = target->attr;
     if (target->mnt && target->mnt->ops && target->mnt->ops->stat) {
-        target->mnt->ops->stat(target->mnt, target, &attr);
+        int st_rc = target->mnt->ops->stat(target->mnt, target, &attr);
+        if (st_rc != 0) {
+            printk("[fs] chdir stat fail path=%s rc=%d\n", path, st_rc);
+            return st_rc;
+        }
     }
     if ((attr.mode & NOZA_FS_MODE_IFMT) != NOZA_FS_MODE_IFDIR) {
         return ENOTDIR;
@@ -395,8 +422,20 @@ int vfs_set_cwd(vfs_client_t *client, const char *path)
     }
     char new_cwd[NOZA_FS_MAX_PATH];
     if (path[0] == '/') {
-        strncpy(new_cwd, path, sizeof(new_cwd) - 1);
-        new_cwd[sizeof(new_cwd) - 1] = '\0';
+        // normalize: collapse multiple leading slashes to single root
+        size_t src = 0;
+        while (path[src] == '/') {
+            src++;
+        }
+        if (path[src] == '\0') {
+            strncpy(new_cwd, "/", sizeof(new_cwd) - 1);
+            new_cwd[sizeof(new_cwd) - 1] = '\0';
+        } else {
+            int n = snprintf(new_cwd, sizeof(new_cwd), "/%s", path + src);
+            if (n < 0 || n >= (int)sizeof(new_cwd)) {
+                return ENAMETOOLONG;
+            }
+        }
     } else {
         int n = snprintf(new_cwd, sizeof(new_cwd), "%s/%s", client->cwd, path);
         if (n < 0 || n >= (int)sizeof(new_cwd)) {

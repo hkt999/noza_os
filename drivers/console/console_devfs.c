@@ -85,10 +85,11 @@ void console_register_devfs(void)
     if (registered) {
         return;
     }
-    int rc = devfs_register_char("tty0", 0666, &CONSOLE_DEV_OPS, NULL);
+    int rc = devfs_register_char("ttyS0", 0666, &CONSOLE_DEV_OPS, NULL);
     if (rc != 0) {
-        printk("[devfs] register /dev/tty0 failed rc=%d\n", rc);
+        printk("[devfs] register /dev/ttyS0 failed rc=%d\n", rc);
         return;
     }
+    printk("[devfs] /dev/ttyS0 ready\n");
     registered = 1;
 }

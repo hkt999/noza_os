@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 #include "posix/errno.h"
 #include "nozaos.h"
 #include "noza_fs.h"
@@ -15,7 +16,7 @@ static int ensure_console_fd(void) {
     if (console_fd >= 0) {
         return console_fd;
     }
-    int fd = noza_open("/dev/tty0", O_RDWR, 0666);
+    int fd = noza_open("/dev/ttyS0", O_RDWR, 0666);
     if (fd >= 0) {
         console_fd = fd;
         return console_fd;
@@ -56,6 +57,33 @@ static int console_read_wrapper(void *buf, size_t count) {
     return (int)out_len;
 }
 
+static void fs_attr_to_stat(const noza_fs_attr_t *attr, struct stat *st)
+{
+    if (attr == NULL || st == NULL) {
+        return;
+    }
+    mode_t type = S_IFREG;
+    switch (attr->mode & NOZA_FS_MODE_IFMT) {
+        case NOZA_FS_MODE_IFDIR:
+            type = S_IFDIR;
+            break;
+        case NOZA_FS_MODE_IFCHR:
+            type = S_IFCHR;
+            break;
+        default:
+            type = S_IFREG;
+            break;
+    }
+    st->st_mode = type | (attr->mode & 0777u);
+    st->st_nlink = attr->nlink;
+    st->st_uid = attr->uid;
+    st->st_gid = attr->gid;
+    st->st_size = (off_t)attr->size;
+    st->st_atime = (time_t)attr->atime_sec;
+    st->st_mtime = (time_t)attr->mtime_sec;
+    st->st_ctime = (time_t)attr->ctime_sec;
+}
+
 int _write(int fd, const void *buf, size_t count) {
     if (buf == NULL) {
         noza_set_errno(EINVAL);
@@ -79,11 +107,8 @@ int _read(int fd, void *buf, size_t count) {
 }
 
 off_t _lseek(int fd, off_t offset, int whence) {
-    (void)fd;
-    (void)offset;
-    (void)whence;
-    noza_set_errno(ENOSYS);
-    return (off_t)-1;
+    int64_t r = noza_lseek(fd, (int64_t)offset, whence);
+    return (off_t)r;
 }
 
 int _close(int fd) {
@@ -106,26 +131,7 @@ int _fstat(int fd, struct stat *st) {
     }
     noza_fs_attr_t attr;
     if (noza_fstat(fd, &attr) == 0) {
-        mode_t type = S_IFREG;
-        switch (attr.mode & NOZA_FS_MODE_IFMT) {
-            case NOZA_FS_MODE_IFDIR:
-                type = S_IFDIR;
-                break;
-            case NOZA_FS_MODE_IFCHR:
-                type = S_IFCHR;
-                break;
-            default:
-                type = S_IFREG;
-                break;
-        }
-        st->st_mode = type | (attr.mode & 0777u);
-        st->st_nlink = attr.nlink;
-        st->st_uid = attr.uid;
-        st->st_gid = attr.gid;
-        st->st_size = (off_t)attr.size;
-        st->st_atime = (time_t)attr.atime_sec;
-        st->st_mtime = (time_t)attr.mtime_sec;
-        st->st_ctime = (time_t)attr.ctime_sec;
+        fs_attr_to_stat(&attr, st);
         return 0;
     }
     noza_set_errno(ENOSYS);
@@ -149,7 +155,38 @@ int _open(const char *path, int flags, int mode) {
 }
 
 int _unlink(const char *path) {
-    (void)path;
-    noza_set_errno(ENOSYS);
-    return -1;
+    return noza_unlink(path);
+}
+
+int _stat(const char *path, struct stat *st) {
+    if (path == NULL || st == NULL) {
+        noza_set_errno(EINVAL);
+        return -1;
+    }
+    noza_fs_attr_t attr;
+    if (noza_stat(path, &attr) != 0) {
+        return -1;
+    }
+    fs_attr_to_stat(&attr, st);
+    return 0;
+}
+
+int _mkdir(const char *path, mode_t mode) {
+    if (path == NULL) {
+        noza_set_errno(EINVAL);
+        return -1;
+    }
+    return noza_mkdir(path, (uint32_t)mode);
+}
+
+int _chdir(const char *path) {
+    if (path == NULL) {
+        noza_set_errno(EINVAL);
+        return -1;
+    }
+    return noza_chdir(path);
+}
+
+char *_getcwd(char *buf, size_t size) {
+    return noza_getcwd(buf, size);
 }
