@@ -2,7 +2,7 @@
 #include "nozaos.h"
 #include "noza_console_api.h"
 #include "cmd_line.h"
-#include "console_io.h"
+#include "uart_io.h"
 #include "service/name_lookup/name_lookup_client.h"
 #include "service/irq/irq_client.h"
 #include "noza_irq_defs.h"

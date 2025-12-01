@@ -8,7 +8,7 @@
 #include "posix/errno.h"
 #include "nozaos.h"
 #include "noza_fs.h"
-#include "drivers/console/console_io_client.h"
+#include "drivers/uart/uart_io_client.h"
 
 static int console_fd = -1;
 

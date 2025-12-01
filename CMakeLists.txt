@@ -134,9 +134,9 @@ set(
 	service/memory/mem_client.c
 	service/sync/sync_serv.c
 	service/sync/sync_client.c
-	drivers/console/console_io_service.c
-	drivers/console/console_io_client.c
-	drivers/console/console_devfs.c
+	drivers/uart/uart_io_service.c
+	drivers/uart/uart_io_client.c
+	drivers/uart/uart_devfs.c
 	user/apps/shell/shell_main.c
 	service/fs/fs_main.c
 	service/fs/fs_dispatch.c

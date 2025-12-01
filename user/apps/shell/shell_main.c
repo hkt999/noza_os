@@ -2,7 +2,7 @@
 #include "nozaos.h"
 #include "noza_console_api.h"
 #include "service/name_lookup/name_lookup_client.h"
-#include "drivers/console/console_io_client.h"
+#include "drivers/uart/uart_io_client.h"
 #include "noza_fs.h"
 #include "printk.h"
 

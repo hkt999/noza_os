@@ -1,11 +1,11 @@
 #include <string.h>
 #include "posix/errno.h"
 #include "service/fs/devfs.h"
-#include "drivers/console/console_io_client.h"
+#include "drivers/uart/uart_io_client.h"
 #include "noza_fs.h"
 #include "printk.h"
 
-static int console_dev_open(void *ctx, uint32_t oflag, uint32_t mode, void **dev_handle)
+static int uart_dev_open(void *ctx, uint32_t oflag, uint32_t mode, void **dev_handle)
 {
     (void)ctx;
     (void)oflag;
@@ -14,13 +14,13 @@ static int console_dev_open(void *ctx, uint32_t oflag, uint32_t mode, void **dev
     return 0;
 }
 
-static int console_dev_close(void *dev_handle)
+static int uart_dev_close(void *dev_handle)
 {
     (void)dev_handle;
     return 0;
 }
 
-static int console_dev_write(void *dev_handle, const void *buf, uint32_t len, uint32_t offset, uint32_t *out_len)
+static int uart_dev_write(void *dev_handle, const void *buf, uint32_t len, uint32_t offset, uint32_t *out_len)
 {
     (void)dev_handle;
     (void)offset;
@@ -39,7 +39,7 @@ static int console_dev_write(void *dev_handle, const void *buf, uint32_t len, ui
     return 0;
 }
 
-static int console_dev_read(void *dev_handle, void *buf, uint32_t len, uint32_t offset, uint32_t *out_len)
+static int uart_dev_read(void *dev_handle, void *buf, uint32_t len, uint32_t offset, uint32_t *out_len)
 {
     (void)dev_handle;
     if (out_len == NULL) {
@@ -61,7 +61,7 @@ static int console_dev_read(void *dev_handle, void *buf, uint32_t len, uint32_t 
     return 0;
 }
 
-static int console_dev_lseek(void *dev_handle, int64_t offset, int32_t whence, int64_t *new_off)
+static int uart_dev_lseek(void *dev_handle, int64_t offset, int32_t whence, int64_t *new_off)
 {
     (void)dev_handle;
     (void)offset;
@@ -70,22 +70,22 @@ static int console_dev_lseek(void *dev_handle, int64_t offset, int32_t whence, i
     return ESPIPE;
 }
 
-static const devfs_device_ops_t CONSOLE_DEV_OPS = {
-    .open = console_dev_open,
-    .close = console_dev_close,
-    .read = console_dev_read,
-    .write = console_dev_write,
-    .lseek = console_dev_lseek,
+static const devfs_device_ops_t UART_DEV_OPS = {
+    .open = uart_dev_open,
+    .close = uart_dev_close,
+    .read = uart_dev_read,
+    .write = uart_dev_write,
+    .lseek = uart_dev_lseek,
     .ioctl = NULL,
 };
 
-void console_register_devfs(void)
+void uart_register_devfs(void)
 {
     static int registered = 0;
     if (registered) {
         return;
     }
-    int rc = devfs_register_char("ttyS0", 0666, &CONSOLE_DEV_OPS, NULL);
+    int rc = devfs_register_char("ttyS0", 0666, &UART_DEV_OPS, NULL);
     if (rc != 0) {
         printk("[devfs] register /dev/ttyS0 failed rc=%d\n", rc);
         return;

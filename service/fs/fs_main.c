@@ -7,7 +7,7 @@
 #include "vfs.h"
 #include "ramfs.h"
 #include "devfs.h"
-#include "drivers/console/console_devfs.h"
+#include "drivers/uart/uart_devfs.h"
 #include "printk.h"
 
 static int handle_fs_call(noza_msg_t *msg)
@@ -53,7 +53,7 @@ static int fs_main(void *param, uint32_t pid)
     if (devfs_rc != 0) {
         printk("fs: devfs init failed (%d)\n", devfs_rc);
     } else {
-        console_register_devfs();
+        uart_register_devfs();
     }
 
     // TODO: spawn worker threads when heavier VFS backends arrive.
