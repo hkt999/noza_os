@@ -133,8 +133,10 @@ int shell_main(int argc, char **argv)
             if (chdir(argv[1]) != 0) {
                 app_printf("cd failed\n");
             }
+        } else if (strcmp(argv[0], "clear") == 0) {
+            app_printf("\033[2J\033[H");
         } else if (strcmp(argv[0], "help") == 0 || strcmp(argv[0], "list") == 0) {
-            app_printf("commands: ls [path], cat <file>, mkdir <path>, rm <path>, cd <path>, pwd\n");
+            app_printf("commands: ls [path], cat <file>, mkdir <path>, rm <path>, cd <path>, pwd, clear\n");
         } else {
             app_printf("command not found: %s\n", argv[0]);
         }
