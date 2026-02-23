@@ -269,11 +269,30 @@ static int devfs_readdir(vfs_mount_t *mnt, vfs_handle_t *handle, noza_fs_dirent_
     return 0;
 }
 
-static int devfs_unimplemented_dir(vfs_mount_t *mnt, vfs_node_t *dir, const char *name)
+static int devfs_unimplemented_unlink(vfs_mount_t *mnt, vfs_node_t *dir, const char *name)
 {
     (void)mnt;
     (void)dir;
     (void)name;
+    return EPERM;
+}
+
+static int devfs_unimplemented_create(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, uint32_t mode, vfs_node_t **out)
+{
+    (void)mnt;
+    (void)dir;
+    (void)name;
+    (void)mode;
+    (void)out;
+    return EPERM;
+}
+
+static int devfs_unimplemented_mkdir(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, uint32_t mode)
+{
+    (void)mnt;
+    (void)dir;
+    (void)name;
+    (void)mode;
     return EPERM;
 }
 
@@ -301,10 +320,10 @@ static const vfs_ops_t DEVFS_OPS = {
     .read = devfs_read,
     .write = devfs_write,
     .lseek = devfs_lseek,
-    .create = (int (*)(vfs_mount_t *, vfs_node_t *, const char *, uint32_t, vfs_node_t **))devfs_unimplemented_dir,
+    .create = devfs_unimplemented_create,
     .stat = devfs_stat,
-    .unlink = (int (*)(vfs_mount_t *, vfs_node_t *, const char *))devfs_unimplemented_dir,
-    .mkdir = (int (*)(vfs_mount_t *, vfs_node_t *, const char *, uint32_t))devfs_unimplemented_dir,
+    .unlink = devfs_unimplemented_unlink,
+    .mkdir = devfs_unimplemented_mkdir,
     .opendir = devfs_opendir,
     .readdir = devfs_readdir,
     .chmod = devfs_chmod,

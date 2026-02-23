@@ -85,6 +85,8 @@ void kernel_log(const char *fmt, ...)
     va_end(args);
 
     printk("log: %s", buffer);
+#else
+    (void)fmt;
 #endif
 }
 
@@ -1093,13 +1095,11 @@ static inline int noza_wait_queue_sleep(noza_wait_queue_t *queue, int64_t timeou
     noza_wait_queue_enqueue(queue, running);
     running->info.state = THREAD_WAITING_SYNC;
 
-    int64_t wait_until = 0;
     if (timeout_us == NOZA_WAIT_FOREVER) {
         running->flags &= ~FLAG_WAIT_TIMEOUT;
     } else if (timeout_us > 0) {
         running->flags |= FLAG_WAIT_TIMEOUT;
         running->expired_time = platform_get_absolute_time_us() + timeout_us;
-        wait_until = running->expired_time;
         noza_os_add_thread(&noza_os.sync_sleep, running);
     } else {
         noza_wait_queue_remove(queue, running);
@@ -1109,6 +1109,7 @@ static inline int noza_wait_queue_sleep(noza_wait_queue_t *queue, int64_t timeou
         return ETIMEDOUT;
     }
 #ifdef FUTEX_DEBUG
+    int64_t wait_until = (timeout_us > 0 && timeout_us != NOZA_WAIT_FOREVER) ? running->expired_time : 0;
     FUTEX_LOG("sleep enter thread=%p queue=%p timeout=%" PRId64 " wait_until=%" PRId64,
         running, queue, timeout_us, wait_until);
 #endif
@@ -1450,7 +1451,7 @@ static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void
 static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param), void *param, uint32_t priority, uint32_t reserved_vid)
 {
     // sanity check
-    if (priority > NOZA_OS_PRIORITY_LIMIT) {
+    if (priority >= NOZA_OS_PRIORITY_LIMIT) {
         return EINVAL;
     }
 
@@ -1491,6 +1492,7 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
 extern void noza_init_kernel_stack(uint32_t *stack);
 static void noza_switch_handler(uint32_t core)
 {
+    (void)core;
     uint32_t dummy[32];
     noza_init_kernel_stack(dummy+32);
 }
@@ -1508,10 +1510,13 @@ static void syscall_thread_sleep(thread_t *running)
 }
 
 static void do_nothing_signal_handler(thread_t *running, thread_t *target) {
-    // do nothing
+    (void)running;
+    (void)target;
 }
 
 static void terminate_signal_handler(thread_t *running, thread_t *target) {
+    (void)running;
+    (void)target;
     // TODO
     kernel_log("fatal error: unimplement feature (singal to terminate)\n");
 }
@@ -1568,7 +1573,9 @@ static signal_handler_t signal_handler[32] = {
     [SIGILL] = terminate_signal_handler,         // illegal instruction, core dump
     [SIGTRAP] = terminate_signal_handler,        // trap, core dump
     [SIGABRT] = terminate_signal_handler,        // core dump (using abort())
+#if SIGIOT != SIGABRT
     [SIGIOT] = terminate_signal_handler,         // core dump (same as SIGABRT)
+#endif
     [SIGBUS] = terminate_signal_handler,         // bus error, core dump
     [SIGFPE] = terminate_signal_handler,         // floating point exception, core dump
     [SIGKILL] = terminate_signal_handler,        // kill, cannot be caught
@@ -1594,7 +1601,9 @@ static signal_handler_t signal_handler[32] = {
     [SIGIO] = do_nothing_signal_handler,         // IO now possible
     [SIGPWR] = terminate_signal_handler,         // power failure restart
     [SIGSYS] = terminate_signal_handler,         // bad system call, terminate, core dump
+#if SIGUNUSED != SIGSYS
     [SIGUNUSED] = do_nothing_signal_handler      // reserved
+#endif
 };
 
 inline static thread_t *get_thread_by_vid(uint32_t vid)
@@ -2090,7 +2099,7 @@ inline static void serv_syscall(uint32_t core)
 {
     thread_t *source = noza_os.running[core];
     // sanity check
-    if (source->callid >= 0 && source->callid < NSC_NUM_SYSCALLS) {
+    if (source->callid < NSC_NUM_SYSCALLS) {
         source->trap.state = SYSCALL_SERVING;
         syscall_func[source->callid](source); 
     } else {

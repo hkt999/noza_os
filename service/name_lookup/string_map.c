@@ -109,7 +109,7 @@ static value_node_t *remove_value(value_node_t* root, const char *key, node_free
             node_free(temp, alloc_param);
         } else {
             value_node_t *temp = min_value_node(root->right);
-            strncpy(root->key, temp->key, MAX_NAME_LEN);
+            memcpy(root->key, temp->key, MAX_NAME_LEN + 1);
             root->right = remove_value(root->right, temp->key, node_free, alloc_param);
         }
     }

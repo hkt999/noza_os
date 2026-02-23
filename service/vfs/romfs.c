@@ -71,6 +71,8 @@ static const char* strtok_noreplace(strtok_noreplace_t *t, const char* str, cons
 
 static int romfd_open(vfs_t *vfs, const char *path, int oflag, int omode)
 {
+    (void)oflag;
+    (void)omode;
     romfs_t *romfs = (romfs_t *)vfs->context;
     read_dir_t *dir = (read_dir_t *)romfs->bin;
     strtok_noreplace_t sn;
@@ -126,6 +128,10 @@ static ssize_t romfd_read(vfs_t *vfs, int fd, void *buf, size_t nbyte)
 
 static ssize_t romfd_write(vfs_t *vfs, int fd, const void *buf, size_t nbyte)
 {
+    (void)vfs;
+    (void)fd;
+    (void)buf;
+    (void)nbyte;
     return -1; // not supported
 }
 
@@ -164,6 +170,7 @@ static off_t romfd_lseek(vfs_t *vfs, int fd, off_t offset, int whence)
 
 static int romfd_stat(vfs_t *vfs, const char *path, struct sys_stat *buf)
 {
+    (void)buf;
     romfs_t *romfs = (romfs_t *)vfs->context;
     read_dir_t *dir = (read_dir_t *)romfs->bin;
     strtok_noreplace_t sn;

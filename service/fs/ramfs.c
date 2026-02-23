@@ -302,6 +302,7 @@ static int ramfs_mkdir(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, uint
 
 static int ramfs_create(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, uint32_t mode, vfs_node_t **out)
 {
+    (void)mnt;
     const noza_identity_t *id = vfs_current_identity();
     uint32_t uid = id ? id->uid : 0;
     uint32_t gid = id ? id->gid : 0;
@@ -452,6 +453,18 @@ void ramfs_init(void)
 
     // ensure mount points we expect exist (e.g., /dev for devfs)
     (void)ramfs_mkdir(g_ramfs_root.vfs.mnt, &g_ramfs_root.vfs, "dev", 0755);
+    (void)ramfs_mkdir(g_ramfs_root.vfs.mnt, &g_ramfs_root.vfs, "sbin", 0755);
+
+    // create a placeholder entry under /sbin so users can see it
+    ramfs_node_t *sbin = ramfs_child(&g_ramfs_root, "sbin");
+    if (sbin) {
+        if (ramfs_child(sbin, "shell") == NULL) {
+            ramfs_node_t *n = ramfs_new_node("shell", 0755, 0, 0, false);
+            if (n) {
+                ramfs_insert_child(sbin, n);
+            }
+        }
+    }
 }
 
 const vfs_ops_t *ramfs_ops(void)

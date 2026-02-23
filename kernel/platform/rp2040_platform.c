@@ -177,7 +177,6 @@ bool platform_get_fault_snapshot(platform_fault_snapshot_t *out)
 }
 
 static uint32_t        interrupt_state[NOZA_OS_NUM_CORES];  // array of interrupt states for each core
-static int             spinlock_num_count;                  // count of spinlocks
 static volatile noza_spin_lock_t     *spinlock;                     // pointer to spinlock count
 
 void platform_os_lock_init() {

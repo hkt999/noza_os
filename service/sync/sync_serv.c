@@ -48,29 +48,41 @@ typedef struct {
 
 static inline void mutex_insert_pending_tail(mutex_item_t *mutex, pending_node_t *pm)
 {
-	mutex->pending = (pending_node_t *)dblist_insert_tail(&mutex->pending->link, &pm->link);
+	mutex->pending = (pending_node_t *)dblist_insert_tail(
+		mutex->pending ? &mutex->pending->link : NULL, &pm->link);
 }
 
 static inline void sem_insert_pending_tail(sem_item_t *sem, pending_node_t *pm)
 {
-	sem->pending = (pending_node_t *)dblist_insert_tail(&sem->pending->link, &pm->link);
+	sem->pending = (pending_node_t *)dblist_insert_tail(
+		sem->pending ? &sem->pending->link : NULL, &pm->link);
 }
 
 static inline pending_node_t *get_free_pending(sync_info_t *si)
 {
 	pending_node_t *head = si->free_pending_head;
+	if (head == NULL) {
+		return NULL;
+	}
 	si->free_pending_head = (pending_node_t *)dblist_remove_head(&head->link);
 	return head;
 }
 
 static inline void insert_free_padding_tail(sync_info_t *si, pending_node_t *pm)
 {
-	si->free_pending_head = (pending_node_t *)dblist_insert_tail(&si->free_pending_head->link, &pm->link);
+	if (pm == NULL) {
+		return;
+	}
+	si->free_pending_head = (pending_node_t *)dblist_insert_tail(
+		si->free_pending_head ? &si->free_pending_head->link : NULL, &pm->link);
 }
 
 static inline pending_node_t *mutex_get_pending_head(mutex_item_t *working_mutex)
 {
 	pending_node_t *head = working_mutex->pending; // get pending list
+	if (head == NULL) {
+		return NULL;
+	}
 	working_mutex->pending = (pending_node_t *)dblist_remove_head(&head->link); // remove the first item
 	return head;
 }
@@ -78,6 +90,9 @@ static inline pending_node_t *mutex_get_pending_head(mutex_item_t *working_mutex
 static inline pending_node_t *sem_get_pending_head(sem_item_t *working_sem)
 {
 	pending_node_t *head = working_sem->pending; // get pending list
+	if (head == NULL) {
+		return NULL;
+	}
 	working_sem->pending = (pending_node_t *)dblist_remove_head(&head->link); // remove the first item
 	return head;
 }
@@ -146,6 +161,7 @@ static void mutex_server_lock(mutex_item_t *working_mutex, noza_msg_t *msg, sync
 
 static void mutex_server_trylock(mutex_item_t *working_mutex, noza_msg_t *msg, sync_info_t *si)
 {
+	(void)si;
 	mutex_msg_t *mutex_msg = (mutex_msg_t *)msg->ptr;
 	if (working_mutex->lock == 0) {
 		working_mutex->lock = 1;
@@ -306,12 +322,10 @@ static void cond_server_wait(cond_item_t *working_cond, noza_msg_t *msg, sync_in
 			printk("cond: no more free pending slot, just lock and reply\n");
 			noza_reply(msg);
 		} else {
-			si->free_pending_head = (pending_node_t *)dblist_remove_head(
-				&si->free_pending_head->link); // update the pending head
 			pm->noza_msg = *msg; // copy message
 			// insert into pending list
 			working_cond->pending = (pending_node_t *)dblist_insert_tail(
-				&working_cond->pending->link, &pm->link);
+				working_cond->pending ? &working_cond->pending->link : NULL, &pm->link);
 		}
 	}
 	return;
@@ -320,6 +334,9 @@ static void cond_server_wait(cond_item_t *working_cond, noza_msg_t *msg, sync_in
 static inline pending_node_t *cond_get_pending_head(cond_item_t *working_cond)
 {
 	pending_node_t *head = working_cond->pending;
+	if (head == NULL) {
+		return NULL;
+	}
 	working_cond->pending = (pending_node_t *)dblist_remove_head(&head->link);
 	return head;
 }
@@ -421,6 +438,7 @@ static void process_cond(noza_msg_t *msg, sync_info_t *si)
 
 static void sem_server_acquire(sem_item_t *working_sem, noza_msg_t *msg, sync_info_t *si)
 {
+	(void)working_sem;
 	sem_msg_t *sem_msg = (sem_msg_t *)msg->ptr;
 	if (si->sem_head == NULL) {
 		printk("sem: no more resource\n");
@@ -499,6 +517,7 @@ static void sem_server_wait(sem_item_t *working_sem, noza_msg_t *msg, sync_info_
 
 static void sem_server_trywait(sem_item_t *working_sem, noza_msg_t *msg, sync_info_t *si)
 {
+	(void)si;
 	sem_msg_t *sem_msg = (sem_msg_t *)msg->ptr;
 	if (working_sem->value > 0) {
 		working_sem->value--;
@@ -528,6 +547,7 @@ static void sem_server_post(sem_item_t *working_sem, noza_msg_t *msg, sync_info_
 
 static void sem_server_getvalue(sem_item_t *working_sem, noza_msg_t *msg, sync_info_t *si)
 {
+	(void)si;
 	sem_msg_t *sem_msg = (sem_msg_t *)msg->ptr;
 	sem_msg->value = working_sem->value;
 	sem_msg->code = SEM_SUCCESS;
@@ -591,7 +611,7 @@ static void process_sem(noza_msg_t *msg, sync_info_t *si)
 
 static void sync_init(sync_info_t *si)
 {
-	memset(si, 0, sizeof(si));
+	memset(si, 0, sizeof(*si));
 	DBLIST_INIT(si->mutex_store, MAX_LOCKS);
 	DBLIST_INIT(si->cond_store, MAX_CONDS);
 	DBLIST_INIT(si->sem_store, MAX_SEMS);
@@ -642,6 +662,8 @@ static int do_synchorization_server(void *param, uint32_t pid)
 static uint8_t mutex_server_stack[1024]; // TODO: reconsider the stack size
 void __attribute__((constructor(110))) synchorization_server_init(void *param, uint32_t pid)
 {
+	(void)param;
+	(void)pid;
     // TODO: move the external declaraction into a header file
     extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
 	noza_add_service(do_synchorization_server, mutex_server_stack, sizeof(mutex_server_stack)); // TODO: add stack size

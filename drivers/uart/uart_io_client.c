@@ -65,6 +65,8 @@ int console_readline(char *buf, uint32_t max_len, uint32_t *out_len)
     if (!buf || max_len == 0) {
         return EINVAL;
     }
+    static int swallow_empty = 0; // eat the second empty line in CR/LF pairs
+    for (;;) {
     uint32_t vid = 0;
     int ret = ensure_console_vid(&vid);
     if (ret != 0) {
@@ -87,8 +89,19 @@ int console_readline(char *buf, uint32_t max_len, uint32_t *out_len)
     uint32_t copy_len = msg.len < max_len - 1 ? msg.len : max_len - 1;
     memcpy(buf, msg.buf, copy_len);
     buf[copy_len] = 0;
+    if (copy_len == 0) {
+        if (swallow_empty) {
+            swallow_empty = 0;
+            continue; // ignore duplicate empty line (CR/LF pair)
+        } else {
+            swallow_empty = 1;
+        }
+    } else {
+        swallow_empty = 0;
+    }
     if (out_len) {
         *out_len = copy_len;
     }
     return 0;
+    }
 }

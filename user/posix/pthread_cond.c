@@ -8,6 +8,7 @@
 
 int nz_pthread_cond_init(nz_pthread_cond_t *restrict cond, const nz_pthread_condattr_t *restrict attr)
 {
+    (void)attr;
     return cond_acquire(cond);
 }
 

@@ -47,3 +47,12 @@ target_include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/../../user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/../../include
 )
+
+if (NOZAOS_STRICT_WARNINGS)
+	target_compile_options(
+		pthread
+		PRIVATE
+		-Wall
+		-Wextra
+	)
+endif()

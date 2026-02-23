@@ -18,6 +18,7 @@ int nz_pthread_attr_init(nz_pthread_attr_t *attr)
 
 int nz_pthread_attr_destroy(nz_pthread_attr_t *attr)
 {
+    (void)attr;
     // do nothing
     return 0;
 }

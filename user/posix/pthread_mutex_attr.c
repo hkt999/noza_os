@@ -11,6 +11,7 @@ int nz_pthread_mutexattr_init(nz_pthread_mutexattr_t *attr)
 /* destroy a mutex attributes object */
 int nz_pthread_mutexattr_destroy(nz_pthread_mutexattr_t *attr)
 {
+    (void)attr;
     // nothing to do
     return 0;
 }

@@ -5,11 +5,13 @@
 
 int nz_sched_get_priority_max(int policy)
 {
+    (void)policy;
     return NOZA_OS_PRIORITY_LIMIT - 1;
 }
 
 int nz_sched_get_priority_min(int policy)
 {
+    (void)policy;
     return 0;
 }
 

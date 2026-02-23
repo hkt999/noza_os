@@ -24,7 +24,6 @@ void term_init(noza_term_t *term, const char *prompt)
 static void noza_term_push_line(char *cmd_str, void *user_data)
 {
 	noza_term_t *term = (noza_term_t *)user_data;
-	cmd_line_t *cmd = &term->cmd;
 	strncpy(term->line, cmd_str, term->max_len); // copy buffer to team->line
 	term->line[term->max_len-1] = 0;
 	term->line_end = 1;

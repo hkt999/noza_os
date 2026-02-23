@@ -19,6 +19,7 @@
 
 static int test_task(void *param, uint32_t pid)
 {
+    (void)param;
     int do_count = rand() % 5 + 2;
     int ms = rand() % 50 + 50;
     while (do_count-->0) {
@@ -36,6 +37,7 @@ static int test_task(void *param, uint32_t pid)
 
 static int yield_test_func(void *param, uint32_t pid)
 {
+    (void)pid;
     #define YIELD_ITER  100
     uint32_t value = 0;
     for (int i=0; i<YIELD_ITER; i++) {
@@ -50,6 +52,7 @@ static int yield_test_func(void *param, uint32_t pid)
 
 static int heavy_test_func(void *param, uint32_t pid)
 {
+    (void)pid;
     int *flag = (int *)param;
     #define HEAVY_ITER  1000000
     uint32_t value = 0;
@@ -89,7 +92,6 @@ static void test_thread_sleep_and_signal()
     }
     noza_thread_sleep_ms(100, NULL);
     for (int i = 0; i < NUM_THREADS; i++) {
-        uint32_t sig = 0;
         noza_thread_kill(th[i], SIGALRM);
     }
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -101,8 +103,8 @@ static void test_thread_sleep_and_signal()
 
 static void test_heavy_loading_thread()
 {
-    uint32_t pid;
-    uint32_t value_heavy = heavy_test_func(NULL, pid);
+    uint32_t pid = 0;
+    uint32_t value_heavy = heavy_test_func(NULL, 0);
     uint32_t th[NUM_THREADS];
 
     noza_thread_self(&pid);
@@ -170,6 +172,7 @@ typedef struct {
 
 static int futex_wait_worker(void *param, uint32_t pid)
 {
+    (void)pid;
     futex_ctx_t *ctx = (futex_ctx_t *)param;
     ctx->result = noza_futex_wait((uint32_t *)&ctx->futex_word, 0, -1);
     return ctx->result;
@@ -177,6 +180,7 @@ static int futex_wait_worker(void *param, uint32_t pid)
 
 static int futex_timeout_worker(void *param, uint32_t pid)
 {
+    (void)pid;
     return noza_futex_wait((uint32_t *)param, 0, 20000);
 }
 
@@ -340,6 +344,7 @@ typedef struct {
 
 static int signal_wait_thread(void *param, uint32_t pid)
 {
+    (void)pid;
     signal_ctx_t *ctx = (signal_ctx_t *)param;
     ctx->wait_result = noza_futex_wait((uint32_t *)&ctx->futex_word, 0, -1);
     ctx->pending_mask = noza_signal_take();
@@ -366,6 +371,8 @@ static void test_signal_interrupts_futex(void)
 #define CLIENT_EXIT_CODE    0x0eadbeef
 static int string_server_thread(void *param, uint32_t pid)
 {
+    (void)param;
+    (void)pid;
     for (;;) {
         noza_msg_t msg;
         TEST_ASSERT_EQUAL_INT(0, noza_recv(&msg));
@@ -380,6 +387,7 @@ static int string_server_thread(void *param, uint32_t pid)
 
 static int string_client_thread(void *param, uint32_t mypid)
 {
+    (void)mypid;
     noza_msg_t msg;
     static char s[16];
 
@@ -455,6 +463,7 @@ static void test_noza_setjmp_longjmp()
 // test hard fault
 static int normal_task(void *param, uint32_t pid)
 {
+    (void)param;
     int counter = 5;
     while (counter-->0) {
         noza_thread_sleep_ms(100, NULL);
@@ -465,6 +474,7 @@ static int normal_task(void *param, uint32_t pid)
 
 static int fault_task(void *param, uint32_t pid)
 {
+    (void)param;
     int counter = 3;
     while (counter-->0) {
         noza_thread_sleep_ms(100, NULL);
@@ -473,6 +483,7 @@ static int fault_task(void *param, uint32_t pid)
     int *p = 0;
     *p = 0;
     TEST_ASSERT_EQUAL_INT(0, 1); // never reash here
+    return 0;
 }
 
 static void test_noza_hardfault()
@@ -491,6 +502,7 @@ static void test_noza_hardfault()
 static int counter = 0;
 static int inc_task(void *param, uint32_t pid)
 {
+    (void)pid;
     mutex_t *mutex = (mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
         TEST_ASSERT_EQUAL_INT(0, mutex_lock(mutex));
@@ -502,6 +514,7 @@ static int inc_task(void *param, uint32_t pid)
 
 static int dec_task(void *param, uint32_t pid)
 {
+    (void)pid;
     mutex_t *mutex = (mutex_t *)param;
     for (int i=0; i<ITERS; i++) {
         TEST_ASSERT_EQUAL_INT(0, mutex_lock(mutex));
@@ -520,7 +533,6 @@ static void test_noza_mutex()
     uint32_t dec_th[NUM_PAIR];
     counter = 0; 
     TEST_ASSERT_EQUAL_INT(0, mutex_acquire(&noza_mutex));
-    mutex_t *mutex = &noza_mutex;
     for (int i=0; i < NUM_PAIR; i++) {
         TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&inc_th[i], inc_task, &noza_mutex, 1, 1024));
     }
@@ -591,6 +603,7 @@ typedef struct spinlock_test_s {
 #define PAIR_ITER 100000
 static int spinlock_inc(void *param, uint32_t pid)
 {
+    (void)pid;
     spinlock_test_t *st = (spinlock_test_t *)param;
     int iter = PAIR_ITER;
     while (iter-->0) {
@@ -603,6 +616,7 @@ static int spinlock_inc(void *param, uint32_t pid)
 
 static int spinlock_dec(void *param, uint32_t pid)
 {
+    (void)pid;
     spinlock_test_t *st = (spinlock_test_t *)param;
     int iter = PAIR_ITER;
     while (iter-->0) {
@@ -615,6 +629,7 @@ static int spinlock_dec(void *param, uint32_t pid)
 
 static int test_lock_busy(void *param, uint32_t pid)
 {
+    (void)pid;
     TEST_ASSERT_EQUAL_INT(EBUSY, noza_spinlock_trylock((spinlock_t *)param));
     return 0;
 }
@@ -640,7 +655,7 @@ static void test_noza_spinlock()
         TEST_ASSERT_NOT_EQUAL(0, inc_th[i]);
     }
     for (int i = 0; i < NUM_PAIR; i++) {
-        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&dec_th[i], spinlock_inc, &spinlock_test.spinlock,
+        TEST_ASSERT_EQUAL_INT(0, noza_thread_create(&dec_th[i], spinlock_dec, &spinlock_test.spinlock,
             (uint32_t)i%NOZA_OS_PRIORITY_LIMIT, 1024));
         TEST_ASSERT_NOT_EQUAL(0, dec_th[i]);
     }
@@ -658,6 +673,8 @@ static void test_noza_spinlock()
 
 static int test_all(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
     srand(time(0));
     UNITY_BEGIN();
     RUN_TEST(test_noza_setjmp_longjmp);
@@ -691,6 +708,8 @@ static int test_all(int argc, char **argv)
 
 static int futex_only(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
     UNITY_BEGIN();
     RUN_TEST(test_futex_wait_wake);
     RUN_TEST(test_futex_timeout);

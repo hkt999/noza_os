@@ -74,6 +74,8 @@ static int do_memory_server(void *param, uint32_t pid)
 static uint8_t memory_server_stack[1024];
 void __attribute__((constructor(110))) memory_server_init(void *param, uint32_t pid)
 {
+    (void)param;
+    (void)pid;
     extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
 	noza_add_service(do_memory_server, memory_server_stack, sizeof(memory_server_stack));
 }

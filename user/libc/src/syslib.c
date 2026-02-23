@@ -34,8 +34,11 @@ uint32_t noza_get_stack_space() {
     if (noza_thread_self(&pid) == 0) {
         uint32_t sp;
         asm volatile ("mov %0, sp\n" : "=r" (sp));
-		uint32_t stack_size;
+		uint32_t stack_size = 0;
         uint32_t stack_bottom = (uint32_t)get_stack_ptr(pid, &stack_size);
+		if (stack_bottom == 0 || stack_size == 0) {
+			return 0;
+		}
 		return (stack_bottom + stack_size) - sp;
 	} else {
 		return 0; // fail
@@ -71,6 +74,8 @@ void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint
 #define SERVICE_PRIORITY    0
 int service_main(int argc, char *argv[])
 {   
+	(void)argc;
+	(void)argv;
     // initial all registered service
 	if (service_count > 0) {
 		for (int i = 0; i < service_count; i++) {

@@ -19,8 +19,18 @@ int nz_nanosleep(const struct nz_timespec *rqtp, struct nz_timespec *rmtp)
 
 void nz_clock_gettime(uint32_t mode, struct nz_timespec *ts)
 {
-    ts->tv_nsec = 0;
-    ts->tv_nsec = 0;
+    if (ts == NULL) {
+        return;
+    }
+    noza_time64_t noza_ts = {0};
+    if (noza_clock_gettime(mode, &noza_ts) != 0) {
+        ts->tv_sec = 0;
+        ts->tv_nsec = 0;
+        return;
+    }
+    uint64_t us = ((uint64_t)noza_ts.high << 32) | noza_ts.low;
+    ts->tv_sec = (uint32_t)(us / 1000000ULL);
+    ts->tv_nsec = (uint32_t)((us % 1000000ULL) * 1000ULL);
 }
 
 int nz_sleep(unsigned int seconds)

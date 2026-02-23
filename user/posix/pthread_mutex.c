@@ -3,6 +3,7 @@
 /* mutex initialization */
 int nz_pthread_mutex_init(nz_pthread_mutex_t *mutex, const nz_pthread_mutexattr_t *attr)
 {
+    (void)attr;
     return mutex_acquire(mutex);
 }
 

@@ -67,18 +67,22 @@ void platform_trap(void *_stack_ptr, kernel_trap_info_t *info)
     memcpy(is, info, sizeof(uint32_t)*4);
 }
 
-static const char *syscall_id_to_name(uint32_t id) 
+#if 0
+static const char *syscall_id_to_name(uint32_t id)
 {
     if (id >= NSC_NUM_SYSCALLS) {
         return "UNKNOWN";
     }
     return syscall_name[id];
 }
+#endif
 
 void dump_interrupt_stack(uint32_t *stack_ptr, uint32_t callid, uint32_t pid)
 {
+    (void)pid;
     if (callid != NSC_THREAD_SLEEP) {
-        interrupted_stack_t *is = (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
+        interrupted_stack_t *is __attribute__((unused)) =
+            (interrupted_stack_t *)(stack_ptr + (sizeof(user_stack_t)/sizeof(uint32_t)));
         #if 0
         printk("core:%d, stack (pid:%d) r0: %08x r1: %08x r2: %08x r3: %08x (%s:%d)\n",
             platform_get_running_core(), pid, is->r0, is->r1, is->r2, is->r3, syscall_id_to_name(callid), callid);

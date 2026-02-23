@@ -3,8 +3,8 @@
 #include "cmd_line.h"
 
 #define KEY_TAB         9
-#define KEY_CR          10
-#define KEY_LF          13  
+#define KEY_CR          13   // carriage return
+#define KEY_LF          10   // line feed
 #define KEY_ESC         27
 #define KEY_BACKSPACE   8
 #define KEY_BACKSPACE2  127
@@ -16,6 +16,8 @@
 #define KEY_LEFT        68
 #define KEY_DEL         51
 #define KEY_VDEL        126
+
+static int pending_newline = 0;
 
 static void state_escape(cmd_line_t *edit, int c);
 static void state_func1(cmd_line_t *edit, int c);
@@ -83,25 +85,34 @@ static void state_stand_by(cmd_line_t *edit, int c)
     switch (c) {
         case KEY_TAB:
             cmd_line_key_tab(edit);
+            pending_newline = 0;
             break;
 
         case KEY_CR:
         case KEY_LF:
+            if (pending_newline) {
+                pending_newline = 0; // swallow second newline in CR+LF or LF+CR
+                break;
+            }
+            pending_newline = 1;
             cmd_line_push_line(edit);
             break;
 
         case KEY_ESC:
             edit->state_func = state_escape;
+            pending_newline = 0;
             break;
 
         case KEY_BACKSPACE:
         case KEY_BACKSPACE2:
         case -1:
             cmd_line_key_backspace(edit);
+            pending_newline = 0;
             break;
 
         default:
             cmd_line_insert(edit, c);
+            pending_newline = 0;
             break;
     }
 }
@@ -181,7 +192,8 @@ static void cmd_line_clear(cmd_line_t *edit)
 static void cmd_line_update(cmd_line_t *edit, char *line)
 {
     cmd_line_clear(edit);
-    strncpy(edit->working_buffer, line, sizeof(edit->working_buffer));
+    strncpy(edit->working_buffer, line, sizeof(edit->working_buffer) - 1);
+    edit->working_buffer[sizeof(edit->working_buffer) - 1] = 0;
     edit->len = edit->cursor = strlen(edit->working_buffer);
     for (int i=0; i<edit->len; i++) {
         edit->driver.putc(edit->working_buffer[i]);
@@ -214,16 +226,19 @@ static void cmd_line_key_down(cmd_line_t *edit)
 
 static void cmd_line_key_tab(cmd_line_t *edit)
 {
+    (void)edit;
     /* do nothing here */
 }
 
 static void cmd_line_key_page_up(cmd_line_t *edit)
 {
+    (void)edit;
     /* do nothing here */
 }
 
 static void cmd_line_key_page_down(cmd_line_t *edit)
 {
+    (void)edit;
     /* do nothing here */
 }
 
@@ -249,18 +264,18 @@ static void cmd_line_insert(cmd_line_t *edit, int c)
 static void cmd_line_push_line(cmd_line_t *edit)
 {
     edit->working_buffer[edit->len] = 0;
+    edit->driver.putc('\n');
     if (edit->len) {
         history_new_line(&edit->history);
         history_save(&edit->history, edit->working_buffer);
-        edit->driver.putc('\n');
         edit->process_command(edit->working_buffer, edit->user_data);
-        bzero(edit->working_buffer, sizeof(edit->working_buffer));
-        edit->cursor = edit->len = 0;
-        history_new_line(&edit->history);
     } else {
-        edit->driver.putc('\n');
+        // even empty line should signal caller
         edit->process_command(edit->working_buffer, edit->user_data);
     }
+    bzero(edit->working_buffer, sizeof(edit->working_buffer));
+    edit->cursor = edit->len = 0;
+    history_new_line(&edit->history);
 }
 
 // exported functions
@@ -284,5 +299,5 @@ void cmd_line_putc(cmd_line_t *edit, int c)
 
 char *cmd_line_get_line(cmd_line_t *edit)
 {
-
+    return edit ? edit->working_buffer : NULL;
 }

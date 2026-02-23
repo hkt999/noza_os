@@ -1,14 +1,13 @@
 #include "semaphore.h"
+#include "errno.h"
 
 int nz_sem_init(nz_sem_t *sem, int pshared, unsigned int value)
 {
     if (pshared) {
         // this simplified implementation does not support shared semaphores
-        return -1;
+        return ENOTSUP;
     }
-    semaphore_init(sem, value);
-
-    return 0;
+    return semaphore_init(sem, value);
 }
 
 int nz_sem_destroy(nz_sem_t *sem)
@@ -35,4 +34,3 @@ int nz_sem_getvalue(nz_sem_t *sem, int *sval)
 {
     return semaphore_getvalue(sem, sval);
 }
-

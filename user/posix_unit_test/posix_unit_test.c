@@ -16,6 +16,7 @@
 
 static void *test_task(void *param)
 {
+    (void)param;
     int do_count = rand() % 5 + 2;
     int ms = rand() % 50 + 50;
     while (do_count-->0) {
@@ -92,7 +93,6 @@ static void test_pthread_kill()
         }
         TEST_ASSERT_EQUAL_INT(0, nanosleep((&(struct timespec){.tv_sec=0, .tv_nsec=50000000}), NULL));
         for (int i = 0; i < NUM_THREADS; i++) {
-            uint32_t sig = 0;
             TEST_ASSERT_EQUAL_INT(0, pthread_kill(th[i], SIGALRM));
         }
         for (int i = 0; i < NUM_THREADS; i++) {
@@ -165,6 +165,7 @@ static void *inc_task(void *param)
         counter++;
         TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(mutex));
     }
+    return NULL;
 }
 
 static void *dec_task(void *param)
@@ -175,6 +176,7 @@ static void *dec_task(void *param)
         counter--;
         TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(mutex));
     }
+    return NULL;
 }
 
 static void test_pthread_mutex()

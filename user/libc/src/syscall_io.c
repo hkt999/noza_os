@@ -542,7 +542,12 @@ struct dirent *readdir(DIR *dirp) {
     }
     impl->at_end = at_end;
     memset(&impl->ent, 0, sizeof(impl->ent));
-    strncpy(impl->ent.d_name, ent.name, sizeof(impl->ent.d_name) - 1);
+    size_t name_len = strnlen(ent.name, sizeof(ent.name));
+    if (name_len >= sizeof(impl->ent.d_name)) {
+        name_len = sizeof(impl->ent.d_name) - 1;
+    }
+    memcpy(impl->ent.d_name, ent.name, name_len);
+    impl->ent.d_name[name_len] = '\0';
     return &impl->ent;
 }
 

@@ -48,6 +48,11 @@ static int sync_call(noza_msg_t *msg)
 	return ret;
 }
 
+static inline int sync_result(int ret, uint32_t code)
+{
+	return ret != 0 ? ret : (int)code;
+}
+
 int mutex_acquire(mutex_t *mutex)
 {
 	mutex_msg_t msg = {.cmd = MUTEX_ACQUIRE, .mid = mutex->mid, .token = 0, .code = 0};
@@ -68,7 +73,7 @@ int mutex_release(mutex_t *mutex)
 	mutex_msg_t msg = {.cmd = MUTEX_RELEASE, .mid = mutex->mid, .token = mutex->token, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int mutex_lock(mutex_t *mutex)
@@ -76,7 +81,7 @@ int mutex_lock(mutex_t *mutex)
 	mutex_msg_t msg = {.cmd = MUTEX_LOCK, .mid = mutex->mid, .token = mutex->token, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int mutex_trylock(mutex_t *mutex)
@@ -84,7 +89,7 @@ int mutex_trylock(mutex_t *mutex)
 	mutex_msg_t msg = {.cmd = MUTEX_TRYLOCK, .mid = mutex->mid, .token = mutex->token, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int mutex_unlock(mutex_t *mutex)
@@ -92,7 +97,7 @@ int mutex_unlock(mutex_t *mutex)
 	mutex_msg_t msg = {.cmd = MUTEX_UNLOCK, .mid = mutex->mid, .token = mutex->token };
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 // cond implementation
@@ -118,7 +123,7 @@ int cond_release(cond_t *cond)
 	cond_msg_t msg = {.cmd = COND_RELEASE, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int cond_wait(cond_t *cond, mutex_t *mutex)
@@ -128,7 +133,7 @@ int cond_wait(cond_t *cond, mutex_t *mutex)
 	cond_msg_t msg = {.cmd = COND_WAIT, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0, .mid = mutex->mid, .mtoken = mutex->token};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 // TODO: implement this
@@ -140,7 +145,7 @@ int cond_timedwait(cond_t *cond, mutex_t *mutex, uint32_t us)
 	cond_msg_t msg = {.cmd = COND_TIMEDWAIT, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0, .mid = mutex->mid, .mtoken = mutex->token};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int cond_signal(cond_t *cond)
@@ -148,7 +153,7 @@ int cond_signal(cond_t *cond)
 	cond_msg_t msg = {.cmd = COND_SIGNAL, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0, .mid = -1};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int cond_broadcast(cond_t *cond)
@@ -156,7 +161,7 @@ int cond_broadcast(cond_t *cond)
 	cond_msg_t msg = {.cmd = COND_BROADCAST, .cid = cond->cid, .ctoken = cond->ctoken, .code = 0, .mid = -1};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 // semaphore
@@ -180,7 +185,7 @@ int semaphore_destroy(semaphore_t *sem)
 	sem_msg_t msg = {.cmd = SEM_RELEASE, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int semaphore_wait(semaphore_t *sem)
@@ -188,7 +193,7 @@ int semaphore_wait(semaphore_t *sem)
 	sem_msg_t msg = {.cmd = SEM_WAIT, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int semaphore_trywait(semaphore_t *sem)
@@ -196,7 +201,7 @@ int semaphore_trywait(semaphore_t *sem)
 	sem_msg_t msg = {.cmd = SEM_TRYWAIT, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int semaphore_post(semaphore_t *sem)
@@ -204,7 +209,7 @@ int semaphore_post(semaphore_t *sem)
 	sem_msg_t msg = {.cmd = SEM_POST, .sid = sem->sid, .stoken = sem->stoken, .code = 0};
 	noza_msg_t noza_msg = {.ptr = (void *)&msg, .size = sizeof(msg)};
 	int ret = sync_call(&noza_msg);
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }
 
 int semaphore_getvalue(semaphore_t *sem, int *sval)
@@ -215,5 +220,5 @@ int semaphore_getvalue(semaphore_t *sem, int *sval)
 	if (ret == 0) {
 		*sval = msg.value;
 	}
-	return ret != 0 ? ret : msg.code;
+	return sync_result(ret, msg.code);
 }

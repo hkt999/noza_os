@@ -103,16 +103,17 @@ static void parse_input_command(char *cmdbuf, int *argc, char **argv, int max_ar
 	int state = STATE_NEW_TOKEN;
 	char *p = cmdbuf;
 	while (*p != 0) {
+		unsigned char ch = (unsigned char)*p;
 		switch (state) {
 			case STATE_NEW_TOKEN:
-				if ( isalnum(*p) || isalpha(*p) || (*p=='_') || (*p=='/') || (*p=='-') || (*p=='.') || (*p=='&')) {
+				if (isalnum(ch) || isalpha(ch) || (*p=='_') || (*p=='/') || (*p=='-') || (*p=='.') || (*p=='&')) {
 					argv[(*argc)++] = p;
 					state = STATE_PROCESSING;
 				} 
 				break;
 
 			case STATE_PROCESSING:
-				if (isalnum(*p) || (*p=='_') || (*p=='/') || (*p=='-') || (*p=='.')) {
+				if (isalnum(ch) || (*p=='_') || (*p=='/') || (*p=='-') || (*p=='.')) {
 					break; // keep the current state
 				} else {
 					*p = (char)0; // terminate
@@ -127,10 +128,11 @@ static void parse_input_command(char *cmdbuf, int *argc, char **argv, int max_ar
 #define MAX_ARGV  12
 static void noza_console_process_command(char *cmd_str, void *user_data)
 {
+	(void)cmd_str;
 	noza_console_t *console = (noza_console_t *)user_data;
 	cmd_line_t *cmd = &console->cmd;
 	char *argv[MAX_ARGV];
-	int i, argc;
+	int argc;
 
 	if (strlen(cmd->working_buffer) > 0) {
 		char *buf = strdup(cmd->working_buffer);

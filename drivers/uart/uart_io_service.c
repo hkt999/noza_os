@@ -115,7 +115,7 @@ int uart_service_start(void *param, uint32_t pid)
                 case CONSOLE_CMD_READLINE: {
                     // if a line is already ready, serve it immediately
                     if (uart_state.line_ready) {
-                        uint32_t copy_len = (uart_state.line_len < cmsg->len) ? (uint32_t)uart_state.line_len : cmsg->len;
+                        uint32_t copy_len = ((uint32_t)uart_state.line_len < cmsg->len) ? (uint32_t)uart_state.line_len : cmsg->len;
                         memcpy(cmsg->buf, uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
@@ -132,7 +132,7 @@ int uart_service_start(void *param, uint32_t pid)
                             handle_irq_input(&uart_state);
                             noza_thread_sleep_ms(1, NULL);
                         }
-                        uint32_t copy_len = (uart_state.line_len < cmsg->len) ? (uint32_t)uart_state.line_len : cmsg->len;
+                        uint32_t copy_len = ((uint32_t)uart_state.line_len < cmsg->len) ? (uint32_t)uart_state.line_len : cmsg->len;
                         memcpy(cmsg->buf, uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
@@ -168,6 +168,8 @@ int uart_service_start(void *param, uint32_t pid)
 static uint8_t uart_service_stack[1024 + sizeof(uart_state_t)];
 void __attribute__((constructor(103))) uart_service_init(void *param, uint32_t pid)
 {
+    (void)param;
+    (void)pid;
     extern void noza_add_service(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size);
     noza_add_service(uart_service_start, uart_service_stack, sizeof(uart_service_stack));
 }

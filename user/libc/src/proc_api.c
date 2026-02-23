@@ -224,6 +224,7 @@ process_record_t *noza_process_self() // TODO: return process is instead of proc
 // thread_record points to the stack tail
 uint32_t save_exit_context(thread_record_t *thread_record, uint32_t pid)
 {
+	(void)pid;
 	return setjmp(thread_record->jmp_buf);
 }
 
@@ -249,7 +250,7 @@ int noza_process_remove_thread(process_record_t *process, uint32_t tid)
 	if (ret != 0)
 		return ret;
 
-	for (int i=0; i<process->thread_count; i++) {
+	for (uint32_t i = 0; i < process->thread_count; i++) {
 		if (process->child_thread[i] == tid) {
 			process->child_thread[i] = process->child_thread[process->thread_count-1];
 			process->thread_count--;
@@ -271,7 +272,7 @@ int noza_process_terminate_children_threads(process_record_t *process)
 	if (ret != 0)
 		return ret;
 
-	for (int i=0; i<process->thread_count; i++) {
+	for (uint32_t i = 0; i < process->thread_count; i++) {
 		join_pid[count++] = process->child_thread[i];
 	}
 	process->thread_count = 0;
@@ -291,12 +292,17 @@ extern int service_main(int argc, char *argv[]);
 static int boot2(int argc, char *argv[])
 {
     extern int user_root_task(int argc, char *argv[]);
-	noza_process_exec_detached(service_main, argc, argv);
-	user_root_task(argc, argv);
+	int ret = noza_process_exec_detached(service_main, argc, argv);
+	if (ret != 0) {
+		return ret;
+	}
+	return user_root_task(argc, argv);
 }
 
 int process_boot(void *param, uint32_t pid)
 {
+	(void)param;
+	(void)pid;
 
 	process_record_t *process = alloc_process_record();
 	if (process == NULL)
@@ -305,5 +311,5 @@ int process_boot(void *param, uint32_t pid)
 	process->entry = boot2;
 	process->env->argc = 1;
 	process->env->argv[0] = "root";
-    noza_process_crt0(process, 0); // 0 --> root thread
+	return noza_process_crt0(process, 0); // 0 --> root thread
 }

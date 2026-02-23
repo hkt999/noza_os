@@ -179,6 +179,7 @@ static int handle_register(name_msg_t *name_msg, uint32_t caller_vid, simap_t *m
 
 static int handle_resolve_name(name_msg_t *name_msg, simap_t *map)
 {
+    (void)map;
     if (!validate_name(name_msg->name)) {
         return NAME_LOOKUP_ERR_INVALID;
     }
@@ -276,6 +277,8 @@ static int do_name_server(void *param, uint32_t pid)
 static uint8_t name_server_stack[1024];
 void __attribute__((constructor(101))) name_server_init(void *param, uint32_t pid)
 {
+    (void)param;
+    (void)pid;
     // TODO: move the external declaraction into a header file
     extern void noza_add_service_with_vid(int (*entry)(void *param, uint32_t pid), void *stack, uint32_t stack_size, uint32_t reserved_vid);
 	noza_add_service_with_vid(do_name_server, name_server_stack, sizeof(name_server_stack), NAME_SERVER_VID);

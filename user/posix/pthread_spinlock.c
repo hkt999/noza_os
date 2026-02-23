@@ -3,6 +3,7 @@
 typedef spinlock_t nz_pthread_spinlock_t;
 int nz_pthread_spin_init(nz_pthread_spinlock_t *lock, int pshared)
 {
+    (void)pshared;
     /* TODO: consider pshared
         NZ_PTHREAD_PROCESS_SHARED
         NZ_PTHREAD_PROCESS_PRIVATE

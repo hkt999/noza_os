@@ -21,6 +21,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # declare the project apps
 option(NOZAOS_UNITTEST "build unit test" ON)
+option(NOZAOS_STRICT_WARNINGS "enable stricter compiler warnings for project sources" OFF)
 
 # posix system
 option(NOZAOS_POSIX	"build posix" ON)
@@ -147,6 +148,7 @@ set(
 	service/vfs/rootfs.c
 	service/vfs/romfs.c
 	service/irq/irq_service.c
+	service/app_launcher/app_launcher.c
 	type/dblist.c
 	type/hashslot.c
 	3rd_party/tinyalloc_port/tinyalloc.c
@@ -159,6 +161,7 @@ set(
 	user/console/cmd_line.c
 	user/console/noza_console.c
 	user/console/noza_term.c
+	user/libc/src/app_launcher_client.c
 )
 
 if (NOZA_PROCESS_USE_TLSF)
@@ -247,6 +250,15 @@ target_link_libraries(
 	pico_multicore
 	${NOZA_LIBS}
 )
+
+if (NOZAOS_STRICT_WARNINGS)
+	target_compile_options(
+		noza
+		PRIVATE
+		$<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra>
+		$<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra>
+	)
+endif()
 
 pico_add_extra_outputs(noza)
 pico_enable_stdio_usb(noza 0)
