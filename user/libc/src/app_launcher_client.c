@@ -97,6 +97,24 @@ int app_launcher_spawn(const char *path, char *const argv[], uint32_t flags, uin
     return call_launcher(&msg);
 }
 
+int app_launcher_list_apps(uint32_t offset, uint32_t max_items, app_launcher_msg_t *msg)
+{
+    if (msg == NULL) {
+        return EINVAL;
+    }
+    memset(msg, 0, sizeof(*msg));
+    msg->cmd = APP_LAUNCHER_LIST;
+    msg->app_list.offset = offset;
+    msg->app_list.request_count = max_items;
+    if (msg->app_list.request_count > APP_LAUNCHER_LIST_BATCH) {
+        msg->app_list.request_count = APP_LAUNCHER_LIST_BATCH;
+    }
+    if (msg->app_list.request_count == 0) {
+        msg->app_list.request_count = APP_LAUNCHER_LIST_BATCH;
+    }
+    return call_launcher(msg);
+}
+
 int app_launcher_exit_notify(uint32_t pid, int exit_code)
 {
     app_launcher_msg_t msg;

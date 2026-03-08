@@ -6,8 +6,10 @@
 #include <unistd.h>
 #include "noza_fs.h"
 #include "nozaos.h"
+#include "app_launcher.h"
 #include "noza_console_api.h"
 #include "drivers/uart/uart_io_client.h"
+#include "posix/errno.h"
 #include "printk.h"
 
 #define SHELL_BANNER "\nNOZA OS v0.01\n"
@@ -15,6 +17,31 @@
 
 static int shell_tty_fd = -1;
 static uint32_t shell_prompt_counter = 0;
+int shell_main(int argc, char **argv);
+
+static void shell_register_self(void)
+{
+    static int registered = 0;
+    static int failed = 0;
+    if (registered || failed) {
+        return;
+    }
+
+    int rc = ESRCH;
+    for (int attempt = 0; attempt < 50; attempt++) {
+        rc = app_launcher_register("/sbin/shell", shell_main, 2048);
+        if (rc == 0) {
+            registered = 1;
+            return;
+        }
+        if (rc != ESRCH) {
+            break;
+        }
+        noza_thread_sleep_ms(10, NULL);
+    }
+    printk("shell: app register failed (%d)\n", rc);
+    failed = 1;
+}
 
 static int shell_open_tty(void)
 {
@@ -70,6 +97,7 @@ int shell_main(int argc, char **argv)
     (void)argc;
     (void)argv;
 
+    shell_register_self();
     app_printf("%s", SHELL_BANNER);
     char line[128];
     for (;;) {

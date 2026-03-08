@@ -7,6 +7,7 @@
 #include "vfs.h"
 #include "ramfs.h"
 #include "devfs.h"
+#include "launcherfs.h"
 #include "drivers/uart/uart_devfs.h"
 #include "printk.h"
 
@@ -54,6 +55,10 @@ static int fs_main(void *param, uint32_t pid)
         printk("fs: devfs init failed (%d)\n", devfs_rc);
     } else {
         uart_register_devfs();
+    }
+    int launcherfs_rc = launcherfs_mount();
+    if (launcherfs_rc != 0) {
+        printk("fs: launcherfs mount failed (%d)\n", launcherfs_rc);
     }
 
     // TODO: spawn worker threads when heavier VFS backends arrive.

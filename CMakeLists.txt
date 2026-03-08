@@ -146,6 +146,7 @@ set(NOZA_CORE_SOURCES
     service/fs/ramfs.c
     service/fs/vfs.c
     service/fs/devfs.c
+    service/fs/launcherfs.c
     service/irq/irq_client.c
     service/vfs/rootfs.c
     service/vfs/romfs.c

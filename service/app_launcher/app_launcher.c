@@ -36,6 +36,25 @@ static app_entry_t *find_app(const char *path)
     return NULL;
 }
 
+static int load_app(const char *path, app_entry_t *out)
+{
+    if (path == NULL || out == NULL) {
+        return EINVAL;
+    }
+    lock_init_once();
+    if (noza_spinlock_lock(&APP_LOCK) != 0) {
+        return EBUSY;
+    }
+    app_entry_t *app = find_app(path);
+    if (app == NULL) {
+        noza_spinlock_unlock(&APP_LOCK);
+        return ENOENT;
+    }
+    *out = *app;
+    noza_spinlock_unlock(&APP_LOCK);
+    return 0;
+}
+
 static int register_app(const char *path, main_t entry, uint32_t stack_size)
 {
     if (path == NULL || entry == NULL) {
@@ -76,21 +95,23 @@ static int register_app(const char *path, main_t entry, uint32_t stack_size)
 
 static int handle_lookup(app_launcher_msg_t *msg)
 {
-    app_entry_t *app = find_app(msg->lookup.path);
-    if (app == NULL) {
-        return ENOENT;
+    app_entry_t app;
+    int rc = load_app(msg->lookup.path, &app);
+    if (rc != 0) {
+        return rc;
     }
-    msg->lookup.entry = app->entry;
-    msg->lookup.stack_size = app->stack_size;
+    msg->lookup.entry = app.entry;
+    msg->lookup.stack_size = app.stack_size;
     return 0;
 }
 
 static int handle_spawn(app_launcher_msg_t *msg)
 {
-    app_entry_t *app = find_app(msg->spawn.path);
-    if (app == NULL) {
+    app_entry_t app;
+    int lookup_rc = load_app(msg->spawn.path, &app);
+    if (lookup_rc != 0) {
         printk("app_launcher: spawn app not found %s\n", msg->spawn.path);
-        return ENOENT;
+        return lookup_rc;
     }
 
     char *argv[APP_LAUNCHER_MAX_ARGC + 1] = {0};
@@ -103,13 +124,48 @@ static int handle_spawn(app_launcher_msg_t *msg)
     }
     argv[argc] = NULL;
 
-    uint32_t stack_size = app->stack_size ? app->stack_size : NOZA_THREAD_DEFAULT_STACK_SIZE;
-    int rc = noza_process_exec_detached_with_stack(app->entry, (int)argc, argv, stack_size);
+    uint32_t stack_size = app.stack_size ? app.stack_size : NOZA_THREAD_DEFAULT_STACK_SIZE;
+    int rc = noza_process_exec_detached_with_stack(app.entry, (int)argc, argv, stack_size);
     if (rc != 0) {
         printk("app_launcher: spawn failed rc=%d\n", rc);
         return rc;
     }
     msg->spawn.pid = 0; // pid unknown with current API
+    return 0;
+}
+
+static int handle_list(app_launcher_msg_t *msg)
+{
+    lock_init_once();
+    if (noza_spinlock_lock(&APP_LOCK) != 0) {
+        return EBUSY;
+    }
+
+    uint32_t offset = msg->app_list.offset;
+    uint32_t request_count = msg->app_list.request_count;
+    if (request_count == 0 || request_count > APP_LAUNCHER_LIST_BATCH) {
+        request_count = APP_LAUNCHER_LIST_BATCH;
+    }
+
+    uint32_t total = 0;
+    uint32_t emitted = 0;
+    memset(msg->app_list.items, 0, sizeof(msg->app_list.items));
+    for (int i = 0; i < APP_LAUNCHER_MAX_APPS; i++) {
+        if (!APP_TABLE[i].in_use) {
+            continue;
+        }
+        if (total >= offset && emitted < request_count) {
+            strncpy(msg->app_list.items[emitted].path, APP_TABLE[i].path, NOZA_FS_MAX_PATH - 1);
+            msg->app_list.items[emitted].path[NOZA_FS_MAX_PATH - 1] = '\0';
+            msg->app_list.items[emitted].stack_size = APP_TABLE[i].stack_size;
+            emitted++;
+        }
+        total++;
+    }
+    msg->app_list.request_count = request_count;
+    msg->app_list.count = emitted;
+    msg->app_list.total = total;
+    noza_spinlock_unlock(&APP_LOCK);
     return 0;
 }
 
@@ -125,6 +181,9 @@ static void dispatch(app_launcher_msg_t *msg)
         break;
     case APP_LAUNCHER_SPAWN:
         msg->code = handle_spawn(msg);
+        break;
+    case APP_LAUNCHER_LIST:
+        msg->code = handle_list(msg);
         break;
     case APP_LAUNCHER_EXIT_NOTIFY:
         msg->code = 0; // reserved for future tracking
