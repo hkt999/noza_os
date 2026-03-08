@@ -10,10 +10,11 @@
 #include "drivers/uart/uart_io_client.h"
 #include "printk.h"
 
-#define SHELL_PROMPT "noza> "
 #define SHELL_BANNER "\nNOZA OS v0.01\n"
+#define SHELL_PROMPT_FMT "noza(%u)> "
 
 static int shell_tty_fd = -1;
+static uint32_t shell_prompt_counter = 0;
 
 static int shell_open_tty(void)
 {
@@ -72,7 +73,7 @@ int shell_main(int argc, char **argv)
     app_printf("%s", SHELL_BANNER);
     char line[128];
     for (;;) {
-        app_printf("%s", SHELL_PROMPT);
+        app_printf(SHELL_PROMPT_FMT, shell_prompt_counter++);
         uint32_t len = 0;
         int ret = console_readline(line, sizeof(line), &len);
         if (ret != 0) {
@@ -81,6 +82,7 @@ int shell_main(int argc, char **argv)
             continue;
         }
         if (len == 0) {
+            app_printf("\r\n");
             continue;
         }
         char *argv[4] = {0};
