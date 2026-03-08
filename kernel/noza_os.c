@@ -38,6 +38,7 @@
 #define THREAD_SLEEP            7
 #define THREAD_ZOMBIE           8
 #define THREAD_PENDING_JOIN     9
+#define THREAD_STOPPED          10
 
 #define SYSCALL_DONE            0
 #define SYSCALL_PENDING         1
@@ -132,7 +133,8 @@ const char *state_to_str(uint32_t id)
         [THREAD_WAITING_SYNC] = "THREAD_WAITING_SYNC",
         [THREAD_SLEEP] = "THREAD_SLEEP",
         [THREAD_ZOMBIE] = "THREAD_ZOMBIE",
-        [THREAD_PENDING_JOIN] = "THREAD_PENDING_JOIN"
+        [THREAD_PENDING_JOIN] = "THREAD_PENDING_JOIN",
+        [THREAD_STOPPED] = "THREAD_STOPPED"
     };
     if (id < sizeof(state_str)/sizeof(char *)) {
         return state_str[id];
@@ -315,6 +317,7 @@ typedef struct {
     thread_list_t   wait;                                // list of threads in waiting state for thread pending on noza_recv
     thread_list_t   sleep;                               // list of threads in sleeping state
     thread_list_t   sync_sleep;                          // threads waiting on synchronization objects
+    thread_list_t   stopped;                            // stopped threads (SIGSTOP)
     thread_list_t   zombie;                              // list of threads in zombie state
     thread_list_t   free;                                // list of free/available threads
     thread_t        thread[NOZA_OS_TASK_LIMIT];          // array of thread_t structures for task management
@@ -562,10 +565,10 @@ inline static void dump_threads()
         }
     }
 
-    total_threads += ready_count + join_pending_count + noza_os.wait.count + noza_os.sleep.count + noza_os.zombie.count + noza_os.free.count + waiting_read + waiting_reply;
-    kernel_log("running: %d, pending_join: %d, ready: %d, wait: %d, sleep: %d, zombie: %d, free:% d, wait_read=%d, wait_reply=%d\n", running_thread ? 1 : 0, 
+    total_threads += ready_count + join_pending_count + noza_os.wait.count + noza_os.sleep.count + noza_os.stopped.count + noza_os.zombie.count + noza_os.free.count + waiting_read + waiting_reply;
+    kernel_log("running: %d, pending_join: %d, ready: %d, wait: %d, sleep: %d, stopped: %d, zombie: %d, free:% d, wait_read=%d, wait_reply=%d\n", running_thread ? 1 : 0,
         join_pending_count, ready_count,
-        noza_os.wait.count, noza_os.sleep.count, noza_os.zombie.count, noza_os.free.count, waiting_read, waiting_reply);
+        noza_os.wait.count, noza_os.sleep.count, noza_os.stopped.count, noza_os.zombie.count, noza_os.free.count, waiting_read, waiting_reply);
     kernel_log("total_threads=%d, NOZA_OS_TASK_LIMIT=%d\n", total_threads, NOZA_OS_TASK_LIMIT);
     for (int i=0; i< NOZA_OS_TASK_LIMIT; i++) {
         thread_t *th = &noza_os.thread[i];
@@ -811,6 +814,7 @@ static void noza_init()
     noza_os.wait.state_id = THREAD_WAITING_MSG;
     noza_os.sleep.state_id = THREAD_SLEEP;
     noza_os.sync_sleep.state_id = THREAD_WAITING_SYNC;
+    noza_os.stopped.state_id = THREAD_STOPPED;
     noza_os.free.state_id = THREAD_FREE;
     noza_os.zombie.state_id = THREAD_ZOMBIE;
 
@@ -941,18 +945,18 @@ inline static thread_t *noza_thread_alloc()
     return th;
 }
 
-static void noza_thread_clear_messages(thread_t *th)
+static void noza_release_waiters_from_port(thread_t *th, uint32_t error)
 {
     // release all pending threads for messages
     while (th->port.pending_list.count>0) {
         thread_t *pending = (thread_t *)th->port.pending_list.head->value;
-        noza_os_set_return_value1(pending, EAGAIN);
+        noza_os_set_return_value1(pending, error);
         noza_os_change_state(pending, &th->port.pending_list, &noza_os.ready[pending->info.priority]);
     }
 
     while (th->port.reply_list.count>0) {
         thread_t *reply = (thread_t *)th->port.reply_list.head->value;
-        noza_os_set_return_value1(reply, EAGAIN);
+        noza_os_set_return_value1(reply, error);
         noza_os_change_state(reply, &th->port.reply_list, &noza_os.ready[reply->info.priority]);
     }
     th->pending_recv_msg = NULL;
@@ -1155,6 +1159,153 @@ static inline void noza_signal_send_thread(thread_t *target, uint32_t signum)
     if ((target->signal_mask & bit) == 0) {
         noza_signal_interrupt_thread(target);
     }
+}
+
+static thread_t *noza_find_port_wait_owner(thread_t *target, thread_list_t **list_out)
+{
+    if (target == NULL || list_out == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < NOZA_OS_TASK_LIMIT; i++) {
+        thread_t *owner = &noza_os.thread[i];
+        if (owner->port.pending_list.count > 0) {
+            thread_t *cursor = (thread_t *)owner->port.pending_list.head->value;
+            for (uint32_t j = 0; j < owner->port.pending_list.count; j++) {
+                if (cursor == target) {
+                    *list_out = &owner->port.pending_list;
+                    return owner;
+                }
+                cursor = (thread_t *)cursor->state_node.next->value;
+            }
+        }
+        if (owner->port.reply_list.count > 0) {
+            thread_t *cursor = (thread_t *)owner->port.reply_list.head->value;
+            for (uint32_t j = 0; j < owner->port.reply_list.count; j++) {
+                if (cursor == target) {
+                    *list_out = &owner->port.reply_list;
+                    return owner;
+                }
+                cursor = (thread_t *)cursor->state_node.next->value;
+            }
+        }
+    }
+    return NULL;
+}
+
+static thread_t *noza_find_join_owner(thread_t *joiner)
+{
+    if (joiner == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < NOZA_OS_TASK_LIMIT; i++) {
+        if (noza_os.thread[i].join_th == joiner) {
+            return &noza_os.thread[i];
+        }
+    }
+    return NULL;
+}
+
+static int noza_detach_blocked_thread(thread_t *target)
+{
+    thread_list_t *wait_list = NULL;
+
+    switch (target->info.state) {
+    case THREAD_READY:
+        noza_os_remove_thread(&noza_os.ready[target->info.priority], target);
+        return 0;
+    case THREAD_WAITING_MSG:
+        noza_os_remove_thread(&noza_os.wait, target);
+        target->pending_recv_msg = NULL;
+        return 0;
+    case THREAD_WAITING_SYNC:
+        if (target->waiting_queue) {
+            noza_wait_queue_remove(target->waiting_queue, target);
+            target->waiting_queue = NULL;
+        }
+        noza_wait_queue_cancel_timeout(target);
+        return 0;
+    case THREAD_SLEEP:
+        noza_os_remove_thread(&noza_os.sleep, target);
+        target->expired_time = 0;
+        return 0;
+    case THREAD_WAITING_READ:
+    case THREAD_WAITING_REPLY:
+        if (noza_find_port_wait_owner(target, &wait_list) == NULL || wait_list == NULL) {
+            return ESRCH;
+        }
+        noza_os_remove_thread(wait_list, target);
+        return 0;
+    case THREAD_PENDING_JOIN: {
+        thread_t *owner = noza_find_join_owner(target);
+        if (owner != NULL) {
+            owner->join_th = NULL;
+        }
+        return 0;
+    }
+    case THREAD_STOPPED:
+        noza_os_remove_thread(&noza_os.stopped, target);
+        return 0;
+    case THREAD_RUNNING:
+        if (target != noza_os_get_running_thread()) {
+            return EBUSY;
+        }
+        return 0;
+    case THREAD_ZOMBIE:
+    case THREAD_FREE:
+        return ESRCH;
+    default:
+        return EINVAL;
+    }
+}
+
+static void noza_release_join_waiter(thread_t *target)
+{
+    if (target->join_th != NULL) {
+        noza_os_add_thread(&noza_os.ready[target->join_th->info.priority], target->join_th);
+        noza_os_set_return_value2(target->join_th, 0, target->exit_code);
+        target->join_th = NULL;
+    }
+}
+
+static void noza_finalize_thread_exit(thread_t *target)
+{
+    target->info.port_state = PORT_WAIT_LISTEN;
+    target->pending_recv_msg = NULL;
+    target->waiting_queue = NULL;
+    target->expired_time = 0;
+    noza_release_waiters_from_port(target, EINTR);
+
+    if (target->join_th == NULL) {
+        if (target->flags & FLAG_DETACH) {
+            noza_os_add_thread(&noza_os.free, target);
+        } else {
+            noza_os_add_thread(&noza_os.zombie, target);
+        }
+    } else {
+        noza_release_join_waiter(target);
+        noza_os_add_thread(&noza_os.free, target);
+    }
+}
+
+static int noza_terminate_thread(thread_t *target, uint32_t exit_code)
+{
+    if (target == NULL) {
+        return ESRCH;
+    }
+
+    int detach_rc = noza_detach_blocked_thread(target);
+    if (detach_rc != 0) {
+        return detach_rc;
+    }
+
+    target->exit_code = exit_code;
+    noza_finalize_thread_exit(target);
+    if (target == noza_os_get_running_thread()) {
+        noza_os_clear_running_thread();
+    }
+    return 0;
 }
 
 static inline uint32_t noza_futex_hash(uintptr_t key)
@@ -1506,20 +1657,59 @@ static void syscall_thread_sleep(thread_t *running)
     noza_os_clear_running_thread();
 }
 
-static void do_nothing_signal_handler(thread_t *running, thread_t *target) {
-    (void)running;
+static void do_nothing_signal_handler(thread_t *running, thread_t *target, uint32_t signum) {
     (void)target;
+    (void)signum;
+    noza_os_set_return_value1(running, 0);
 }
 
-static void terminate_signal_handler(thread_t *running, thread_t *target) {
-    (void)running;
-    (void)target;
-    // TODO
-    kernel_log("fatal error: unimplement feature (singal to terminate)\n");
+static void terminate_signal_handler(thread_t *running, thread_t *target, uint32_t signum) {
+    int rc = noza_terminate_thread(target, 128u + signum);
+    if (running != target) {
+        noza_os_set_return_value1(running, rc);
+    }
 }
 
-static void alarm_signal_handler(thread_t *running, thread_t *target)
+static void stop_signal_handler(thread_t *running, thread_t *target, uint32_t signum)
 {
+    (void)signum;
+    int rc = 0;
+
+    switch (target->info.state) {
+    case THREAD_READY:
+        noza_os_change_state(target, &noza_os.ready[target->info.priority], &noza_os.stopped);
+        break;
+    case THREAD_RUNNING:
+        if (target != running) {
+            rc = EBUSY;
+            break;
+        }
+        noza_os_add_thread(&noza_os.stopped, target);
+        noza_os_clear_running_thread();
+        break;
+    case THREAD_STOPPED:
+        break;
+    default:
+        break;
+    }
+
+    if (running != target || rc != 0) {
+        noza_os_set_return_value1(running, rc);
+    }
+}
+
+static void continue_signal_handler(thread_t *running, thread_t *target, uint32_t signum)
+{
+    (void)signum;
+    if (target->info.state == THREAD_STOPPED) {
+        noza_os_change_state(target, &noza_os.stopped, &noza_os.ready[target->info.priority]);
+    }
+    noza_os_set_return_value1(running, 0);
+}
+
+static void alarm_signal_handler(thread_t *running, thread_t *target, uint32_t signum)
+{
+    (void)signum;
     if (target->info.state == THREAD_SLEEP) {
         // move to ready list
         noza_os_change_state(target, &noza_os.sleep, &noza_os.ready[target->info.priority]);
@@ -1561,7 +1751,7 @@ static void alarm_signal_handler(thread_t *running, thread_t *target)
     noza_os_set_return_value1(running, 0); // return success
 }
 
-typedef void (*signal_handler_t)(thread_t *running, thread_t *target);
+typedef void (*signal_handler_t)(thread_t *running, thread_t *target, uint32_t signum);
 static signal_handler_t signal_handler[32] = {
     [0] = do_nothing_signal_handler,
     [SIGHUP] = terminate_signal_handler,         // hangup
@@ -1584,9 +1774,9 @@ static signal_handler_t signal_handler[32] = {
     [SIGTERM] = terminate_signal_handler,        // software termination signal
     [SIGSTKFLT] = terminate_signal_handler,      // stack fault
     [SIGCHLD] = do_nothing_signal_handler,       // child process terminated, stopped, or continued
-    [SIGCONT] = do_nothing_signal_handler,       // continue executing, if stopped -- TODO: move to ready state
-    [SIGSTOP] = do_nothing_signal_handler,       // stop executing, cannot be caught -- TODO: move to wait state
-    [SIGTSTP] = do_nothing_signal_handler,       // CTRL-Z interactive stop signal, cannot be caught 
+    [SIGCONT] = continue_signal_handler,         // continue executing, if stopped
+    [SIGSTOP] = stop_signal_handler,             // stop executing, cannot be caught
+    [SIGTSTP] = stop_signal_handler,             // CTRL-Z interactive stop signal
     [SIGTTIN] = do_nothing_signal_handler,       // background process attempting read from terminal -- TODO?
     [SIGTTOU] = do_nothing_signal_handler,       // background process attempting write to terminal -- TODO?
     [SIGURG] = do_nothing_signal_handler,        // urgent condition on IO channel
@@ -1630,7 +1820,7 @@ static void syscall_thread_kill(thread_t *running)
         noza_os_set_return_value1(running, EINVAL);
         return;
     }
-    signal_handler[sig](running, picked_thread);
+    signal_handler[sig](running, picked_thread, (uint32_t)sig);
 }
 
 static void syscall_thread_create(thread_t *running)
@@ -1737,46 +1927,9 @@ static void syscall_thread_change_priority(thread_t *running)
 
 static void syscall_thread_terminate(thread_t *running)
 {
-    running->exit_code = running->trap.r1; // r0 is the # of syscall, r1 is the exit code
-    running->info.port_state = PORT_WAIT_LISTEN;
-
-    // release all pending threads for messages
-    if (running->port.pending_list.count > 0) {
-        thread_t *head = running->port.pending_list.head->value;
-        while (head) {
-            noza_os_change_state(head, &running->port.pending_list, &noza_os.ready[head->info.priority]);
-            noza_os_set_return_value1(head, EINTR);
-            head = running->port.pending_list.head->value;
-        }
+    if (noza_terminate_thread(running, running->trap.r1) != 0) {
+        kernel_panic("fatal error: syscall_thread_terminate failed\n");
     }
-
-    // release all pending threads for reply
-    if (running->port.reply_list.count > 0) {
-        thread_t *head = running->port.reply_list.head->value;
-        while (head) {
-            noza_os_change_state(head, &running->port.reply_list, &noza_os.ready[head->info.priority]);
-            noza_os_set_return_value1(head, EINTR);
-            head = running->port.reply_list.head->value;
-        }
-    }
-
-    // what if the thread is in the some others wait list or reply list ?
-    // unlikely to happen, because the thread is in the running state, so that it can call "terminate"
-    if (running->join_th == NULL) {
-        if (running->flags & FLAG_DETACH) {
-            // if the thread is detached, then free the thread
-            noza_os_add_thread(&noza_os.free, running);
-        } else {
-            noza_os_add_thread(&noza_os.zombie, running); // move the thread to zombie list
-        }
-    } else {
-        noza_os_add_thread(&noza_os.ready[running->join_th->info.priority], running->join_th); // insert the thread back to ready queue
-        noza_os_set_return_value2(running->join_th, 0, running->exit_code);
-        running->join_th = NULL; // clear the join thread
-        noza_os_add_thread(&noza_os.free, running); // collect the thread to free list
-    }
-    noza_thread_clear_messages(running); 
-    noza_os_clear_running_thread();
 }
 
 static void syscall_recv(thread_t *running)

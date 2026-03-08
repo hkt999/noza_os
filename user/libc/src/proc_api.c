@@ -4,6 +4,7 @@
 #include "spinlock.h"
 #include "nozaos.h"
 #include "thread_api.h"
+#include "app_launcher.h"
 #include "service/memory/mem_client.h"
 #include "posix/errno.h"
 #include "posix/bits/signum.h"
@@ -30,11 +31,13 @@ static void process_record_reset(process_record_t *process)
 #endif
 	process->entry = NULL;
 	process->main_thread = 0;
+	process->parent_pid = 0;
 	process->thread_count = 0;
 	memset(process->child_thread, 0, sizeof(process->child_thread));
 	process->heap = NULL;
 	process->env = (env_t *)process->env_buf;
 	memset(process->env_buf, 0, sizeof(process->env_buf));
+	process->in_use = 0;
 	process->next = NULL;
 }
 
@@ -50,6 +53,7 @@ static process_record_t *alloc_process_record()
 	// insert the process into hash table
 	if (process) {
 		process_record_reset(process);
+		process->in_use = 1;
 		mapping_insert(&PROCESS_RECORD_HASH, process_count++, &process->hash_item, process);
 		noza_spinlock_init(&process->lock);
 	}
@@ -83,25 +87,77 @@ int noza_process_init()
 	return 0;
 }
 
-static size_t calc_env_size(int argc, char *argv[])
+static int count_list(char *const list[], uint32_t limit)
 {
-	size_t sz = sizeof(int) + argc * sizeof(char *);
+	int count = 0;
+	if (list == NULL) {
+		return 0;
+	}
+	while (count < (int)limit && list[count] != NULL) {
+		count++;
+	}
+	return count;
+}
+
+static size_t calc_env_size(int argc, char *argv[], char *envp[])
+{
+	int envc = count_list(envp, APP_LAUNCHER_MAX_ENVC);
+	size_t sz = sizeof(env_t) + (size_t)(argc + 1 + envc + 1) * sizeof(char *);
 	for (int i=0; i<argc; i++) {
 		sz += strlen(argv[i]) + 1;
+	}
+	for (int i=0; i<envc; i++) {
+		sz += strlen(envp[i]) + 1;
 	}
 	sz = 16 * ((sz + 15)/16); // align to 32 bytes
 	return sz;
 }
 
-static void env_copy(env_t *dst, int argc, char *argv[])
+static void env_copy(env_t *dst, int argc, char *argv[], char *envp[])
 {
+	int envc = count_list(envp, APP_LAUNCHER_MAX_ENVC);
 	dst->argc = argc;
-	char *ptr = (char *)dst + sizeof(int) + argc * sizeof(char *);
+	dst->envc = envc;
+	char **argv_slot = (char **)((uint8_t *)dst + sizeof(env_t));
+	char **envp_slot = argv_slot + argc + 1;
+	char *ptr = (char *)(envp_slot + envc + 1);
+	dst->argv = argv_slot;
+	dst->envp = envp_slot;
 	for (int i=0; i<argc; i++) {
-		dst->argv[i] = ptr;
+		argv_slot[i] = ptr;
 		strcpy(ptr, argv[i]);
 		ptr += strlen(ptr) + 1;
 	}
+	argv_slot[argc] = NULL;
+	for (int i=0; i<envc; i++) {
+		envp_slot[i] = ptr;
+		strcpy(ptr, envp[i]);
+		ptr += strlen(ptr) + 1;
+	}
+	envp_slot[envc] = NULL;
+}
+
+static process_record_t *find_process_by_main_thread(uint32_t pid)
+{
+	if (pid == 0) {
+		return NULL;
+	}
+	for (int i = 0; i < NOZA_MAX_PROCESSES; i++) {
+		process_record_t *process = &PROCESS_SLOT[i];
+		if (process->in_use && process->main_thread == pid) {
+			return process;
+		}
+	}
+	return NULL;
+}
+
+static uint32_t current_process_pid(void)
+{
+	uint32_t pid = 0;
+	if (noza_thread_self(&pid) == 0) {
+		return pid;
+	}
+	return 0;
 }
 
 int noza_process_crt0(void *param, uint32_t tid)
@@ -125,6 +181,7 @@ int noza_process_crt0(void *param, uint32_t tid)
 	// initialize process heap
 	process->heap = NULL;
 	int ret =  process->entry(process->env->argc, process->env->argv);
+    app_launcher_exit_notify(process->main_thread, ret);
 	if (process->heap) {
 		noza_free(process->heap); // release process heap
 		process->heap = NULL;
@@ -137,7 +194,8 @@ int noza_process_crt0(void *param, uint32_t tid)
 	return ret;
 }
 
-static int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *tid, uint32_t stack_size)
+static int _noza_process_exec(main_t entry, int argc, char *argv[], char *envp[],
+	uint32_t parent_pid, uint32_t *tid, uint32_t stack_size)
 {
 	*tid = 0;
 	process_record_t *process = alloc_process_record();
@@ -147,13 +205,14 @@ static int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *ti
 	}
 
 	process->entry = entry;
-	size_t required_env = calc_env_size(argc, argv);
+	process->parent_pid = parent_pid;
+	size_t required_env = calc_env_size(argc, argv, envp);
 	if (required_env > sizeof(process->env_buf)) {
 		printk("noza_process_exec: env overflow (need %zu)\n", required_env);
 		free_process_record(process);
 		return ENOMEM;
 	}
-	env_copy(process->env, argc, argv);
+	env_copy(process->env, argc, argv, envp);
 	if (stack_size == 0) {
 		stack_size = NOZA_THREAD_DEFAULT_STACK_SIZE;
 	}
@@ -170,12 +229,33 @@ static int _noza_process_exec(main_t entry, int argc, char *argv[], uint32_t *ti
 int noza_process_exec_detached_with_stack(main_t entry, int argc, char *argv[], uint32_t stack_size)
 {
 	uint32_t tid;
-	return _noza_process_exec(entry, argc, argv, &tid, stack_size);
+	return _noza_process_exec(entry, argc, argv, NULL, current_process_pid(), &tid, stack_size);
 }
 
 int noza_process_exec_detached(main_t entry, int argc, char *argv[])
 {
 	return noza_process_exec_detached_with_stack(entry, argc, argv, 0);
+}
+
+int noza_process_spawn_detached_ex(main_t entry, int argc, char *argv[], char *envp[],
+	uint32_t parent_pid, uint32_t stack_size, uint32_t *pid_out)
+{
+	uint32_t tid;
+	int ret = _noza_process_exec(entry, argc, argv, envp, parent_pid, &tid, stack_size);
+	if (ret == 0 && pid_out) {
+		*pid_out = tid;
+	}
+	return ret;
+}
+
+int noza_process_spawn_detached_with_stack(main_t entry, int argc, char *argv[], uint32_t stack_size, uint32_t *pid_out)
+{
+	return noza_process_spawn_detached_ex(entry, argc, argv, NULL, current_process_pid(), stack_size, pid_out);
+}
+
+int noza_process_spawn_detached(main_t entry, int argc, char *argv[], uint32_t *pid_out)
+{
+	return noza_process_spawn_detached_with_stack(entry, argc, argv, 0, pid_out);
 }
 
 int noza_process_exec_with_stack(main_t entry, int argc, char *argv[], int *exit_code, uint32_t stack_size)
@@ -189,7 +269,7 @@ int noza_process_exec_with_stack(main_t entry, int argc, char *argv[], int *exit
 		join_dst = (uint32_t *)exit_code;
 	}
 
-	if (_noza_process_exec(entry, argc, argv, &tid, stack_size) == 0) {
+	if (_noza_process_exec(entry, argc, argv, NULL, current_process_pid(), &tid, stack_size) == 0) {
 		if (noza_thread_join(tid, join_dst) != 0) {
 			return ENOMEM;
 		}
@@ -197,6 +277,21 @@ int noza_process_exec_with_stack(main_t entry, int argc, char *argv[], int *exit
 	}
 
 	return ENOMEM;
+}
+
+int noza_process_get_info(uint32_t pid, noza_process_info_t *info)
+{
+	if (info == NULL) {
+		return EINVAL;
+	}
+	process_record_t *process = find_process_by_main_thread(pid);
+	if (process == NULL) {
+		return ESRCH;
+	}
+
+	info->parent_pid = process->parent_pid;
+	info->thread_count = (process->main_thread != 0 ? 1u : 0u) + process->thread_count;
+	return 0;
 }
 
 int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code)
@@ -280,7 +375,7 @@ int noza_process_terminate_children_threads(process_record_t *process)
 	noza_spinlock_unlock(&process->lock);
 
 	for (int i=0; i<count; i++) {
-		noza_thread_kill(join_pid[i], SIGKILL); // TODO: implement SIGKILL in kernel
+		noza_thread_kill(join_pid[i], SIGKILL);
 	}
 	for (int i=0; i<count; i++) {
 		noza_thread_join(join_pid[i], NULL);
@@ -309,7 +404,7 @@ int process_boot(void *param, uint32_t pid)
 		return ENOMEM;
 
 	process->entry = boot2;
-	process->env->argc = 1;
-	process->env->argv[0] = "root";
+	char *argv[] = {"root", NULL};
+	env_copy(process->env, 1, argv, NULL);
 	return noza_process_crt0(process, 0); // 0 --> root thread
 }

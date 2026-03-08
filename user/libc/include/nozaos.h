@@ -54,7 +54,16 @@ int noza_get_errno();
 
 // process
 typedef int (*main_t)(int argc, char **argv);
+typedef struct {
+    uint32_t parent_pid;
+    uint32_t thread_count;
+} noza_process_info_t;
+
 int noza_process_exec(main_t entry, int argc, char *argv[], int *exit_code);
 int noza_process_exec_with_stack(main_t entry, int argc, char *argv[], int *exit_code, uint32_t stack_size);
 int noza_process_exec_detached(main_t entry, int argc, char *argv[]);
 int noza_process_exec_detached_with_stack(main_t entry, int argc, char *argv[], uint32_t stack_size);
+int noza_process_spawn_detached(main_t entry, int argc, char *argv[], uint32_t *pid_out);
+int noza_process_spawn_detached_with_stack(main_t entry, int argc, char *argv[], uint32_t stack_size, uint32_t *pid_out);
+int noza_process_spawn_detached_ex(main_t entry, int argc, char *argv[], char *envp[], uint32_t parent_pid, uint32_t stack_size, uint32_t *pid_out);
+int noza_process_get_info(uint32_t pid, noza_process_info_t *info);

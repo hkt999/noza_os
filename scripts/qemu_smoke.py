@@ -10,6 +10,7 @@ import time
 
 
 PROMPT_RE = re.compile(rb"noza(?:\((\d+)\))?> ")
+PID_RE = re.compile(r"spawned pid (\d+)")
 
 
 def reserve_port() -> int:
@@ -52,19 +53,6 @@ def connect_serial(port: int, timeout_s: float) -> socket.socket:
     raise TimeoutError(f"timed out connecting to QEMU serial on port {port}")
 
 
-def drain_socket(conn: socket.socket) -> bytes:
-    data = bytearray()
-    while True:
-        try:
-            chunk = conn.recv(4096)
-        except socket.timeout:
-            break
-        if not chunk:
-            break
-        data.extend(chunk)
-    return bytes(data)
-
-
 def run_smoke(kernel: str, qemu_bin: str, machine: str, boot_timeout_s: float) -> None:
     port = reserve_port()
     qemu = subprocess.Popen(
@@ -74,7 +62,7 @@ def run_smoke(kernel: str, qemu_bin: str, machine: str, boot_timeout_s: float) -
             machine,
             "-nographic",
             "-serial",
-            f"tcp:127.0.0.1:{port},server,nowait",
+            f"tcp:127.0.0.1:{port},server",
             "-kernel",
             kernel,
         ],
@@ -85,16 +73,22 @@ def run_smoke(kernel: str, qemu_bin: str, machine: str, boot_timeout_s: float) -
     conn = None
     try:
         conn = connect_serial(port, boot_timeout_s)
-        time.sleep(1.0)
-        drain_socket(conn)
+        _, current_prompt = read_until_prompt(conn, boot_timeout_s)
 
         checks = [
-            ("help", ["commands: ls [path], cat <file>, mkdir <path>, rm <path>, cd <path>, pwd"]),
+            (
+                "help",
+                [
+                    "commands: ls [path], cat <file>, mkdir <path>, rm <path>, cd <path>, pwd, pid, ps, kill [-signum] <pid>, wait <pid>, exec <app>",
+                    "unknown commands are resolved via /sbin and spawned with posix_spawnp",
+                ],
+            ),
             ("pwd", ["/"]),
             ("ls", ["sbin", "dev"]),
+            ("ls /sbin", ["shell", "spin", "exit42"]),
+            ("ps", ["PID", "/sbin/shell"]),
         ]
 
-        current_prompt = None
         for command, expected_fragments in checks:
             conn.sendall(command.encode("ascii") + b"\r\n")
             output, next_prompt = read_until_prompt(conn, boot_timeout_s)
@@ -109,6 +103,67 @@ def run_smoke(kernel: str, qemu_bin: str, machine: str, boot_timeout_s: float) -
                     f"prompt counter skipped from {current_prompt} to {next_prompt} after {command!r}: {text}"
                 )
             current_prompt = next_prompt
+
+        conn.sendall(b"spin\r\n")
+        output, next_prompt = read_until_prompt(conn, boot_timeout_s)
+        text = output.decode("latin1", "replace")
+        match = PID_RE.search(text)
+        if not match:
+            raise RuntimeError(f"failed to parse spawned spin pid: {text}")
+        spin_pid = match.group(1)
+        if current_prompt is not None and next_prompt is not None and next_prompt != current_prompt + 1:
+            raise RuntimeError(f"prompt counter skipped from {current_prompt} to {next_prompt} after 'spin': {text}")
+        current_prompt = next_prompt
+
+        conn.sendall(b"exit42\r\n")
+        output, next_prompt = read_until_prompt(conn, boot_timeout_s)
+        text = output.decode("latin1", "replace")
+        match = PID_RE.search(text)
+        if not match:
+            raise RuntimeError(f"failed to parse spawned exit42 pid: {text}")
+        exit42_pid = match.group(1)
+        if current_prompt is not None and next_prompt is not None and next_prompt != current_prompt + 1:
+            raise RuntimeError(f"prompt counter skipped from {current_prompt} to {next_prompt} after 'exit42': {text}")
+        current_prompt = next_prompt
+
+        signal_checks = [
+            ("ps", [exit42_pid, "/sbin/exit42", "EXIT"]),
+            (f"wait {exit42_pid}", [f"wait: pid={exit42_pid} exit=42"]),
+            ("ps", [f"{spin_pid}", "/sbin/spin", "RUN"]),
+            (f"kill -19 {spin_pid}", []),
+            ("ps", [f"{spin_pid}", "/sbin/spin", "STOP"]),
+            (f"kill -18 {spin_pid}", []),
+            ("ps", [f"{spin_pid}", "/sbin/spin", "RUN"]),
+            (f"kill {spin_pid}", []),
+            ("ps", [f"{spin_pid}", "/sbin/spin", "EXIT"]),
+            (f"wait {spin_pid}", [f"wait: pid={spin_pid} signal=15"]),
+        ]
+
+        for command, expected_fragments in signal_checks:
+            conn.sendall(command.encode("ascii") + b"\r\n")
+            output, next_prompt = read_until_prompt(conn, boot_timeout_s)
+            text = output.decode("latin1", "replace")
+            for fragment in expected_fragments:
+                if fragment not in text:
+                    raise RuntimeError(
+                        f"missing fragment {fragment!r} in output for command {command!r}: {text}"
+                    )
+            if current_prompt is not None and next_prompt is not None and next_prompt != current_prompt + 1:
+                raise RuntimeError(
+                    f"prompt counter skipped from {current_prompt} to {next_prompt} after {command!r}: {text}"
+                )
+            current_prompt = next_prompt
+
+        conn.sendall(b"ps\r\n")
+        output, next_prompt = read_until_prompt(conn, boot_timeout_s)
+        text = output.decode("latin1", "replace")
+        if exit42_pid in text or spin_pid in text:
+            raise RuntimeError(f"reaped children still present in ps output: {text}")
+        if current_prompt is not None and next_prompt is not None and next_prompt != current_prompt + 1:
+            raise RuntimeError(
+                f"prompt counter skipped from {current_prompt} to {next_prompt} after final 'ps': {text}"
+            )
+        current_prompt = next_prompt
 
         print("QEMU smoke test passed")
     finally:

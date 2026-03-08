@@ -127,6 +127,8 @@ set(NOZA_CORE_SOURCES
     user/libc/src/setjmp.S
     user/libc/src/spinlock.c
     user/libc/src/nz_stdlib.c
+    user/libc/src/process_spawn.c
+    user/libc/src/process_wait.c
     user/libc/src/syscall_io.c
 
     service/name_lookup/name_lookup_server.c

@@ -13,7 +13,9 @@
 
 typedef struct env_s {
 	int argc;
-	char *argv[];
+	int envc;
+	char **argv;
+	char **envp;
 } env_t;
 
 typedef struct process_record_s {
@@ -26,11 +28,13 @@ typedef struct process_record_s {
 #endif
 	main_t entry;
 	uint32_t main_thread;
+	uint32_t parent_pid;
 	uint32_t thread_count;
 	uint32_t child_thread[NOZA_PROC_THREAD_COUNT];
 	env_t *env;
 	uint8_t env_buf[NOZA_PROCESS_ENV_SIZE];
 	void *heap;
+	uint8_t in_use;
 	struct process_record_s *next;
 } process_record_t;
 

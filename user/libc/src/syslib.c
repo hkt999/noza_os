@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h> // TODO: remove malloc and free to use the memory service
 #include "kernel/noza_config.h"
+#include "platform.h"
 #include "setjmp.h"
 #include "posix/errno.h"
 #include "spinlock.h"
@@ -10,6 +11,7 @@
 #include "printk.h"
 
 extern void noza_thread_request_reserved_vid(uint32_t vid);
+extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
 
 #define NO_AUTO_FREE_STACK	0
 #define AUTO_FREE_STACK		1
@@ -119,32 +121,36 @@ int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms) {
 }
 
 int noza_set_errno(int err) {
-	uint32_t pid;
-	if (noza_thread_self(&pid) == 0) {
-		thread_record_t *record = get_thread_record(pid);
-		if (record == NULL) {
-			printk("fatal: noza_set_errno: pid %ld not found\n", pid);
-			return -1; // TODO: return errno
+	uint32_t pid = 0;
+	if (noza_thread_self(&pid) != 0 || pid == 0 || get_thread_record(pid) == NULL) {
+		uint32_t core = platform_get_running_core();
+		if (core < NOZA_OS_NUM_CORES) {
+			pid = NOZAOS_PID[core];
 		}
-		record->errno = err;
-		return 0;
 	}
-
-	return -1;
+	thread_record_t *record = get_thread_record(pid);
+	if (record == NULL) {
+		printk("fatal: noza_set_errno: pid %ld not found\n", pid);
+		return -1; // TODO: return errno
+	}
+	record->errno = err;
+	return 0;
 }
 
 int noza_errno() {
-	uint32_t pid;
-	if (noza_thread_self(&pid) == 0) {
-		thread_record_t *th = get_thread_record(pid);
-		if (th == NULL) {
-			printk("fatal: noza_errno: pid %ld not found\n", pid);
-			return -1; // TODO: return errno
+	uint32_t pid = 0;
+	if (noza_thread_self(&pid) != 0 || pid == 0 || get_thread_record(pid) == NULL) {
+		uint32_t core = platform_get_running_core();
+		if (core < NOZA_OS_NUM_CORES) {
+			pid = NOZAOS_PID[core];
 		}
-		return th->errno;
 	}
-
-	return -1;
+	thread_record_t *th = get_thread_record(pid);
+	if (th == NULL) {
+		printk("fatal: noza_errno: pid %ld not found\n", pid);
+		return -1; // TODO: return errno
+	}
+	return th->errno;
 }
 
 int noza_get_errno() {
@@ -153,6 +159,15 @@ int noza_get_errno() {
 
 int noza_thread_self(uint32_t *pid) {
 	extern uint32_t NOZAOS_PID[NOZA_OS_NUM_CORES];
+	uint32_t core = platform_get_running_core();
+	if (core < NOZA_OS_NUM_CORES) {
+		uint32_t current_pid = NOZAOS_PID[core];
+		if (current_pid != 0 && get_thread_record(current_pid) != NULL) {
+			*pid = current_pid;
+			return 0;
+		}
+	}
+
 	uint32_t sp;
 	asm volatile ("mov %0, sp\n" : "=r" (sp));
 	for (int core = 0; core < NOZA_OS_NUM_CORES; core++) {
