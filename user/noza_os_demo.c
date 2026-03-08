@@ -11,6 +11,7 @@ int user_root_task(int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
-    noza_process_exec_detached_with_stack(shell_main, 0, NULL, 2048);
+    int ret = noza_process_exec_detached_with_stack(shell_main, 0, NULL, 2048);
+    (void)ret;
     return 0;
 }

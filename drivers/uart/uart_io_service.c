@@ -136,6 +136,8 @@ int uart_service_start(void *param, uint32_t pid)
                         memcpy(cmsg->buf, uart_state.line_buf, copy_len);
                         cmsg->len = copy_len;
                         cmsg->code = 0;
+                        uart_state.line_ready = 0;
+                        uart_state.line_len = 0;
                         noza_reply(&msg);
                         break;
                     }

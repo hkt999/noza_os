@@ -1,11 +1,11 @@
 #pragma once
 
-#define NOZA_OS_ENABLE_IRQ        1          // staged IRQ delivery; flip to 1 when irq service is ready
+#include "platform_config.h"
+
 #define NOZA_OS_STACK_SIZE       192         // size of our user task stacks in words
 #define NOZA_OS_TASK_LIMIT       32          // number of user task
 #define NOZA_OS_TIME_SLICE       10000       // scheduler timer, in us
 #define NOZA_OS_PRIORITY_LIMIT   8           // levels of priority
-#define NOZA_OS_NUM_CORES        2           // number of cores
 #define NOZA_MAX_SERVICES        8           // number of services
 #define NOZA_MAX_PROCESSES      16           // number of processes
 #define NOZA_PROC_THREAD_COUNT  32           // number of threads per process

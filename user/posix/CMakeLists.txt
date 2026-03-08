@@ -44,6 +44,7 @@ target_include_directories(
 	pthread
     PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/../..
+	${CMAKE_CURRENT_LIST_DIR}/../../kernel
 	${CMAKE_CURRENT_LIST_DIR}/../../user/libc/include
 	${CMAKE_CURRENT_LIST_DIR}/../../include
 )

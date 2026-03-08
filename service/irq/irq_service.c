@@ -5,14 +5,14 @@
 #include "noza_irq_defs.h"
 #include "printk.h"
 
-static uint32_t subscriber_vid[NOZA_RP2040_IRQ_COUNT];
+static uint32_t subscriber_vid[NOZA_PLATFORM_IRQ_COUNT];
 
 static int handle_command(noza_irq_service_msg_t *cmd, uint32_t sender_vid)
 {
     if (cmd == NULL) {
         return EINVAL;
     }
-    if (cmd->irq_id >= NOZA_RP2040_IRQ_COUNT) {
+    if (cmd->irq_id >= NOZA_PLATFORM_IRQ_COUNT) {
         cmd->status = EINVAL;
         return 0;
     }
@@ -49,7 +49,7 @@ static void forward_event(noza_irq_event_t *event)
     if (event == NULL) {
         return;
     }
-    if (event->irq_id >= NOZA_RP2040_IRQ_COUNT) {
+    if (event->irq_id >= NOZA_PLATFORM_IRQ_COUNT) {
         return;
     }
     uint32_t target = subscriber_vid[event->irq_id];

@@ -35,13 +35,10 @@ int noza_spinlock_free(spinlock_t *spinlock)
 
 int noza_raw_lock(spinlock_t *spinlock)
 {
-    uint32_t tid = 0;
     spinlock_wait(spinlock);
-    if (noza_thread_self(&tid) == 0) {
-        spinlock->lock_thread = (int)tid;
-    } else {
-        spinlock->lock_thread = -1;
-    }
+    // Raw locks are used inside bookkeeping paths such as thread/process maps.
+    // Resolving the current thread here would recurse back into those maps.
+    spinlock->lock_thread = -1;
     return 0;
 }
 
@@ -75,6 +72,11 @@ int noza_spinlock_trylock(spinlock_t *spinlock)
 
 int noza_spinlock_unlock(spinlock_t *spinlock)
 {
+    if (spinlock->lock_thread == -1) {
+        __atomic_store_n(&spinlock->state, 0, __ATOMIC_RELEASE);
+        return 0;
+    }
+
     uint32_t tid = 0;
     int has_tid = (noza_thread_self(&tid) == 0);
     if (__atomic_load_n(&spinlock->state, __ATOMIC_RELAXED) == 0) {

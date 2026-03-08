@@ -1,9 +1,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "printk.h"
-
-#include "hardware/sync.h"
 #include "noza_uart.h"
+#include "platform.h"
 
 #ifndef PRINTK_BUF_SIZE
 #define PRINTK_BUF_SIZE 256
@@ -21,9 +20,9 @@ void kvprintk(const char *fmt, va_list args)
         buf[n] = '\0';
     }
 
-    uint32_t flags = save_and_disable_interrupts();
+    uint32_t flags = platform_interrupt_disable();
     noza_uart_write(buf, (size_t)n);
-    restore_interrupts(flags);
+    platform_interrupt_restore(flags);
 }
 
 void printk(const char *fmt, ...)

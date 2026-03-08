@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #include "noza_config.h"
+#include "arch/arch.h"
 #include "printk.h"
 #include "syscall.h"
 #include "platform.h"
@@ -12,9 +13,7 @@
 #include "posix/bits/signum.h"
 #include "posix/errno.h"
 #if NOZA_OS_ENABLE_IRQ
-#include "hardware/sync.h"
 #include "../include/noza_irq_defs.h"
-#include "hardware/structs/scb.h"
 #endif
 
 //#define DEBUG
@@ -322,7 +321,7 @@ typedef struct {
     vid_map_item_t  vid_map[NOZA_OS_TASK_LIMIT];
     vid_map_item_t  *free_vid_map;
     vid_map_item_t  *slot[NUM_VID_SLOT];
-    int64_t         next_tick_time;
+    int64_t         next_tick_time[NOZA_OS_NUM_CORES];
 } noza_os_t;
 
 
@@ -340,7 +339,7 @@ static volatile uint32_t futex_wake_counter;
 static volatile uint32_t futex_last_wake_count;
 static bool reserved_vid0_assigned;
 #if NOZA_OS_ENABLE_IRQ
-static irq_binding_t irq_bindings[NOZA_RP2040_IRQ_COUNT];
+static irq_binding_t irq_bindings[NOZA_PLATFORM_IRQ_COUNT];
 static volatile uint32_t irq_pending_bitmap;
 static uint32_t irq_debug_samples;
 
@@ -403,7 +402,7 @@ static inline uint32_t irq_sender_vid_inline(uint32_t irq_id)
 
 static void irq_bindings_init(void)
 {
-    for (uint32_t i = 0; i < NOZA_RP2040_IRQ_COUNT; i++) {
+    for (uint32_t i = 0; i < NOZA_PLATFORM_IRQ_COUNT; i++) {
         irq_bindings[i].owner_vid = IRQ_SERVER_VID;
         irq_bindings[i].queued = 0;
         irq_bindings[i].inflight = 0;
@@ -448,15 +447,15 @@ static void irq_deliver_if_waiting(uint32_t irq_id)
 
 static int32_t irq_fetch_next_pending(void)
 {
-    uint32_t flags = save_and_disable_interrupts();
+    uint32_t flags = platform_interrupt_disable();
     uint32_t pending = irq_pending_bitmap;
     if (pending == 0) {
-        restore_interrupts(flags);
+        platform_interrupt_restore(flags);
         return -1;
     }
     uint32_t irq_id = __builtin_ctz(pending);
     irq_pending_bitmap &= ~(1u << irq_id);
-    restore_interrupts(flags);
+    platform_interrupt_restore(flags);
     return (int32_t)irq_id;
 }
 
@@ -474,7 +473,7 @@ static bool irq_try_consume_event(thread_t *running)
 {
     if (thread_get_vid(running) != IRQ_SERVER_VID)
         return false;
-    for (uint32_t i = 0; i < NOZA_RP2040_IRQ_COUNT; i++) {
+    for (uint32_t i = 0; i < NOZA_PLATFORM_IRQ_COUNT; i++) {
         irq_binding_t *binding = &irq_bindings[i];
         if (!binding->queued || binding->inflight)
             continue;
@@ -493,7 +492,7 @@ static bool irq_try_handle_reply(thread_t *running)
     if (!NOZA_IRQ_IS_KERNEL_VID(target_vid))
         return false;
     uint32_t irq_id = NOZA_IRQ_SENDER_TO_ID(target_vid);
-    if (irq_id >= NOZA_RP2040_IRQ_COUNT)
+    if (irq_id >= NOZA_PLATFORM_IRQ_COUNT)
         return false;
 
     irq_binding_t *binding = &irq_bindings[irq_id];
@@ -509,7 +508,7 @@ static bool irq_try_handle_reply(thread_t *running)
 
 void noza_irq_handle_from_isr(uint32_t irq_id)
 {
-    if (irq_id >= NOZA_RP2040_IRQ_COUNT)
+    if (irq_id >= NOZA_PLATFORM_IRQ_COUNT)
         return;
     irq_binding_t *binding = &irq_bindings[irq_id];
     if (binding->owner_vid == 0)
@@ -526,7 +525,7 @@ void noza_irq_handle_from_isr(uint32_t irq_id)
             irq_id, binding->owner_vid, binding->queued, binding->inflight);
         irq_debug_samples++;
     }
-    scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS;
+    platform_trigger_pendsv();
 }
 
 #endif // NOZA_OS_ENABLE_IRQ
@@ -1435,16 +1434,15 @@ typedef struct {
 static idle_task_t idle_task[NOZA_OS_NUM_CORES];
 
 extern int noza_syscall(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3);
-extern uint32_t *platform_build_stack(uint32_t thread_id, uint32_t *stack, uint32_t size, void (*entry)(void *), void *param);
 static void noza_make_idle_context(uint32_t core)
 {
     idle_task_t *t = &idle_task[core];
-    t->idle_stack_ptr = platform_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), platform_idle, (void *)0);
+    t->idle_stack_ptr = arch_build_stack(0, t->idle_stack, sizeof(t->idle_stack)/sizeof(uint32_t), platform_idle, (void *)0);
 }
 
 static void noza_make_app_context(thread_t *th, void (*entry)(void *param), void *param)
 {
-    th->stack_ptr = platform_build_stack(
+    th->stack_ptr = arch_build_stack(
         thread_get_vid(th), (uint32_t *)th->stack_area, NOZA_OS_STACK_SIZE, (void *)entry, param);
 }
 
@@ -1489,12 +1487,11 @@ static uint32_t noza_os_thread_create(uint32_t *pth, void (*entry)(void *param),
 
 // system call implementation
 //
-extern void noza_init_kernel_stack(uint32_t *stack);
 static void noza_switch_handler(uint32_t core)
 {
     (void)core;
     uint32_t dummy[32];
-    noza_init_kernel_stack(dummy+32);
+    arch_init_kernel_stack(dummy+32);
 }
 
 static void syscall_thread_sleep(thread_t *running)
@@ -2105,7 +2102,7 @@ inline static void serv_syscall(uint32_t core)
     } else {
         if (source->callid == 255) {
             // TODO: handle hardfault
-            platform_core_dump(source->stack_ptr, thread_get_vid(source));
+            arch_core_dump(source->stack_ptr, thread_get_vid(source));
             syscall_thread_terminate(source);
         } else {
             // system call not found !
@@ -2163,33 +2160,63 @@ inline static uint32_t noza_wakeup_sync(int64_t now)
     return wakeup_count;
 }
 
-inline static void check_sleep_period(int64_t now)
+static inline int has_same_priority_peer(thread_t *running)
 {
-    noza_os.next_tick_time = now + NOZA_OS_TIME_SLICE;
+    if (running == NULL) {
+        return 0;
+    }
+    return noza_os.ready[running->info.priority].count > 0;
+}
+
+static inline int64_t next_event_deadline(void)
+{
+    int64_t deadline = 0;
     cdl_node_t *cursor = noza_os.sleep.head;
     if (cursor) {
         thread_t *th = (thread_t *)cursor->value;
-        if (th->expired_time < noza_os.next_tick_time) {
-            noza_os.next_tick_time = th->expired_time;
-        }
+        deadline = th->expired_time;
     }
     cursor = noza_os.sync_sleep.head;
     if (cursor) {
         thread_t *th = (thread_t *)cursor->value;
-        if (th->expired_time < noza_os.next_tick_time) {
-            noza_os.next_tick_time = th->expired_time;
+        if (deadline == 0 || th->expired_time < deadline) {
+            deadline = th->expired_time;
         }
     }
     if (noza_timer_head) {
         noza_timer_t *timer = (noza_timer_t *)noza_timer_head->value;
-        if (timer->deadline < noza_os.next_tick_time) {
-            noza_os.next_tick_time = timer->deadline;
+        if (deadline == 0 || timer->deadline < deadline) {
+            deadline = timer->deadline;
         }
     }
-    platform_systick_config(noza_os.next_tick_time - now);
+    return deadline;
 }
 
-extern uint32_t *noza_os_resume_thread(uint32_t *stack);
+static inline void arm_next_scheduler_deadline(uint32_t core, int64_t now, thread_t *running)
+{
+    int64_t deadline = next_event_deadline();
+
+    // Round-robin only matters when another peer at the same priority is ready.
+    if (has_same_priority_peer(running)) {
+        int64_t quantum_deadline = now + NOZA_OS_TIME_SLICE;
+        if (deadline == 0 || quantum_deadline < deadline) {
+            deadline = quantum_deadline;
+        }
+    }
+
+    noza_os.next_tick_time[core] = deadline;
+    if (deadline == 0) {
+        platform_systick_config(0);
+        return;
+    }
+
+    int64_t delta = deadline - now;
+    if (delta <= 0) {
+        delta = 1;
+    }
+    platform_systick_config((unsigned int)delta);
+}
+
 // switch to user stack
 inline static void GO_RUN(int core, thread_t *running)
 {
@@ -2198,7 +2225,7 @@ inline static void GO_RUN(int core, thread_t *running)
     irq_process_pending();
 #endif
     noza_os_unlock(core);
-    running->stack_ptr = noza_os_resume_thread(running->stack_ptr);
+    running->stack_ptr = arch_resume_thread(running->stack_ptr);
     noza_os_lock(core); 
 }
 
@@ -2206,7 +2233,7 @@ inline static void GO_RUN(int core, thread_t *running)
 inline static void GO_IDLE(int core)
 {
     noza_os_unlock(core);
-    idle_task[core].idle_stack_ptr = noza_os_resume_thread(idle_task[core].idle_stack_ptr);
+    idle_task[core].idle_stack_ptr = arch_resume_thread(idle_task[core].idle_stack_ptr);
     noza_os_lock(core);
 }
 
@@ -2228,7 +2255,7 @@ inline static thread_t *pick_ready_thread()
 inline static void check_syscall_output(thread_t *running)
 {
     if (running->trap.state == SYSCALL_OUTPUT) {
-        platform_trap(running->stack_ptr, &running->trap); // copy register to trap structure
+        arch_trap(running->stack_ptr, &running->trap); // copy register to trap structure
         running->trap.state = SYSCALL_DONE; // clear the state
         running->callid = -1; // clear the callid
     }
@@ -2261,38 +2288,44 @@ static void noza_os_scheduler()
     platform_multicore_init(noza_os_scheduler);
 #endif
     noza_switch_handler(core); // switch to kernel stack (priviliged mode)
-    platform_systick_config(NOZA_OS_TIME_SLICE); // start system tick 10ms
     // TODO: for lock, consider the case PendSV interrupt goes here, 
     // some other high priority interrupt is triggered, could cause deadlock here
     // maybe need to disable all interrupts here with spin lock
     noza_os_lock(core);
-    noza_os.next_tick_time = platform_get_absolute_time_us() + NOZA_OS_TIME_SLICE;
+    noza_os.next_tick_time[core] = 0;
     for (;;) {
         int64_t now = platform_get_absolute_time_us();
         noza_timer_tick(now);
+        noza_wakeup(now);
+        noza_wakeup_sync(now);
 #if NOZA_OS_ENABLE_IRQ
         irq_process_pending();
 #endif
         thread_t *running = pick_ready_thread();
         if (running) {
             // a ready thread is picked
-            int64_t expired = now + NOZA_OS_TIME_SLICE; // pick up a new thread, and setup time slice
             running->info.state = THREAD_RUNNING;
             noza_os.running[core] = running;
             for (;;) {
                 check_syscall_output(running); // check if the call pending on output
-                if (expired > now) {
-                    check_sleep_period(now); // update tick from the sleeping queue
-                    GO_RUN(core, running);
-                    now = platform_get_absolute_time_us();  // update time
-                    noza_timer_tick(now);
-                    check_syscall_serve(core, running);     // check if any syscall is pending, if pending, then serve it
-                    if (noza_os.running[core] == NULL)
-                        break;
-                    if (is_with_higher_priority_thread(running))
-                        break;
-                } else
+                arm_next_scheduler_deadline(core, now, running);
+                GO_RUN(core, running);
+                now = platform_get_absolute_time_us();  // update time
+                noza_timer_tick(now);
+                noza_wakeup(now);
+                noza_wakeup_sync(now);
+                check_syscall_serve(core, running);     // check if any syscall is pending, if pending, then serve it
+                if (noza_os.running[core] == NULL) {
                     break;
+                }
+                if (is_with_higher_priority_thread(running)) {
+                    break;
+                }
+                if (has_same_priority_peer(running) &&
+                    noza_os.next_tick_time[core] != 0 &&
+                    now >= noza_os.next_tick_time[core]) {
+                    break;
+                }
             }
             running = noza_os.running[core];
             if (running != NULL) {
@@ -2300,13 +2333,11 @@ static void noza_os_scheduler()
                 noza_os.running[core] = NULL;
             }
         } else {
-            // there is no candidate thread to run, check the next tick and go idle
-            if (noza_wakeup(now) == 0 && noza_wakeup_sync(now) == 0) {
-                check_sleep_period(now);
-                GO_IDLE(core);
-                if (core == 0)
-                    platform_tick_cores();
-            }
+            // there is no candidate thread to run, arm the next event deadline and go idle
+            arm_next_scheduler_deadline(core, now, NULL);
+            GO_IDLE(core);
+            if (core == 0)
+                platform_tick_cores();
         }
     }
 }
@@ -2336,7 +2367,7 @@ void noza_os_trap_info(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3)
 
     #if 0 // TODO: raise the PendSV interrupt
     if (r0==255) {
-        scb_hw->icsr = M0PLUS_ICSR_PENDSVSET_BITS; // issue PendSV interrupt
+        platform_trigger_pendsv(); // issue PendSV interrupt
     }
     #endif
 }

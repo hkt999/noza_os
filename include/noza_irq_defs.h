@@ -1,17 +1,14 @@
 #pragma once
 
 #include <stdint.h>
+#include "platform_config.h"
 
 // Reserved VID for the user-space IRQ service
 // Pick a high value so auto-assigned thread IDs never collide before the
 // service explicitly requests this VID during boot.
 #define IRQ_SERVER_VID             65000u
 
-// RP2040 exposes 26 NVIC-visible IRQs, but keep some slack for future boards
-#define NOZA_RP2040_IRQ_COUNT      26
-#define NOZA_MAX_IRQ_COUNT         32
 #define NOZA_IRQ_SERVICE_NAME      "irq.svc"
-#define NOZA_IRQ_UART0             20
 #define NOZA_IRQ_SENDER_BASE       0xFFFF0000u
 #define NOZA_IRQ_SENDER_MASK       0xFFFF0000u
 #define NOZA_IRQ_SENDER_ID(irq_id) (NOZA_IRQ_SENDER_BASE | ((irq_id) & 0xFFFFu))

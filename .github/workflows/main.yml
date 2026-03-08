@@ -9,44 +9,88 @@ on:
       - main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  rp2040-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
-    - name: Checkout repository with submodules
-      uses: actions/checkout@v2
-      with:
-        submodules: 'recursive'
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y cmake gcc-arm-none-eabi build-essential
-        cmake --version
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            gcc-arm-none-eabi \
+            git \
+            libnewlib-arm-none-eabi \
+            ninja-build
 
-    - name: Set up pico-sdk
-      run: |
-        git clone https://github.com/raspberrypi/pico-sdk.git
-        cd pico-sdk
-        git submodule update --init
-        echo "PICO_SDK_PATH=$(pwd)" >> $GITHUB_ENV
+      - name: Fetch pico-sdk
+        run: |
+          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git "$RUNNER_TEMP/pico-sdk"
+          git -C "$RUNNER_TEMP/pico-sdk" submodule update --init --depth 1
 
-    - name: Create build directory
-      run: |
-        mkdir build
+      - name: Configure RP2040 build
+        run: |
+          cmake -S . -B build-rp2040 -G Ninja \
+            -DNOZA_PLATFORM=rp2040 \
+            -DPICO_SDK_PATH="$RUNNER_TEMP/pico-sdk" \
+            -DNOZAOS_UNITTEST=ON \
+            -DNOZAOS_POSIX=ON
 
-    - name: Build project with CMake
-      run: |
-        cd build
-        cmake -DPICO_SDK_PATH=$PICO_SDK_PATH ..
-        make
+      - name: Build RP2040 image
+        run: cmake --build build-rp2040 -j"$(nproc)"
 
-    - name: List build directory contents
-      run: |
-        ls -la build 
+      - name: Upload RP2040 firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp2040-firmware
+          path: |
+            build-rp2040/noza.uf2
+            build-rp2040/noza.elf
 
-    - name: Upload firmware binary
-      uses: actions/upload-artifact@v2
-      with:
-        name: noza.uf2
-        path: build/noza.uf2
+  qemu-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install toolchain and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            ninja-build \
+            python3 \
+            qemu-system-arm
+
+      - name: Configure QEMU build
+        run: |
+          cmake -S . -B build-qemu -G Ninja \
+            -DNOZA_PLATFORM=qemu_mps2_an385 \
+            -DNOZAOS_UNITTEST=ON \
+            -DNOZAOS_POSIX=ON
+
+      - name: Build QEMU image
+        run: cmake --build build-qemu -j"$(nproc)"
+
+      - name: QEMU shell smoke test
+        run: python3 scripts/qemu_smoke.py --kernel build-qemu/noza
+
+      - name: Upload QEMU ELF
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-elf
+          path: build-qemu/noza
