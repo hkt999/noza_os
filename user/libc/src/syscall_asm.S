@@ -26,6 +26,7 @@
 
 .type noza_thread_join, %function
 .global noza_thread_join
+.thumb_func
 noza_thread_join:
 	push {r4-r7, lr}
 	push {r1}					// address of retval
@@ -41,6 +42,7 @@ noza_thread_join_end:
 
 .type noza_thread_detach, %function
 .global noza_thread_detach
+.thumb_func
 noza_thread_detach:
 	push {r4-r7, lr}
 	mov r1, r0 					// pid
@@ -50,8 +52,9 @@ noza_thread_detach:
 
 
 //int __noza_thread_sleep(syscall_time_t *time, syscall_time_t *remain); // in assembly
-.type noza_thread_sleep, %function
+.type __noza_thread_sleep, %function
 .global __noza_thread_sleep
+.thumb_func
 __noza_thread_sleep:
 	push {r4-r7, lr}
 	push {r1}					// address of remain
@@ -64,6 +67,7 @@ __noza_thread_sleep:
 
 .type noza_thread_kill, %function
 .global noza_thread_kill
+.thumb_func
 noza_thread_kill:
 	push {r4-r7, lr}
 	mov r2, r1
@@ -74,6 +78,7 @@ noza_thread_kill:
 
 .type noza_thread_change_priority, %function
 .global noza_thread_change_priority
+.thumb_func
 noza_thread_change_priority:
 	push {r4-r7, lr}
 	mov r2, r1
@@ -84,6 +89,7 @@ noza_thread_change_priority:
 
 .type noza_thread_terminate, %function
 .global noza_thread_terminate
+.thumb_func
 noza_thread_terminate:
 	mov r1, r0 						// move the function return code to r1
 	movs r0, #NSC_THREAD_TERMINATE	// set r0 to the value of NSC_THREAD_TERMINATE
@@ -91,6 +97,7 @@ noza_thread_terminate:
 
 .type noza_recv, %function
 .global noza_recv
+.thumb_func
 noza_recv:
 	push {r4-r7, lr}
 	mov r4, r0 // save the original r0 to r4 --> noza_msg_t pointer
@@ -104,6 +111,7 @@ noza_recv:
 
 .type noza_reply, %function
 .global noza_reply
+.thumb_func
 noza_reply:
 	push {r4-r7, lr}
 	ldmia r0!, {r1, r2, r3} // r1 = pid, r2 = ptr, r3 = size, load to register
@@ -113,6 +121,7 @@ noza_reply:
 
 .type noza_call, %function
 .global noza_call
+.thumb_func
 noza_call:
 	push {r4-r7, lr}
 	push {r0}				// push noza msg pointer to stack
@@ -125,6 +134,7 @@ noza_call:
 
 .type noza_nonblock_call, %function
 .global noza_nonblock_call
+.thumb_func
 noza_nonblock_call:
 	push {r4-r7, lr}
 	mov r4, r0				// save r0 to r4
@@ -136,6 +146,7 @@ noza_nonblock_call:
 
 .type noza_nonblock_recv, %function
 .global noza_nonblock_recv
+.thumb_func
 noza_nonblock_recv:
 	push {r4-r7, lr}
 	mov r4, r0				// save r0 to r4
@@ -147,6 +158,7 @@ noza_nonblock_recv:
 
 .type __noza_futex_wait, %function
 .global __noza_futex_wait
+.thumb_func
 __noza_futex_wait:
 	push {r4-r7, lr}
 	mov r3, r2
@@ -158,6 +170,7 @@ __noza_futex_wait:
 
 .type __noza_futex_wake, %function
 .global __noza_futex_wake
+.thumb_func
 __noza_futex_wake:
 	push {r4-r7, lr}
 	mov r2, r1
@@ -168,6 +181,7 @@ __noza_futex_wake:
 
 .type noza_timer_create, %function
 .global noza_timer_create
+.thumb_func
 noza_timer_create:
 	push {r4-r7, lr}
 	mov r4, r0
@@ -183,6 +197,7 @@ noza_timer_create_skip:
 
 .type noza_timer_delete, %function
 .global noza_timer_delete
+.thumb_func
 noza_timer_delete:
 	push {r4-r7, lr}
 	mov r1, r0
@@ -192,6 +207,7 @@ noza_timer_delete:
 
 .type noza_timer_arm, %function
 .global noza_timer_arm
+.thumb_func
 noza_timer_arm:
 	push {r4-r7, lr}
 	mov r3, r2
@@ -203,6 +219,7 @@ noza_timer_arm:
 
 .type noza_timer_cancel, %function
 .global noza_timer_cancel
+.thumb_func
 noza_timer_cancel:
 	push {r4-r7, lr}
 	mov r1, r0
@@ -212,6 +229,7 @@ noza_timer_cancel:
 
 .type noza_timer_wait, %function
 .global noza_timer_wait
+.thumb_func
 noza_timer_wait:
 	push {r4-r7, lr}
 	mov r2, r1
@@ -222,6 +240,7 @@ noza_timer_wait:
 
 .type noza_clock_gettime, %function
 .global noza_clock_gettime
+.thumb_func
 noza_clock_gettime:
 	push {r4-r7, lr}
 	mov r4, r1
@@ -238,6 +257,7 @@ noza_clock_gettime_end:
 
 .type noza_signal_send, %function
 .global noza_signal_send
+.thumb_func
 noza_signal_send:
 	push {r4-r7, lr}
 	mov r2, r1
@@ -248,6 +268,7 @@ noza_signal_send:
 
 .type noza_signal_take, %function
 .global noza_signal_take
+.thumb_func
 noza_signal_take:
 	movs r0, #NSC_SIGNAL_TAKE
 	svc #0
@@ -255,6 +276,7 @@ noza_signal_take:
 
 .type noza_thread_create_primitive, %function
 .global noza_thread_create_primitive
+.thumb_func
 noza_thread_create_primitive:
 	push {r4-r7, lr}
 	mov r4, r0				// save r0 to r4

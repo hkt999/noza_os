@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include "posix/errno.h"
+#include "nozaos.h"
 #include "vfs.h"
 #include "printk.h"
 
@@ -14,6 +15,50 @@ static vfs_client_t g_clients[VFS_MAX_CLIENTS];
 static vfs_mount_t g_root_mount;
 static vfs_node_t g_root_node;
 static vfs_client_t *g_current_client;
+
+static void vfs_release_handle_slot(vfs_handle_t **slot)
+{
+    if (slot == NULL || *slot == NULL) {
+        return;
+    }
+
+    vfs_handle_t *handle = *slot;
+    int rc = 0;
+    if (handle->node && handle->node->mnt && handle->node->mnt->ops && handle->node->mnt->ops->close) {
+        rc = handle->node->mnt->ops->close(handle->node->mnt, handle);
+    }
+    if (rc != 0) {
+        printk("[fs] stale handle close rc=%d\n", rc);
+    }
+    *slot = NULL;
+}
+
+static void vfs_release_client(vfs_client_t *client)
+{
+    if (client == NULL || client->vid == 0) {
+        return;
+    }
+
+    for (size_t i = 0; i < VFS_MAX_FD; i++) {
+        vfs_release_handle_slot(&client->files[i]);
+    }
+    for (size_t i = 0; i < VFS_MAX_DIR; i++) {
+        vfs_release_handle_slot(&client->dirs[i]);
+    }
+    memset(client, 0, sizeof(*client));
+}
+
+static void vfs_reap_stale_clients(void)
+{
+    for (size_t i = 0; i < VFS_MAX_CLIENTS; i++) {
+        if (g_clients[i].vid == 0) {
+            continue;
+        }
+        if (noza_thread_kill(g_clients[i].vid, 0) == ESRCH) {
+            vfs_release_client(&g_clients[i]);
+        }
+    }
+}
 
 static int null_lookup(vfs_mount_t *mnt, vfs_node_t *dir, const char *name, vfs_node_t **out)
 {
@@ -226,6 +271,7 @@ int vfs_umount(const char *path)
 
 static vfs_client_t *vfs_alloc_client(uint32_t vid, const noza_identity_t *identity)
 {
+    vfs_reap_stale_clients();
     for (size_t i = 0; i < VFS_MAX_CLIENTS; i++) {
         if (g_clients[i].vid == 0) {
             vfs_client_t *c = &g_clients[i];

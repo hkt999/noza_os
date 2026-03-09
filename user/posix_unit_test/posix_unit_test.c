@@ -547,7 +547,7 @@ static int should_run(int argc, char **argv, const char *name)
     return 0;
 }
 
-static int test_posix(int argc, char **argv)
+int posix_unittest_main(int argc, char **argv)
 {
     if ((argc > 1) && (strcmp(argv[1], "--list") == 0)) {
         static const char *tests[] = {
@@ -606,5 +606,5 @@ static int test_posix(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_posix_unittest()
 {
-    console_add_command("posix_unittest", test_posix, "nozaos and lib, posix unit-test suite", 4096);
+    console_add_command("posix_unittest", posix_unittest_main, "nozaos and lib, posix unit-test suite", 4096);
 }

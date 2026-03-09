@@ -120,7 +120,8 @@ int noza_thread_sleep_ms(int64_t ms, int64_t *remain_ms) {
 	return ret;
 }
 
-int noza_set_errno(int err) {
+static thread_record_t *noza_current_thread_record(void)
+{
 	uint32_t pid = 0;
 	if (noza_thread_self(&pid) != 0 || pid == 0 || get_thread_record(pid) == NULL) {
 		uint32_t core = platform_get_running_core();
@@ -128,8 +129,19 @@ int noza_set_errno(int err) {
 			pid = NOZAOS_PID[core];
 		}
 	}
-	thread_record_t *record = get_thread_record(pid);
+	return get_thread_record(pid);
+}
+
+int noza_set_errno(int err) {
+	thread_record_t *record = noza_current_thread_record();
 	if (record == NULL) {
+		uint32_t pid = 0;
+		if (noza_thread_self(&pid) != 0 || pid == 0 || get_thread_record(pid) == NULL) {
+			uint32_t core = platform_get_running_core();
+			if (core < NOZA_OS_NUM_CORES) {
+				pid = NOZAOS_PID[core];
+			}
+		}
 		printk("fatal: noza_set_errno: pid %ld not found\n", pid);
 		return -1; // TODO: return errno
 	}
@@ -138,15 +150,15 @@ int noza_set_errno(int err) {
 }
 
 int noza_errno() {
-	uint32_t pid = 0;
-	if (noza_thread_self(&pid) != 0 || pid == 0 || get_thread_record(pid) == NULL) {
-		uint32_t core = platform_get_running_core();
-		if (core < NOZA_OS_NUM_CORES) {
-			pid = NOZAOS_PID[core];
-		}
-	}
-	thread_record_t *th = get_thread_record(pid);
+	thread_record_t *th = noza_current_thread_record();
 	if (th == NULL) {
+		uint32_t pid = 0;
+		if (noza_thread_self(&pid) != 0 || pid == 0 || get_thread_record(pid) == NULL) {
+			uint32_t core = platform_get_running_core();
+			if (core < NOZA_OS_NUM_CORES) {
+				pid = NOZAOS_PID[core];
+			}
+		}
 		printk("fatal: noza_errno: pid %ld not found\n", pid);
 		return -1; // TODO: return errno
 	}

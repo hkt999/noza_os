@@ -38,6 +38,7 @@
     pop {r4-r7}
 .endm
 
+.thumb_func
 setjmp:
 	// save registers into _jmp_buf
     mov r1, sp          	// move the current stack pointer into r1
@@ -60,6 +61,7 @@ setjmp:
     mov r0, #0          	// set r0 to 0
     bx lr         
 
+.thumb_func
 longjmp:
     // restore registers from _jmp_buf
     ldr r2, [r0]        	// load the stack pointer using a low register

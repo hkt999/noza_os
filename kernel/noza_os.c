@@ -1649,6 +1649,9 @@ static void syscall_thread_sleep(thread_t *running)
 {
     int64_t duration = ((int64_t)running->trap.r1) << 32 | running->trap.r2;
     if (duration <= 0) {
+        // Yielding still returns through the syscall path, so clear r0-r2
+        // explicitly instead of leaking whatever trap values were already there.
+        noza_os_set_return_value3(running, 0, 0, 0);
         noza_os_add_thread(&noza_os.ready[running->info.priority], running);
     } else { 
         running->expired_time = platform_get_absolute_time_us() + duration; // setup expired time
@@ -1743,9 +1746,10 @@ static void alarm_signal_handler(thread_t *running, thread_t *target, uint32_t s
         // TODO: think faster way to remove the thread from reply list
         kernel_log("fatal error: unimplement feature (2)\n");
     } else {
-        kernel_log("kernel: vid (%d) (%s) unhandled kill message\n", thread_get_vid(target), state_to_str(target->info.state));
-        noza_os_set_return_value1(target, ESRCH);
-        return;
+        // A live thread may receive SIGALRM while runnable instead of blocked in
+        // sleep/wait. Preserve the signal as pending and still report success to
+        // the sender, rather than leaking a stale syscall return value.
+        noza_signal_send_thread(target, signum);
     }
 
     noza_os_set_return_value1(running, 0); // return success

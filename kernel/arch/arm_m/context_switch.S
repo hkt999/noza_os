@@ -32,6 +32,7 @@
 // interrupt service routine for hardfault
 .type isr_hardfault, %function
 .global isr_hardfault
+.thumb_func
 isr_hardfault:
     save_context
     mrs r1, psp
@@ -45,6 +46,7 @@ isr_hardfault:
 // interrupt service routine for supervisor calls (SVC)
 .type isr_pendsv, %function
 .global isr_pendsv
+.thumb_func
 isr_pendsv: // for context switching in an OS
     b isr_systick // do timer context switch
 
@@ -54,6 +56,7 @@ isr_pendsv: // for context switching in an OS
 .global isr_svcall
 .global show_svc
 .global show_registers
+.thumb_func
 isr_svcall: // for system calls
     // get svc call number
     push {r4}
@@ -108,6 +111,7 @@ go_service:
 // interrupt service routine for the system timer tick (SysTick) interrupt
 .type isr_systick, %function
 .global isr_systick
+.thumb_func
 isr_systick:
     /*
 	movs r0, #254
@@ -140,8 +144,10 @@ isr_systick:
 	msr APSR_nzcvq, ip
     pop {pc} // jump to kernel wihout changing priviledge level
 
+.type arch_resume_thread, %function
 .global arch_resume_thread
 .global test_addr
+.thumb_func
 arch_resume_thread:
 	mrs ip, APSR
     push {r4, r5, r6, r7, lr}
@@ -166,7 +172,9 @@ arch_resume_thread:
 	bx lr // return to user with r0 as stack pointer
 
 // function to initialize the kernel stack and switch to the process stack
+.type arch_init_kernel_stack, %function
 .global arch_init_kernel_stack
+.thumb_func
 arch_init_kernel_stack:
     // save registers
 	mrs ip, APSR

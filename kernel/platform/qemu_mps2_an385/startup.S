@@ -39,6 +39,7 @@ __isr_vector:
 
 .section .text.Reset_Handler,"ax",%progbits
 .type Reset_Handler, %function
+.thumb_func
 Reset_Handler:
     ldr r0, =_sidata
     ldr r1, =_sdata
@@ -67,6 +68,7 @@ Reset_Handler:
 
 .section .text.Default_Handler,"ax",%progbits
 .type Default_Handler, %function
+.thumb_func
 Default_Handler:
     b .
 .size Default_Handler, . - Default_Handler

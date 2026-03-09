@@ -108,8 +108,7 @@ These functions all funnel through the internal `noza_syscall(r0,r1,r2,r3)` tram
 
 # Testing Notes
 - `user/noza_unit_test/` 與 `user/posix_unit_test/` 目前仍會編進映像。
-- 但 default boot image 啟動的是 `shell_main()`，不是 legacy `noza_console`，因此 `noza_unittest` / `posix_unittest` 這類透過 `console_add_command()` 註冊的命令，目前不會直接出現在預設 shell。
-- 若要重新啟用這些命令，需把 boot path 切回 `console_start()`，或把對應測試入口補進 `shell_main()` / app launcher。
+- default boot image 啟動的是 `shell_main()`；測試入口已同步掛到 app launcher，所以在 QEMU shell 內可直接輸入 `noza_unittest`、`posix_unittest` 或 `futex_test` 執行。
 - `qemu_mps2_an385` 目前是 single-core debug target，只用來驗證 kernel/service/shell 路徑、serial console 與 gdbstub，不用來驗證 RP2040 雙核 scheduler、FIFO wakeup 或板級 IRQ 行為。
 - 目前已驗證的 QEMU smoke path 是：開機到 shell prompt，並可在 serial console 下執行 `help`、`pwd`、`ls`、`ls /sbin`、`ps`，以及透過 `/sbin/exit42` 與 `/sbin/spin` 驗證 `spawn -> ps -> kill/wait -> reap`。另外也手動驗證過 `exec shell` 之後 pid 會改變，且舊 shell 會在 `ps` 裡顯示成 `EXIT`。
 

@@ -28,6 +28,9 @@ static uint32_t shell_prompt_counter = 0;
 int shell_main(int argc, char **argv);
 static int spin_main(int argc, char **argv);
 static int exit42_main(int argc, char **argv);
+int noza_unittest_main(int argc, char **argv) __attribute__((weak));
+int posix_unittest_main(int argc, char **argv) __attribute__((weak));
+int futex_test_main(int argc, char **argv) __attribute__((weak));
 
 static int spin_main(int argc, char **argv)
 {
@@ -59,6 +62,9 @@ static void shell_register_apps(void)
         {"/sbin/shell", shell_main, 2048},
         {"/sbin/spin", spin_main, 1024},
         {"/sbin/exit42", exit42_main, 1024},
+        {"/sbin/noza_unittest", noza_unittest_main, 4096},
+        {"/sbin/posix_unittest", posix_unittest_main, 4096},
+        {"/sbin/futex_test", futex_test_main, 2048},
     };
 
     if (registered || failed) {
@@ -66,6 +72,9 @@ static void shell_register_apps(void)
     }
 
     for (uint32_t app = 0; app < (sizeof(apps) / sizeof(apps[0])); app++) {
+        if (apps[app].entry == NULL) {
+            continue;
+        }
         int rc = ESRCH;
         for (int attempt = 0; attempt < 50; attempt++) {
             rc = app_launcher_register(apps[app].path, apps[app].entry, apps[app].stack_size);

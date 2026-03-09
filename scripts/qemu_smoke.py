@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import time
+from typing import Optional, Tuple
 
 
 PROMPT_RE = re.compile(rb"noza(?:\((\d+)\))?> ")
@@ -21,7 +22,7 @@ def reserve_port() -> int:
     return port
 
 
-def read_until_prompt(conn: socket.socket, timeout_s: float) -> tuple[bytes, int | None]:
+def read_until_prompt(conn: socket.socket, timeout_s: float) -> Tuple[bytes, Optional[int]]:
     deadline = time.time() + timeout_s
     data = bytearray()
     last_prompt = None

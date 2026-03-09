@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include "mem_serv.h"
 #include "nozaos.h"
 #include "posix/errno.h"
@@ -23,6 +24,27 @@ void *_sbrk(ptrdiff_t increment)
 }
 
 static tinyalloc_t tinyalloc;
+
+static void *memory_service_heap_limit(void)
+{
+    uintptr_t base = (uintptr_t)heap_end;
+    uintptr_t limit = (uintptr_t)heap_limit;
+    size_t heap_bytes = (size_t)(limit - base);
+
+    // The memory service uses tinyalloc directly, but other services still rely
+    // on newlib malloc/calloc/realloc via _sbrk(). Leave a tail region for that
+    // allocator instead of consuming the entire heap here.
+    size_t libc_reserve = 64u * 1024u;
+    if (heap_bytes <= libc_reserve * 2u) {
+        libc_reserve = heap_bytes / 4u;
+    }
+
+    if (libc_reserve == 0 || libc_reserve >= heap_bytes) {
+        return heap_limit;
+    }
+    return (void *)(limit - libc_reserve);
+}
+
 static int do_memory_server(void *param, uint32_t pid)
 {
     int ret;
@@ -30,8 +52,9 @@ static int do_memory_server(void *param, uint32_t pid)
     (void)pid;
     noza_msg_t msg;
 
-    ta_init(&tinyalloc, heap_end, heap_limit, 256, 16, 8);
-    heap_end = heap_limit;
+    void *service_heap_limit = memory_service_heap_limit();
+    ta_init(&tinyalloc, heap_end, service_heap_limit, 256, 16, 8);
+    heap_end = service_heap_limit;
 
     static uint32_t memory_service_id;
     int lookup_ret = name_lookup_register(NOZA_MEMORY_SERVICE_NAME, &memory_service_id);

@@ -18,6 +18,8 @@ static uint32_t g_fs_vid;
 static uint32_t g_fs_service_id;
 static int console_fd = -1;
 
+#define NOZA_LIBC_FD_BASE 3
+
 typedef struct dir_impl {
     int handle;
     struct dirent ent;
@@ -301,6 +303,26 @@ static int fs_readdir(int dir_fd, noza_fs_dirent_t *ent, int *at_end)
     return 0;
 }
 
+static int libc_fd_from_handle(int handle)
+{
+    return handle + NOZA_LIBC_FD_BASE;
+}
+
+static int fs_handle_from_libc_fd(int fd)
+{
+    return fd - NOZA_LIBC_FD_BASE;
+}
+
+static int is_stdio_fd(int fd)
+{
+    return fd >= STDIN_FILENO && fd <= STDERR_FILENO;
+}
+
+static int is_fs_backed_fd(int fd)
+{
+    return fd >= NOZA_LIBC_FD_BASE;
+}
+
 static int ensure_console_fd(void) {
     if (console_fd >= 0) {
         return console_fd;
@@ -381,7 +403,11 @@ int _write(int fd, const void *buf, size_t count) {
     if (fd == STDOUT_FILENO || fd == STDERR_FILENO) {
         return console_write_wrapper(buf, count);
     }
-    return fs_write(fd, buf, (uint32_t)count);
+    if (!is_fs_backed_fd(fd)) {
+        noza_set_errno(EBADF);
+        return -1;
+    }
+    return fs_write(fs_handle_from_libc_fd(fd), buf, (uint32_t)count);
 }
 
 int _read(int fd, void *buf, size_t count) {
@@ -392,17 +418,33 @@ int _read(int fd, void *buf, size_t count) {
     if (fd == STDIN_FILENO) {
         return console_read_wrapper(buf, count);
     }
-    return fs_read(fd, buf, (uint32_t)count);
+    if (!is_fs_backed_fd(fd)) {
+        noza_set_errno(EBADF);
+        return -1;
+    }
+    return fs_read(fs_handle_from_libc_fd(fd), buf, (uint32_t)count);
 }
 
 off_t _lseek(int fd, off_t offset, int whence) {
-    int64_t r = fs_lseek(fd, (int64_t)offset, whence);
+    if (!is_fs_backed_fd(fd)) {
+        noza_set_errno(ESPIPE);
+        return -1;
+    }
+    int64_t r = fs_lseek(fs_handle_from_libc_fd(fd), (int64_t)offset, whence);
     return (off_t)r;
 }
 
 int _close(int fd) {
-    int rc = fs_close(fd);
-    if (fd == console_fd) {
+    if (is_stdio_fd(fd)) {
+        return 0;
+    }
+    if (!is_fs_backed_fd(fd)) {
+        noza_set_errno(EBADF);
+        return -1;
+    }
+    int handle = fs_handle_from_libc_fd(fd);
+    int rc = fs_close(handle);
+    if (handle == console_fd) {
         console_fd = -1;
     }
     return rc;
@@ -414,12 +456,16 @@ int _fstat(int fd, struct stat *st) {
         return -1;
     }
     memset(st, 0, sizeof(*st));
-    if (fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO || fd == console_fd) {
+    if (is_stdio_fd(fd)) {
         st->st_mode = S_IFCHR;
         return 0;
     }
+    if (!is_fs_backed_fd(fd)) {
+        noza_set_errno(EBADF);
+        return -1;
+    }
     noza_fs_attr_t attr;
-    if (fs_fstat(fd, &attr) == 0) {
+    if (fs_fstat(fs_handle_from_libc_fd(fd), &attr) == 0) {
         fs_attr_to_stat(&attr, st);
         return 0;
     }
@@ -428,7 +474,7 @@ int _fstat(int fd, struct stat *st) {
 }
 
 int _isatty(int fd) {
-    if (fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO || fd == console_fd) {
+    if (is_stdio_fd(fd)) {
         return 1;
     }
     noza_set_errno(ENOTTY);
@@ -436,11 +482,11 @@ int _isatty(int fd) {
 }
 
 int _open(const char *path, int flags, int mode) {
-    int fd = fs_open(path, (uint32_t)flags, (uint32_t)mode);
-    if (fd < 0) {
+    int handle = fs_open(path, (uint32_t)flags, (uint32_t)mode);
+    if (handle < 0) {
         return -1;
     }
-    return fd;
+    return libc_fd_from_handle(handle);
 }
 
 int _unlink(const char *path) {

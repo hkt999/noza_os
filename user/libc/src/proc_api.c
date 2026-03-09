@@ -198,6 +198,7 @@ static int _noza_process_exec(main_t entry, int argc, char *argv[], char *envp[]
 	uint32_t parent_pid, uint32_t *tid, uint32_t stack_size)
 {
 	*tid = 0;
+	process_record_t *creator_process = noza_process_self();
 	process_record_t *process = alloc_process_record();
 	if (process == NULL) {
 		printk("noza_process_exec: no free process slot (argc=%d)\n", argc);
@@ -221,6 +222,20 @@ static int _noza_process_exec(main_t entry, int argc, char *argv[], char *envp[]
 		printk("noza_process_exec: thread_create ret=%d\n", create_ret);
 		free_process_record(process);
 		return create_ret;
+	}
+	if (creator_process != NULL) {
+		int remove_ret = noza_process_remove_thread(creator_process, *tid);
+		if (remove_ret != 0) {
+			printk("noza_process_exec: remove parent thread ret=%d\n", remove_ret);
+		}
+	}
+	// Process lifecycles are reaped through app-launcher wait/exit-notify, not
+	// via kernel thread_join on the process main thread. Mark it detached so the
+	// kernel can release the thread slot immediately when the process exits.
+	int detach_ret = noza_thread_detach(*tid);
+	if (detach_ret != 0) {
+		printk("noza_process_exec: thread_detach ret=%d\n", detach_ret);
+		return detach_ret;
 	}
 
 	return 0;

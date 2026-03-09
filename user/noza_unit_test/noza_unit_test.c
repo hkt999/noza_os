@@ -479,9 +479,10 @@ static int fault_task(void *param, uint32_t pid)
     while (counter-->0) {
         noza_thread_sleep_ms(100, NULL);
     }
-    TEST_PRINTF("test raise fault (write memory address #00000000) pid=%d", pid);
-    int *p = 0;
-    *p = 0;
+    // Null-pointer writes are not a reliable fault source on every QEMU board.
+    // Use an undefined Thumb instruction so the kernel's hardfault path is
+    // exercised consistently on Cortex-M targets.
+    __asm__ volatile("udf #0");
     TEST_ASSERT_EQUAL_INT(0, 1); // never reash here
     return 0;
 }
@@ -671,7 +672,7 @@ static void test_noza_spinlock()
     TEST_ASSERT_EQUAL_INT(0, counter);
 }
 
-static int test_all(int argc, char **argv)
+int noza_unittest_main(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
@@ -706,7 +707,7 @@ static int test_all(int argc, char **argv)
 
 #include "user/console/noza_console.h"
 
-static int futex_only(int argc, char **argv)
+int futex_test_main(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
@@ -720,10 +721,10 @@ static int futex_only(int argc, char **argv)
 #include "user/console/noza_console.h"
 void __attribute__((constructor(1000))) register_noza_unittest()
 {
-    console_add_command("noza_unittest", test_all, "nozaos and lib, unit-test suite", 2048);
+    console_add_command("noza_unittest", noza_unittest_main, "nozaos and lib, unit-test suite", 2048);
 }
 
 void __attribute__((constructor(1001))) register_futex_command()
 {
-    console_add_command("futex_test", futex_only, "run futex-only unit tests", 2048);
+    console_add_command("futex_test", futex_test_main, "run futex-only unit tests", 2048);
 }

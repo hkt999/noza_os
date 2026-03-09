@@ -3,6 +3,7 @@
 
 .type app_run, %function
 .global app_run, noza_thread_terminate, free_resource, dummy_stack_addr
+.thumb_func
 app_run:
     // C interface --> void app_run(thread_record_t *info, uint32_t thread_id)
     // r0: the pointer to the boot info structure
